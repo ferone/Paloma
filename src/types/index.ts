@@ -56,10 +56,26 @@ export interface InstrumentVolume {
   price: number
 }
 
+export interface CountryDemand {
+  country: string
+  flag: string
+  volume: number
+  percent: number
+  breakdown: { type: string; percent: number; color: string }[]
+}
+
+export interface RegionData {
+  region: string
+  percent: number
+  color: string
+  countries: CountryDemand[]
+}
+
 export interface GoldLiquidity {
   totalDollarVolume: number
   sources: LiquiditySource[]
   instruments: InstrumentVolume[]
+  regions: RegionData[]
   history: { date: string; volume: number }[]
   timestamp: number
 }

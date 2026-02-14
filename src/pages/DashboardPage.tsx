@@ -1,8 +1,22 @@
+import { GoldPriceTicker } from '../components/dashboard/GoldPriceTicker'
+import { PriceCardGrid } from '../components/dashboard/PriceCardGrid'
+import { PriceChart } from '../components/charts/PriceChart'
+import { ErrorBoundary } from '../components/shared/ErrorBoundary'
+
 export default function DashboardPage() {
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-      <p className="text-gray-400">Gold price and ETF overview will appear here.</p>
+      <ErrorBoundary>
+        <GoldPriceTicker />
+      </ErrorBoundary>
+
+      <ErrorBoundary>
+        <PriceCardGrid />
+      </ErrorBoundary>
+
+      <ErrorBoundary>
+        <PriceChart symbol="GLD" />
+      </ErrorBoundary>
     </div>
   )
 }

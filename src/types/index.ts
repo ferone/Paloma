@@ -116,9 +116,17 @@ export interface LiquiditySummary {
   }
 }
 
+export interface VolumeSpike {
+  date: string
+  totalVolume: number
+  title: string
+  description: string
+}
+
 export interface LiquidityHistoryResponse {
   history: LiquidityHistoryDay[]
   summary: LiquiditySummary
+  spikes: VolumeSpike[]
   regions: RegionData[]
   range: string
   timestamp: number

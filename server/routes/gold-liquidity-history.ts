@@ -6,6 +6,7 @@ import {
   SOURCE_BREAKDOWN,
   REGION_DATA,
 } from '../data/gold-constants.js'
+import { MARKET_EVENTS, type MarketEvent } from '../data/market-events.js'
 
 export const goldLiquidityHistoryRouter = Router()
 
@@ -15,6 +16,50 @@ function getInterval(range: string): ChartInterval {
   if (range === '5Y') return '1wk'
   if (range === 'ALL') return '1mo'
   return '1d'
+}
+
+interface HistoryDay {
+  date: string
+  totalVolume: number
+}
+
+function detectSpikes(history: HistoryDay[], count: number) {
+  if (history.length < 10) return []
+
+  const volumes = history.map((d) => d.totalVolume)
+  const mean = volumes.reduce((s, v) => s + v, 0) / volumes.length
+  const std = Math.sqrt(
+    volumes.reduce((s, v) => s + (v - mean) ** 2, 0) / volumes.length
+  )
+
+  if (std === 0) return []
+
+  return history
+    .map((d) => ({
+      date: d.date,
+      totalVolume: d.totalVolume,
+      deviation: (d.totalVolume - mean) / std,
+    }))
+    .filter((d) => d.deviation > 1.2)
+    .sort((a, b) => b.deviation - a.deviation)
+    .slice(0, count)
+}
+
+function matchEvent(spikeDate: string, events: MarketEvent[]): MarketEvent | null {
+  const spike = new Date(spikeDate + 'T00:00:00Z').getTime()
+  let closest: MarketEvent | null = null
+  let closestDist = Infinity
+
+  for (const event of events) {
+    const eventTime = new Date(event.date + 'T00:00:00Z').getTime()
+    const dist = Math.abs(spike - eventTime) / (1000 * 60 * 60 * 24)
+    if (dist <= 3 && dist < closestDist) {
+      closestDist = dist
+      closest = event
+    }
+  }
+
+  return closest
 }
 
 goldLiquidityHistoryRouter.get('/', cacheMiddleware('daily'), async (req, res) => {
@@ -63,6 +108,18 @@ goldLiquidityHistoryRouter.get('/', cacheMiddleware('daily'), async (req, res) =
       }
     })
 
+    // Detect top 6 volume spikes and match to known market events
+    const rawSpikes = detectSpikes(history, 6)
+    const spikes = rawSpikes.map((spike) => {
+      const event = matchEvent(spike.date, MARKET_EVENTS)
+      return {
+        date: spike.date,
+        totalVolume: spike.totalVolume,
+        title: event?.title ?? 'Unusual Volume Spike',
+        description: event?.description ?? 'Trading volume significantly exceeded the historical average for this period.',
+      }
+    })
+
     // Range summary
     const totalVolume = history.reduce((sum, d) => sum + d.totalVolume, 0)
     const tradingDays = history.length
@@ -98,6 +155,7 @@ goldLiquidityHistoryRouter.get('/', cacheMiddleware('daily'), async (req, res) =
     res.json({
       history,
       summary,
+      spikes,
       regions,
       range,
       timestamp: Date.now(),

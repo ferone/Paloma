@@ -47,7 +47,7 @@ export default function LiquidityPage() {
           {isLoading ? (
             <Skeleton className="h-80" />
           ) : data ? (
-            <LiquidityStackedChart data={data.history} range={range} />
+            <LiquidityStackedChart data={data.history} range={range} spikes={data.spikes} />
           ) : null}
         </Card>
       </ErrorBoundary>

@@ -1,4 +1,6 @@
-import yahooFinance from 'yahoo-finance2'
+import YahooFinance from 'yahoo-finance2'
+
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getQuote(symbol: string) {

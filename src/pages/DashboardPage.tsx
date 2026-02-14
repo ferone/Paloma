@@ -1,5 +1,6 @@
 import { GoldPriceTicker } from '../components/dashboard/GoldPriceTicker'
 import { PriceCardGrid } from '../components/dashboard/PriceCardGrid'
+import { GoldLiquidityPanel } from '../components/dashboard/GoldLiquidityPanel'
 import { PriceChart } from '../components/charts/PriceChart'
 import { ErrorBoundary } from '../components/shared/ErrorBoundary'
 
@@ -12,6 +13,10 @@ export default function DashboardPage() {
 
       <ErrorBoundary>
         <PriceCardGrid />
+      </ErrorBoundary>
+
+      <ErrorBoundary>
+        <GoldLiquidityPanel />
       </ErrorBoundary>
 
       <ErrorBoundary>

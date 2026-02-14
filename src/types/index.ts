@@ -41,6 +41,29 @@ export interface SimulationResult {
   data: { date: string; value: number }[]
 }
 
+export interface LiquiditySource {
+  name: string
+  value: number
+  percent: number
+  color: string
+}
+
+export interface InstrumentVolume {
+  symbol: string
+  name: string
+  volume: number
+  dollarVolume: number
+  price: number
+}
+
+export interface GoldLiquidity {
+  totalDollarVolume: number
+  sources: LiquiditySource[]
+  instruments: InstrumentVolume[]
+  history: { date: string; volume: number }[]
+  timestamp: number
+}
+
 export interface ComparisonReturn {
   symbol: string
   '1D': number

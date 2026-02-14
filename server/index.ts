@@ -6,6 +6,7 @@ import { batchRouter } from './routes/batch.js'
 import { historicalRouter } from './routes/historical.js'
 import { goldPriceRouter } from './routes/gold-price.js'
 import { goldLiquidityRouter } from './routes/gold-liquidity.js'
+import { goldLiquidityHistoryRouter } from './routes/gold-liquidity-history.js'
 import { rateLimiter } from './middleware/rate-limiter.js'
 
 const app = express()
@@ -20,6 +21,7 @@ app.use('/api/batch', batchRouter)
 app.use('/api/historical', historicalRouter)
 app.use('/api/gold-price', goldPriceRouter)
 app.use('/api/gold-liquidity', goldLiquidityRouter)
+app.use('/api/gold-liquidity/history', goldLiquidityHistoryRouter)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })

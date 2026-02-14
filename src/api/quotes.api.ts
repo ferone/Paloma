@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Quote, GoldLiquidity } from '../types'
+import type { Quote, GoldLiquidity, LiquidityHistoryResponse } from '../types'
 
 export async function fetchQuote(symbol: string): Promise<Quote> {
   const { data } = await api.get<Quote>(`/quotes/${symbol}`)
@@ -20,5 +20,12 @@ export async function fetchGoldPrice(): Promise<Quote> {
 
 export async function fetchGoldLiquidity(): Promise<GoldLiquidity> {
   const { data } = await api.get<GoldLiquidity>('/gold-liquidity')
+  return data
+}
+
+export async function fetchLiquidityHistory(range: string): Promise<LiquidityHistoryResponse> {
+  const { data } = await api.get<LiquidityHistoryResponse>('/gold-liquidity/history', {
+    params: { range },
+  })
   return data
 }

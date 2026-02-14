@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { RiDashboardLine, RiExchangeLine, RiSignalTowerLine, RiPieChartLine, RiMenuLine, RiCloseLine } from 'react-icons/ri'
+import { RiDashboardLine, RiExchangeLine, RiSignalTowerLine, RiPieChartLine, RiDropLine, RiMenuLine, RiCloseLine } from 'react-icons/ri'
 import { useState } from 'react'
 import clsx from 'clsx'
 
@@ -7,6 +7,7 @@ const navItems = [
   { to: '/', label: 'Dashboard', icon: RiDashboardLine },
   { to: '/comparison', label: 'Comparison', icon: RiExchangeLine },
   { to: '/signals', label: 'Signals', icon: RiSignalTowerLine },
+  { to: '/liquidity', label: 'Liquidity', icon: RiDropLine },
   { to: '/simulator', label: 'Simulator', icon: RiPieChartLine },
 ]
 

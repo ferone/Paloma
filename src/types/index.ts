@@ -90,3 +90,36 @@ export interface ComparisonReturn {
   YTD: number
   '1Y': number
 }
+
+// Liquidity History types
+
+export interface LiquidityHistoryDay {
+  date: string
+  totalVolume: number
+  institutional: number
+  centralBanks: number
+  privateRetail: number
+  jewelry: number
+  mining: number
+}
+
+export interface LiquiditySummary {
+  totalVolume: number
+  avgDailyVolume: number
+  tradingDays: number
+  perSource: {
+    institutional: number
+    centralBanks: number
+    privateRetail: number
+    jewelry: number
+    mining: number
+  }
+}
+
+export interface LiquidityHistoryResponse {
+  history: LiquidityHistoryDay[]
+  summary: LiquiditySummary
+  regions: RegionData[]
+  range: string
+  timestamp: number
+}

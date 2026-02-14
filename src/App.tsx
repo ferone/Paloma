@@ -10,6 +10,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ComparisonPage = lazy(() => import('./pages/ComparisonPage'))
 const SignalsPage = lazy(() => import('./pages/SignalsPage'))
 const SimulatorPage = lazy(() => import('./pages/SimulatorPage'))
+const LiquidityPage = lazy(() => import('./pages/LiquidityPage'))
 
 function Loading() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
               <Route path="signals" element={<PageWrapper><SignalsPage /></PageWrapper>} />
               <Route path="signals/:symbol" element={<PageWrapper><SignalsPage /></PageWrapper>} />
               <Route path="simulator" element={<PageWrapper><SimulatorPage /></PageWrapper>} />
+              <Route path="liquidity" element={<PageWrapper><LiquidityPage /></PageWrapper>} />
               <Route
                 path="*"
                 element={

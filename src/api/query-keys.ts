@@ -11,5 +11,6 @@ export const queryKeys = {
   gold: {
     price: ['gold', 'price'] as const,
     liquidity: ['gold', 'liquidity'] as const,
+    liquidityHistory: (range: string) => ['gold', 'liquidity-history', range] as const,
   },
 } as const

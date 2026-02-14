@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import {
   createChart,
-  type IChartApi,
   ColorType,
   LineSeries,
   AreaSeries,
@@ -22,8 +21,6 @@ interface IndicatorChartProps {
 export function IndicatorChart({ ohlcv, sma50, sma200, ema12, ema26, rsi }: IndicatorChartProps) {
   const priceRef = useRef<HTMLDivElement>(null)
   const rsiRef = useRef<HTMLDivElement>(null)
-  const priceChartRef = useRef<IChartApi | null>(null)
-  const rsiChartRef = useRef<IChartApi | null>(null)
 
   useEffect(() => {
     if (!priceRef.current || !rsiRef.current || ohlcv.length === 0) return
@@ -46,7 +43,6 @@ export function IndicatorChart({ ohlcv, sma50, sma200, ema12, ema26, rsi }: Indi
 
     // Price chart
     const priceChart = createChart(priceRef.current, chartOpts)
-    priceChartRef.current = priceChart
 
     const dates = ohlcv.map((d) => d.date.split('T')[0])
 
@@ -84,7 +80,6 @@ export function IndicatorChart({ ohlcv, sma50, sma200, ema12, ema26, rsi }: Indi
       ...chartOpts,
       height: 150,
     })
-    rsiChartRef.current = rsiChart
 
     const rsiSeries = rsiChart.addSeries(LineSeries, {
       color: '#eab308',
@@ -116,8 +111,6 @@ export function IndicatorChart({ ohlcv, sma50, sma200, ema12, ema26, rsi }: Indi
       resizeObserver.disconnect()
       priceChart.remove()
       rsiChart.remove()
-      priceChartRef.current = null
-      rsiChartRef.current = null
     }
   }, [ohlcv, sma50, sma200, ema12, ema26, rsi])
 

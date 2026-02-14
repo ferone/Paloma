@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   createChart,
-  type IChartApi,
-  type ISeriesApi,
   ColorType,
   CandlestickSeries,
   AreaSeries,
@@ -24,16 +22,12 @@ type ChartType = 'area' | 'candlestick'
 
 export function PriceChart({ symbol = 'GLD', className }: PriceChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<IChartApi | null>(null)
-  const seriesRef = useRef<ISeriesApi<'Area'> | ISeriesApi<'Candlestick'> | null>(null)
-  const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
-
   const [range, setRange] = useState<TimeRange>('1M')
   const [chartType, setChartType] = useState<ChartType>('area')
   const { data, isLoading } = useHistorical(symbol, range)
 
   useEffect(() => {
-    if (!chartContainerRef.current) return
+    if (!chartContainerRef.current || !data || data.length === 0) return
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
@@ -60,38 +54,6 @@ export function PriceChart({ symbol = 'GLD', className }: PriceChartProps) {
       handleScroll: { vertTouchDrag: false },
     })
 
-    chartRef.current = chart
-
-    const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth })
-      }
-    }
-    const resizeObserver = new ResizeObserver(handleResize)
-    resizeObserver.observe(chartContainerRef.current)
-
-    return () => {
-      resizeObserver.disconnect()
-      chart.remove()
-      chartRef.current = null
-      seriesRef.current = null
-      volumeRef.current = null
-    }
-  }, [range])
-
-  useEffect(() => {
-    if (!chartRef.current || !data || data.length === 0) return
-    const chart = chartRef.current
-
-    if (seriesRef.current) {
-      chart.removeSeries(seriesRef.current)
-      seriesRef.current = null
-    }
-    if (volumeRef.current) {
-      chart.removeSeries(volumeRef.current)
-      volumeRef.current = null
-    }
-
     if (chartType === 'candlestick') {
       const series = chart.addSeries(CandlestickSeries, {
         upColor: CHART_COLORS.up,
@@ -110,7 +72,6 @@ export function PriceChart({ symbol = 'GLD', className }: PriceChartProps) {
           close: d.close,
         }))
       )
-      seriesRef.current = series
     } else {
       const series = chart.addSeries(AreaSeries, {
         lineColor: CHART_COLORS.gold,
@@ -124,7 +85,6 @@ export function PriceChart({ symbol = 'GLD', className }: PriceChartProps) {
           value: d.close,
         }))
       )
-      seriesRef.current = series
     }
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
@@ -141,10 +101,21 @@ export function PriceChart({ symbol = 'GLD', className }: PriceChartProps) {
         color: d.close >= d.open ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
       }))
     )
-    volumeRef.current = volumeSeries
 
     chart.timeScale().fitContent()
-  }, [data, chartType])
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth })
+      }
+    })
+    resizeObserver.observe(chartContainerRef.current)
+
+    return () => {
+      resizeObserver.disconnect()
+      chart.remove()
+    }
+  }, [data, range, chartType])
 
   if (isLoading) return <ChartSkeleton />
 

@@ -13,7 +13,7 @@ let res: QuantResult
 function route(url: string): unknown {
   const u = new URL(url, 'http://x')
   const p = u.pathname
-  const metal = u.searchParams.get('metal') ?? 'gold'
+  const metal = u.searchParams.get('asset') ?? u.searchParams.get('metal') ?? 'gold'
   const mode = (u.searchParams.get('mode') ?? 'conservative') as 'conservative' | 'aggressive'
   const forMetal = (o: { metal: string; product: string }) => o.metal === metal || o.product === 'GS'
   if (p === '/quant/status') return { run: { id: 1, generatedAt: res.generatedAt, dataThrough: res.dataThrough, instruments: res.instruments.length, durationMs: 1 }, job: null, hasData: true }
@@ -21,7 +21,7 @@ function route(url: string): unknown {
   if (p === '/quant/instruments') return res.instruments.filter((i) => i.metal === metal || i.product === 'GS').map((i) => ({ id: i.id, label: i.label, kind: i.kind, metal: i.metal }))
   if (p.startsWith('/quant/instrument/')) return res.instruments.find((i) => i.id === decodeURIComponent(p.split('/').pop()!))
   if (p.startsWith('/quant/seasonality/')) return res.seasonality.find((i) => i.id === decodeURIComponent(p.split('/').pop()!))
-  if (p === '/quant/relative-value') return res.relativeValue
+  if (p === '/quant/relative-value') return res.relativeValue.find((r) => r.pair === u.searchParams.get('pair'))
   if (p.startsWith('/quant/curve/')) return res.curves.find((c) => c.root === p.split('/').pop())
   if (p === '/quant/backtest') return res.backtests.find((b) => b.metal === metal && b.mode === mode)
   if (p === '/quant/gates') return res.gates.find((g) => g.metal === metal)
@@ -86,6 +86,10 @@ describe('Quant Lab pages', () => {
     cleanup()
     await renderAt('/quant/relative-value')
     expect(await screen.findByText('Gold/silver ratio', {}, { timeout: 10_000 })).toBeTruthy()
+    expect(screen.getByText('Gold − silver dollar spread')).toBeTruthy()
+    expect(screen.getAllByText(/^1 GC : [\d.]+ SI$/).length).toBeGreaterThanOrEqual(1) // hedge (+ vol-parity)
+    expect(screen.getByText(/100 oz gold − 5,000 oz silver \(1 GC vs 1 SI\)/)).toBeTruthy()
+    expect(screen.getByText('Full analysis & trade ticket →').getAttribute('href')).toBe('/quant/i/GS.ratio')
     cleanup()
     await renderAt('/quant/curve')
     expect(await screen.findByText(/COMEX Gold term structure/, {}, { timeout: 10_000 })).toBeTruthy()

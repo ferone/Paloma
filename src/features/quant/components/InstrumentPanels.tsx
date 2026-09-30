@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { InstrumentDetail, OosView } from '@shared/quant'
-import { PALETTE, METAL_COLOR, signColor } from '../../../design/tokens'
+import { PALETTE, ASSET_COLOR, signColor } from '../../../design/tokens'
 import { fmtDate, fmtNum, fmtPct, fmtSigned, fmtUsd } from '../../../design/format'
 import { RegimeGateChart, SpreadChart, TimeSeriesChart } from '../../../charts'
 import { Chip, Panel, Stat } from '../../../ui'
@@ -23,7 +23,7 @@ export function ZBandPanel({ d, title }: { d: InstrumentDetail; title?: string }
       provenance={{ ...d.provenance, note: d.kind === 'seasonal' ? 'Current season only' : undefined }}
     >
       {points.length > 1 ? (
-        <SpreadChart points={points} window={d.bandWindow} color={METAL_COLOR[d.metal]} yFormat={valueFormatter(d.unit)} label={d.kind === 'seasonal' ? 'this season' : 'value'} />
+        <SpreadChart points={points} window={d.bandWindow} color={ASSET_COLOR[d.metal]} yFormat={valueFormatter(d.unit)} label={d.kind === 'seasonal' ? 'this season' : 'value'} />
       ) : (
         <p className="py-8 text-center text-xs text-muted">This spread is not trading yet this season.</p>
       )}

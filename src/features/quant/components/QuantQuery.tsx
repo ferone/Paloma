@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { isQuantEmpty, type QuantEmpty } from '@shared/quant'
-import { Button, EmptyState, ErrorNote, PanelSkeleton } from '../../../ui'
+import { Button, EmptyState, ErrorNote, Panel, PanelSkeleton } from '../../../ui'
 import { useRecompute } from '../api'
 
 /** Loading / error / honest-empty / data switch for any quant query. */
@@ -12,6 +12,17 @@ export function QuantQuery<T>({ q, rows = 5, children }: { q: UseQueryResult<T |
   const d = q.data
   if (isQuantEmpty(d)) return <QuantEmptyState empty={d} />
   return <>{children(d as T)}</>
+}
+
+/** Honest state for an asset the Quant Lab cannot analyze: it has no listed futures in the universe. */
+export function NoFuturesState({ label, what }: { label: string; what: string }) {
+  return (
+    <Panel>
+      <EmptyState title={`No listed futures for ${label}`}>
+        <p>{`The Quant Lab builds ${what} from futures contracts, and the universe lists none for ${label}.`}</p>
+      </EmptyState>
+    </Panel>
+  )
 }
 
 export function QuantEmptyState({ empty, compact }: { empty: QuantEmpty; compact?: boolean }) {

@@ -11,6 +11,7 @@ import { ActionChip, CarryChip, OosChip, TierChip } from '../components/chips'
 import { OuExplainer, VerdictExplainer, ZScoreExplainer } from '../components/glossary'
 import { KIND_LABEL, fmtValue } from '../format'
 import { useQuantContext } from '../QuantLayout'
+import { pairNames } from '../pairs'
 
 type KindFilter = 'all' | 'spreads' | 'seasonal' | 'outright' | 'rv'
 
@@ -19,7 +20,7 @@ const FILTERS: { value: KindFilter; label: string }[] = [
   { value: 'spreads', label: 'Spreads & flies' },
   { value: 'seasonal', label: 'Seasonal pairs' },
   { value: 'outright', label: 'Outrights' },
-  { value: 'rv', label: 'Gold/silver' },
+  { value: 'rv', label: 'Relative value' },
 ]
 
 function matches(o: QuantOpportunity, f: KindFilter): boolean {
@@ -74,8 +75,8 @@ const COLUMNS: Column<QuantOpportunity>[] = [
 ]
 
 export default function ScannerPage() {
-  const { metal, mode } = useQuantContext()
-  const q = useOpportunities(metal, mode)
+  const { asset, mode } = useQuantContext()
+  const q = useOpportunities(asset, mode)
   return (
     <QuantQuery q={q} rows={10}>
       {(data) => <Scanner data={data} />}
@@ -94,7 +95,7 @@ function Scanner({ data }: { data: OpportunitiesResponse }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-surface p-4 sm:grid-cols-5">
-        <Stat label="Instruments" value={data.rows.length} size="sm" hint={`${label} + gold/silver`} />
+        <Stat label="Instruments" value={data.rows.length} size="sm" hint={[label, ...pairNames(data.metal)].join(' + ')} />
         <Stat label="Buy · long" value={acts.filter((o) => o.verdict.action === 'BUY').length} size="sm" hint={`${data.mode} mode`} />
         <Stat label="Sell · short" value={acts.filter((o) => o.verdict.action === 'SELL').length} size="sm" hint={`${data.mode} mode`} />
         <Stat label="OOS passed" value={data.rows.filter((o) => o.oos === 'passed').length} size="sm" hint="walk-forward" />

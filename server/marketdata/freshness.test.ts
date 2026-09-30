@@ -45,8 +45,7 @@ describe('freshness', () => {
 
   it('reports generic tables once another domain creates them', () => {
     const d = useTestDb()
-    d.exec('CREATE TABLE pf_nav_snapshots (date TEXT, nav REAL)')
-    d.exec(`INSERT INTO pf_nav_snapshots VALUES ('2026-09-01', 1), ('2026-09-30', 2)`)
+    d.exec(`INSERT INTO pf_nav_snapshots (date, nav, units, nav_per_unit, cash, gross_exposure, by_sleeve, by_metal) VALUES ('2026-09-01', 1, 1, 1, 0, 0, '{}', '{}'), ('2026-09-30', 2, 1, 2, 0, 0, '{}', '{}')`)
     expect(freshness('2026-10-01').rows.find((r) => r.dataset === 'pf_nav_snapshots')).toMatchObject({ exists: true, rows: 2, from: '2026-09-01', to: '2026-09-30' })
   })
 })

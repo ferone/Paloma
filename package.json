@@ -24,7 +24,9 @@
     "data:backfill": "tsx server/marketdata/cli.ts backfill",
     "data:incremental": "tsx server/marketdata/cli.ts incremental",
     "macro:refresh": "tsx server/macro/cli.ts",
-    "ai:report": "tsx server/ai/cli.ts"
+    "ai:report": "tsx server/ai/cli.ts",
+    "portfolio:seed-demo": "tsx server/portfolio/seed-demo.ts",
+    "portfolio:clear-demo": "tsx server/portfolio/seed-demo.ts --clear"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

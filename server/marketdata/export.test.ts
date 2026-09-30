@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Writable } from 'node:stream'
 import type { Response } from 'express'
-import { useTestDb } from '../db/client.js'
+import { getDb, useTestDb } from '../db/client.js'
 import { upsertDailyBars } from '../db/repo.js'
 import { upsertContractBars, upsertContracts } from '../db/shared-repo.js'
 import { csvField, csvRow, toCsv } from './csv.js'
@@ -74,7 +74,8 @@ describe('export whitelist and queries', () => {
   })
 
   it('returns a clean not-found for whitelisted tables that do not exist yet', () => {
-    expect(() => buildExportQuery('pf_transactions', {})).toThrow(/does not exist yet/)
+    getDb().exec('DROP TABLE pf_fund_units')
+    expect(() => buildExportQuery('pf_fund_units', {})).toThrow(/does not exist yet/)
   })
 
   it('filters prices_daily by symbol, source and inclusive date range with bound parameters', () => {

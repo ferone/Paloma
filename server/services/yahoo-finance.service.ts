@@ -1,7 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- yahoo-finance2 v3 result types are too loose to model usefully here */
 import YahooFinance from 'yahoo-finance2'
 
-const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
+/**
+ * OFFLINE=1 makes every Yahoo call fail fast, so callers fall back to cached
+ * prices_daily rows. Used for reproducible runs (regression snapshots, tests)
+ * where live price moves would otherwise show up as differences.
+ */
+const offline = new Proxy({} as InstanceType<typeof YahooFinance>, {
+  get: () => () => Promise.reject(new Error('Yahoo Finance disabled (OFFLINE=1)')),
+})
+
+const yahooFinance = process.env.OFFLINE === '1' ? offline : new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
 export async function getQuote(symbol: string) {
   const result: any = await yahooFinance.quote(symbol)

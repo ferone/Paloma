@@ -66,13 +66,15 @@ export async function estimate(
 ): Promise<CostEstimate> {
   const avail = availableEnd ?? (await client.getDatasetRange()).end
   const { start, end } = clampRange(req.start, req.end, avail)
-  const lines: CostLine[] = []
-  for (const root of req.roots) {
-    for (const schema of req.schemas) {
-      const cost = await client.getCost({ symbols: [`${root}.FUT`], stypeIn: 'parent', schema, start, end })
-      lines.push({ root, schema, cost })
-    }
-  }
+  // get_cost is free but slow for long ranges: ask for every (root, schema) in parallel.
+  const pairs = req.roots.flatMap((root) => req.schemas.map((schema) => ({ root, schema })))
+  const lines: CostLine[] = await Promise.all(
+    pairs.map(async ({ root, schema }) => ({
+      root,
+      schema,
+      cost: await client.getCost({ symbols: [`${root}.FUT`], stypeIn: 'parent', schema, start, end }),
+    })),
+  )
   const total = Math.round(lines.reduce((s, l) => s + l.cost, 0) * 1e6) / 1e6
   return { dataset: DATABENTO_DATASET, start, end, lines, total, budget, withinBudget: total <= budget }
 }

@@ -13,7 +13,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b",
-    "db:migrate": "tsx server/db/migrate-cli.ts"
+    "db:migrate": "tsx server/db/migrate-cli.ts",
+    "data:freshness": "tsx server/marketdata/cli.ts freshness",
+    "data:yahoo": "tsx server/marketdata/cli.ts yahoo",
+    "data:estimate": "tsx server/marketdata/cli.ts estimate",
+    "data:backfill": "tsx server/marketdata/cli.ts backfill",
+    "data:incremental": "tsx server/marketdata/cli.ts incremental"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

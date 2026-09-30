@@ -28,7 +28,7 @@ function matches(o: QuantOpportunity, f: KindFilter): boolean {
   if (f === 'spreads') return o.kind === 'calendar' || o.kind === 'butterfly'
   if (f === 'seasonal') return o.kind === 'seasonal'
   if (f === 'outright') return o.kind === 'outright'
-  return o.kind === 'ratio' || o.kind === 'inter'
+  return o.kind === 'ratio' || o.kind === 'inter' || o.kind === 'basis'
 }
 
 const COLUMNS: Column<QuantOpportunity>[] = [

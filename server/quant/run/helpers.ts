@@ -165,6 +165,7 @@ const STRUCT_NAME: Record<string, string> = {
   seasonal: "the spread",
   ratio: "the ratio",
   inter: "the spread",
+  basis: "the basis",
 };
 
 export function verdictView(

@@ -192,8 +192,8 @@ function legText(inst: Instrument, legs: ContractLegView[], ratioHedge?: number)
 }
 
 // ── structural gate ──────────────────────────────────────────────────────────
-const STRUCT_N = 60;
-const STRUCT_K = 2.5;
+export const STRUCT_N = 60;
+export const STRUCT_K = 2.5;
 
 function structuralSeries(curve: CurvePoint[] | undefined, tail = 756): StructuralPoint[] {
   if (!curve || curve.length < STRUCT_N) return [];
@@ -312,7 +312,7 @@ function priorWindows(series: SeriesPoint[], pointValue: number, originDoy: numb
   return { windows: found.map((w) => windowView(w, originDoy, todaySeasonDay)), todaySeasonDay };
 }
 
-function scoreView(row: ReturnType<typeof scoreAsOf>): ScoreView | null {
+export function scoreView(row: ReturnType<typeof scoreAsOf>): ScoreView | null {
   if (!row) return null;
   return {
     z: round(row.z, 4),
@@ -326,12 +326,12 @@ function scoreView(row: ReturnType<typeof scoreAsOf>): ScoreView | null {
   };
 }
 
-function capacityView(volumes: number[]): CapacityView {
+export function capacityView(volumes: number[]): CapacityView {
   const c = capacityEstimate(volumes);
   return { medianAdv: c.medianAdv, tier: c.tier, suggestedMaxContracts: c.suggestedMaxContracts, note: c.note };
 }
 
-function volPercentile(values: number[]): number | null {
+export function volPercentile(values: number[]): number | null {
   if (values.length < 120) return null;
   const hvs: number[] = [];
   for (let end = 40; end <= values.length; end += 5) {
@@ -342,7 +342,7 @@ function volPercentile(values: number[]): number | null {
   return cur == null ? null : percentileRank(hvs, cur);
 }
 
-function decisionView(d: ReturnType<typeof assembleDecision>): DecisionView {
+export function decisionView(d: ReturnType<typeof assembleDecision>): DecisionView {
   return {
     conviction: d.conviction,
     convictionLabel: d.convictionLabel,
@@ -604,7 +604,7 @@ export function analyzeContinuous(inst: Instrument, series: SeriesPoint[], ctx: 
   };
 }
 
-function rowsFor(
+export function rowsFor(
   d: InstrumentDetail,
   zEff: number | null,
   tier: QuantTier,

@@ -45,10 +45,28 @@ export interface QuantOpportunityLite {
   oosStatus: 'passed' | 'failed' | 'untested'
 }
 
+/** Cash-and-carry basis summary (annualized percent). */
+export interface QuantBasisLite {
+  id: string
+  metal: Metal
+  asOf: string
+  contract: string
+  daysToExpiry: number
+  basis: number
+  tbill: number
+  excess: number
+  z: number | null
+  halfLife: number | null
+  oosStatus: 'passed' | 'failed' | 'untested'
+  verdict: 'BUY' | 'SELL' | 'AVOID'
+}
+
 export interface QuantSnapshotLite {
   asOf: string
   dataThrough: string | null
   opportunities: QuantOpportunityLite[]
+  /** Cash-and-carry basis per asset that has one (always published, whatever its rank). */
+  basis?: QuantBasisLite[]
 }
 
 export interface MlPredictionLite {

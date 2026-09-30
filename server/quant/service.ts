@@ -1,7 +1,8 @@
 import { Worker } from "node:worker_threads";
 import { getDb } from "../db/client.js";
 import { listContracts, readRootBars } from "../db/shared-repo.js";
-import { readArtifact, writeArtifact } from "../db/repo.js";
+import { readArtifact, readDailyBars, writeArtifact } from "../db/repo.js";
+import { ASSETS, UNIVERSE } from "../../shared/universe.js";
 import { ARTIFACTS, type MlPredictionsLite, type QuantSnapshotLite } from "../../shared/artifacts.js";
 import { allRoots } from "./universe/registry.js";
 import { computeQuant, type MarketInput } from "./run/compute.js";
@@ -42,8 +43,17 @@ export function loadMarketInput(generatedAt: string): MarketInput {
       bars: bars.map((b) => ({ symbol: b.symbol, date: b.date, close: b.close, volume: b.volume, openInterest: b.openInterest })),
     };
   }
+  // Spot + cash benchmark for each cash-and-carry basis (Yahoo closes in prices_daily).
+  const daily: NonNullable<MarketInput["daily"]> = {};
+  for (const asset of ASSETS) {
+    const b = UNIVERSE[asset].basis;
+    if (!b) continue;
+    for (const symbol of [b.spot, b.rate]) {
+      daily[symbol] ??= readDailyBars(symbol, { source: "yahoo" }).map((r) => ({ date: r.date, close: r.close }));
+    }
+  }
   const ml = readArtifact<MlPredictionsLite>(ARTIFACTS.mlPredictions)?.data ?? null;
-  return { roots, ml, generatedAt };
+  return { roots, ml, daily, generatedAt };
 }
 
 /** Load → compute → persist → publish. Synchronous (CPU-bound); runs inside the worker. */

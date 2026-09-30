@@ -10,7 +10,7 @@ import type {
   RelativeValueDetail,
   SeasonalityDetail,
 } from "../../../shared/quant.js";
-import type { MlPredictionsLite, QuantSnapshotLite, MlPredictionLite } from "../../../shared/artifacts.js";
+import type { MlPredictionsLite, QuantBasisLite, QuantSnapshotLite, MlPredictionLite } from "../../../shared/artifacts.js";
 import { ASSETS, UNIVERSE, futuresProduct, type AssetId } from "../../../shared/universe.js";
 import type { SeriesPoint } from "../types/index.js";
 import { QT_CONFIG } from "../engine/profiles.js";
@@ -36,6 +36,8 @@ import {
   type RawContract,
 } from "../data/continuous.js";
 import { assembleMetalSeasonal } from "../data/seasonalSpread.js";
+import { buildBasisSeries, frontContractQuotes, type DailyClose } from "../data/basis.js";
+import { analyzeBasis } from "./basis.js";
 import { analyzeContinuous, analyzeSeasonal, type AnalyzedInstrument, type RunContext } from "./analyze.js";
 import { percentileRank, rollingBands, round } from "./helpers.js";
 
@@ -48,6 +50,8 @@ import { percentileRank, rollingBands, round } from "./helpers.js";
 export interface MarketInput {
   roots: Record<string, { contracts: RawContract[]; bars: RawBar[] }>;
   ml?: MlPredictionsLite | null;
+  /** Daily closes by Yahoo symbol (spot series and the T-bill behind each asset's cash-and-carry basis). */
+  daily?: Record<string, DailyClose[]>;
   generatedAt: string;
   /** Optional as-of override (defaults to the latest bar date). */
   asOf?: string;
@@ -187,6 +191,23 @@ export function computeQuant(input: MarketInput): QuantResult {
     }
   }
 
+  // 3b) Cash-and-carry basis: front cash-settled future vs spot, over the T-bill.
+  for (const asset of ASSETS) {
+    const spec = UNIVERSE[asset].basis;
+    const front = UNIVERSE[asset].futures[0];
+    if (!spec || !front?.cashSettled) continue;
+    const r = roots.get(front.root);
+    const spot = input.daily?.[spec.spot];
+    const rate = input.daily?.[spec.rate];
+    if (!r || !spot?.length || !rate?.length) continue;
+    const series = buildBasisSeries(frontContractQuotes(r.prepared), spot, rate);
+    const a = analyzeBasis(
+      { asset, assetLabel: UNIVERSE[asset].label, priceUnit: UNIVERSE[asset].priceUnit, product: front, spec, series },
+      ctx,
+    );
+    if (a) analyzed.push(a);
+  }
+
   // 4) Scanner rows (mirrors excluded — they duplicate the full-size signal).
   const opportunities = Object.fromEntries(
     MODES.map((m) => [m, analyzed.filter((a) => !a.mirror).map((a) => a.rows[m]).sort((x, y) => y.qtRank - x.qtRank)]),
@@ -235,10 +256,14 @@ export function computeQuant(input: MarketInput): QuantResult {
     }
   }
 
+  // The snapshot: the top 40 by rank, plus every basis row (published whatever its rank).
+  const basisDetails = analyzed.filter((a) => a.detail.kind === "basis").map((a) => a.detail);
+  const top = opportunities.conservative.slice(0, 40);
+  const liteRows = [...top, ...opportunities.conservative.filter((o) => o.kind === "basis" && !top.includes(o))];
   const lite: QuantSnapshotLite = {
     asOf: input.generatedAt,
     dataThrough,
-    opportunities: opportunities.conservative.slice(0, 40).map((o) => ({
+    opportunities: liteRows.map((o) => ({
       id: o.id,
       metal: o.metal,
       label: o.label,
@@ -249,6 +274,7 @@ export function computeQuant(input: MarketInput): QuantResult {
       z: o.z,
       oosStatus: o.oos,
     })),
+    ...(basisDetails.length ? { basis: basisDetails.map(basisLite) } : {}),
   };
 
   return {
@@ -264,6 +290,24 @@ export function computeQuant(input: MarketInput): QuantResult {
     gates,
     lite,
     mlCounted: analyzed.filter((a) => a.detail.ml?.counted).length,
+  };
+}
+
+function basisLite(d: InstrumentDetail): QuantBasisLite {
+  const b = d.basis!.latest;
+  return {
+    id: d.id,
+    metal: d.metal,
+    asOf: d.asOf,
+    contract: b.contract,
+    daysToExpiry: b.daysToExpiry,
+    basis: b.basis,
+    tbill: b.tbill,
+    excess: b.excess,
+    z: d.score?.z ?? null,
+    halfLife: d.ou?.halfLife ?? null,
+    oosStatus: d.oos.status,
+    verdict: d.verdicts.conservative.action,
   };
 }
 

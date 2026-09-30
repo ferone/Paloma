@@ -30,6 +30,11 @@ export function yahooHistorySymbols(specs: readonly AssetSpec[] = ASSETS.map((a)
     for (const f of u.futures) s.add(f.yahoo)
     s.add(u.spot)
     if (u.displaySpot) s.add(u.displaySpot)
+    // Cash-and-carry basis inputs (spot series + cash benchmark) feed the quant engine.
+    if (u.basis) {
+      s.add(u.basis.spot)
+      s.add(u.basis.rate)
+    }
     u.etfs.forEach((e) => s.add(e))
     if (u.miners) s.add(u.miners)
   }

@@ -78,6 +78,10 @@ export function quantBlock(metal: AssetId, focus?: QuantOpportunityLite): Contex
     `- ${o.id} "${o.label}": ${o.side} · tier ${o.tier} · verdict ${o.verdict} · rank ${f(o.qtRank, 0)} · z ${f(o.z)} · out-of-sample ${o.oosStatus}`
   const lines = [`QUANT SNAPSHOT (engine data through ${a.data.dataThrough ?? 'n/a'}, run ${a.data.asOf}). Top ${UNIVERSE[metal].label.toLowerCase()} opportunities:`]
   lines.push(...(opps.length ? opps.map(line) : ['- none for this asset']))
+  for (const b of a.data.basis?.filter((x) => x.metal === metal) ?? [])
+    lines.push(
+      `CASH-AND-CARRY BASIS ${b.id} (${b.asOf}, ${b.contract}, ${b.daysToExpiry} d to expiry): basis ${f(b.basis)}% p.a., T-bill ${f(b.tbill)}%, excess carry ${f(b.excess)}% · z ${f(b.z)} · half-life ${f(b.halfLife, 1)} d · out-of-sample ${b.oosStatus} · verdict ${b.verdict}. A carry harvest (long spot / short future), not a directional bet.`,
+    )
   if (focus) lines.push(`FOCUS OPPORTUNITY: ${line(focus).slice(2)}`)
   return { name: 'Quant snapshot', present: true, asOf: a.data.dataThrough ?? a.data.asOf, text: lines.join('\n'), urls: [] }
 }

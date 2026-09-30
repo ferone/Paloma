@@ -6,7 +6,7 @@ import type { AssetId } from './universe.js'
 export type QuantMode = 'conservative' | 'aggressive'
 export type OosStatus = 'passed' | 'failed' | 'untested'
 export type QuantTier = 'STRONG' | 'MODERATE' | 'WATCH' | 'AVOID'
-export type QuantKind = 'outright' | 'calendar' | 'butterfly' | 'seasonal' | 'ratio' | 'inter'
+export type QuantKind = 'outright' | 'calendar' | 'butterfly' | 'seasonal' | 'ratio' | 'inter' | 'basis'
 /** User-facing action: BUY = go long the structure, SELL = go short it, AVOID = stand aside. */
 export type QuantAction = 'BUY' | 'SELL' | 'AVOID'
 
@@ -289,6 +289,51 @@ export interface StructuralPoint {
   slopeZ: number | null
 }
 
+/** One date of a cash-and-carry basis series. Rates are annualized percent (5.2 = 5.2%/yr). */
+export interface BasisPointView {
+  date: string
+  /** Front contract used that day (the continuous-series roll), e.g. "BTCV26". */
+  contract: string
+  /** Calendar days from `date` to that contract's last trade. */
+  daysToExpiry: number
+  spot: number
+  future: number
+  /** (F/S − 1) × 365 / daysToExpiry, in % p.a. */
+  basis: number
+  /** Cash benchmark (13-week T-bill) in % p.a. */
+  tbill: number
+  /** basis − tbill: the long-spot / short-future return over cash, in % p.a. */
+  excess: number
+}
+
+/** The cash-and-carry basis behind a `<root>.basis` instrument. */
+export interface BasisView {
+  spotSymbol: string
+  rateSymbol: string
+  rateLabel: string
+  /** Reference rate the futures settle to (e.g. CME CF Bitcoin Reference Rate). */
+  settlement: string
+  /** Futures root and contract size (units of the asset per contract). */
+  root: string
+  contractSize: number
+  priceUnit: string
+  latest: BasisPointView
+  /** Last trade of the latest front contract. */
+  lastTrade: string | null
+  /** Dates dropped because the front was within `minDays` calendar days of expiry. */
+  excluded: number
+  minDays: number
+  /** $ per 1 bp of annualized basis, per contract, at today's spot and days to expiry. */
+  dollarsPerBp: number
+  /** Locked-in basis to expiry, $ per contract: (F − S) × contract size. */
+  grossCarryUsd: number
+  /** Cash cost of financing the spot leg to expiry at the T-bill, $ per contract. */
+  fundingUsd: number
+  /** Excess carry to expiry, $ per contract (gross carry − funding). */
+  excessCarryUsd: number
+  points: BasisPointView[]
+}
+
 export interface InstrumentDetail {
   id: string
   label: string
@@ -321,6 +366,8 @@ export interface InstrumentDetail {
   window: SeasonalWindowView | null
   caveats: string[]
   provenance: Provenance
+  /** Cash-and-carry basis instruments only. */
+  basis?: BasisView | null
 }
 
 export interface EnvelopePoint {

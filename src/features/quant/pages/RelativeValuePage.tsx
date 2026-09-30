@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { RelativeValueDetail } from '@shared/quant'
-import { UNIVERSE } from '@shared/universe'
+import { UNIVERSE, basisInstrumentId } from '@shared/universe'
 import { ASSET_COLOR, PALETTE, signColor } from '../../../design/tokens'
 import { fmtNum, fmtPct, fmtSigned, fmtUsd } from '../../../design/format'
 import { SpreadChart } from '../../../charts'
 import { EmptyState, Panel, Segmented, Stat } from '../../../ui'
-import { useRelativeValue } from '../api'
+import { useInstrument, useRelativeValue } from '../api'
 import { QuantQuery } from '../components/QuantQuery'
 import { ActionChip } from '../components/chips'
+import { BasisSummary } from '../components/BasisPanels'
 import { OuExplainer, RatioExplainer } from '../components/glossary'
 import { OosPanel } from '../components/InstrumentPanels'
 import { RangeControl, useRange } from '../components/Range'
@@ -21,7 +22,8 @@ export default function RelativeValuePage() {
   const pairs = useMemo(() => pairsForAsset(asset), [asset])
   const [picked, setPicked] = useState<string | null>(null)
   const current = pairs.find((p) => p.pair.key === picked) ?? pairs[0]
-  if (!current) {
+  const basisId = basisInstrumentId(asset)
+  if (!current && !basisId) {
     return (
       <Panel>
         <EmptyState title={`No relative-value pair includes ${UNIVERSE[asset].label}`}>
@@ -31,18 +33,44 @@ export default function RelativeValuePage() {
     )
   }
   return (
-    <div className="space-y-4">
-      {pairs.length > 1 && (
-        <Segmented<string>
-          ariaLabel="Relative-value pair"
-          size="md"
-          value={current.pair.key}
-          onChange={setPicked}
-          options={pairs.map((p) => ({ value: p.pair.key, label: p.pair.label }))}
-        />
+    <div className="space-y-8">
+      {current && (
+        <div className="space-y-4">
+          {pairs.length > 1 && (
+            <Segmented<string>
+              ariaLabel="Relative-value pair"
+              size="md"
+              value={current.pair.key}
+              onChange={setPicked}
+              options={pairs.map((p) => ({ value: p.pair.key, label: p.pair.label }))}
+            />
+          )}
+          <PairView key={current.pair.key} cp={current} />
+        </div>
       )}
-      <PairView key={current.pair.key} cp={current} />
+      {basisId && <BasisSection id={basisId} />}
     </div>
+  )
+}
+
+/** The asset's cash-and-carry basis (front cash-settled future vs spot, over the T-bill). */
+function BasisSection({ id }: { id: string }) {
+  const { mode } = useQuantContext()
+  const q = useInstrument(id)
+  return (
+    <section aria-labelledby="basis-heading" className="space-y-4">
+      <header>
+        <h2 id="basis-heading" className="display text-xl text-foreground">
+          Cash-and-carry basis
+        </h2>
+        <p className="mt-1 max-w-3xl text-xs text-muted">
+          Long spot against the short front future: a carry harvest, not a directional bet. The engine fades the excess carry over the T-bill.
+        </p>
+      </header>
+      <QuantQuery q={q} rows={6}>
+        {(d) => <BasisSummary d={d} mode={mode} />}
+      </QuantQuery>
+    </section>
   )
 }
 

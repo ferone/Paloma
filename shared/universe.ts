@@ -70,6 +70,26 @@ export interface CotSpec {
   market: string
 }
 
+/**
+ * Cash-and-carry basis inputs: the asset's front CASH-SETTLED future against a
+ * daily spot series, compared with a cash benchmark. Any asset with a spot
+ * series and cash-settled futures can declare one; the quant engine then builds
+ * the `<root>.basis` instrument (see `basisInstrumentId`).
+ */
+export interface CarryBasisSpec {
+  /** Yahoo symbol of the spot series the future converges to (daily close, `prices_daily`). */
+  spot: string
+  /** Yahoo symbol of the cash benchmark, quoted in percent (e.g. `^IRX`, the 13-week T-bill). */
+  rate: string
+  /** Human name of the cash benchmark. */
+  rateLabel: string
+  /** Reference rate the futures settle to (named in caveats). */
+  settlement: string
+}
+
+/** 13-week US T-bill discount yield (Yahoo, quoted in percent). */
+export const TBILL_13W = '^IRX'
+
 export interface AssetSpec {
   id: AssetId
   label: string
@@ -96,6 +116,8 @@ export interface AssetSpec {
   /** How the fund can hold the asset directly; null when it cannot. */
   physical: PhysicalSpec | null
   cot: CotSpec | null
+  /** Cash-and-carry basis (front cash-settled future vs spot); absent when the asset has none. */
+  basis?: CarryBasisSpec
   /** CSS custom property holding this asset's chart colour. */
   colorVar: string
 
@@ -176,6 +198,7 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     benchmarkEtf: 'IBIT',
     physical: { unit: 'BTC', kind: 'custody', instrumentId: 'BTC-SPOT' },
     cot: { report: 'tff', code: '133741', market: 'BTC' },
+    basis: { spot: 'BTC-USD', rate: TBILL_13W, rateLabel: '13-week T-bill', settlement: 'CME CF Bitcoin Reference Rate' },
     cotMarket: 'BTC',
     colorVar: '--asset-bitcoin',
   },
@@ -206,6 +229,21 @@ export function physicalAssets(): AssetId[] {
 /** Every futures root across the universe (Databento parent symbology, contract tables). */
 export function futuresRoots(): string[] {
   return ASSETS.flatMap((a) => UNIVERSE[a].futures.map((f) => f.root))
+}
+
+/**
+ * Quant instrument id of an asset's cash-and-carry basis (`BTC.basis`), or null
+ * when the asset declares no basis or its front future is physically settled.
+ */
+export function basisInstrumentId(id: AssetId): string | null {
+  const s = UNIVERSE[id]
+  const front = s.futures[0]
+  return s.basis && front?.cashSettled ? `${front.root}.basis` : null
+}
+
+/** Assets with a cash-and-carry basis instrument. */
+export function basisAssets(): AssetId[] {
+  return ASSETS.filter((a) => basisInstrumentId(a) !== null)
 }
 
 /** Relative-value pairs the quant engine analyses. `ratio` = num/den; `spread` = num − hedge·den (vol-parity). */

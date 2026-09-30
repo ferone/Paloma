@@ -24,6 +24,21 @@ export interface FlyWalkForwardOpts {
   holdBars?: number; // max holding period before a timeout exit (default 30)
   minTrainYears?: number; // skip entries in the first N years (default 5)
   k?: number; // structural-move σ threshold (default 2.5, matches isStructuralMove)
+  /** Which stretches to fade: both (default) or only rich ones (z > 0 ⇒ short), e.g. a cash-and-carry basis. */
+  sides?: "both" | "short";
+  /**
+   * `year` (default): one aggregated OOS row per entry year (the fly convention).
+   * `trade`: one row per trade with its real entry day-of-year, so regime windows
+   * are matched on the actual entry date and the gate counts individual trades.
+   */
+  aggregate?: "year" | "trade";
+  /**
+   * Bars between a decision and its fill (default 0: filled at the signal bar's value).
+   * With 1, entry and exit fill at the NEXT observation, so a trade cannot profit
+   * from the same measurement noise that triggered it (e.g. a basis built from
+   * non-simultaneous spot and futures closes).
+   */
+  executionLag?: number;
 }
 
 /**
@@ -44,6 +59,9 @@ export function flyWalkForward(
   const holdBars = opts.holdBars ?? 30;
   const minTrainYears = opts.minTrainYears ?? 5;
   const k = opts.k ?? 2.5;
+  const shortOnly = opts.sides === "short";
+  const perTrade = opts.aggregate === "trade";
+  const lag = Math.max(0, Math.floor(opts.executionLag ?? 0));
   const MIN_OOS = 3;
 
   const N = Math.min(spread.length, dates.length);
@@ -64,19 +82,19 @@ export function flyWalkForward(
       if (year - firstYear < minTrainYears) continue; // warm-up: don't count early entries
       const outTrail = outLevels.slice(Math.max(0, i + 1 - n), i + 1).filter((v): v is number => v != null && Number.isFinite(v));
       const structural = outTrail.length > 0 && isStructuralMove([outTrail], n, k);
-      if (!structural && Math.abs(z) >= minZ) {
+      if (!structural && Math.abs(z) >= minZ && !(shortOnly && z < 0) && i + lag < N) {
         // fade the stretch: z>0 (spread rich) ⇒ short; z<0 (cheap) ⇒ long.
-        pos = { idx: i, side: z > 0 ? -1 : 1, entry: spread[i] };
+        pos = { idx: i, side: z > 0 ? -1 : 1, entry: spread[i + lag] };
       }
     } else {
       const held = i - pos.idx;
       const reverted = pos.side === -1 ? z <= 0 : z >= 0;
       if (reverted || held >= holdBars) {
-        const gross = pos.side * (spread[i] - pos.entry) * pv;
+        const gross = pos.side * (spread[Math.min(N - 1, i + lag)] - pos.entry) * pv;
         trades.push({
           year: Number(dates[pos.idx].slice(0, 4)),
-          entryDoy: 0,
-          exitDoy: 0,
+          entryDoy: perTrade ? dayOfYear(dates[pos.idx]) : 0,
+          exitDoy: perTrade ? dayOfYear(dates[i]) : 0,
           side: pos.side === 1 ? "long" : "short",
           grossPnl: Number(gross.toFixed(2)),
           netPnl: Number(netPnl(gross, cost).toFixed(2)),
@@ -96,11 +114,13 @@ export function flyWalkForward(
       cur.netPnl = Number((cur.netPnl + t.netPnl).toFixed(2));
     }
   }
-  const yearly = [...byYear.values()].sort((a, b) => a.year - b.year);
+  const yearly = perTrade ? trades : [...byYear.values()].sort((a, b) => a.year - b.year);
 
   const metrics: PerfMetrics = performance(yearly.map((t) => t.netPnl));
   let validationStatus: ValidationStatus = "untested";
-  let reason = `${yearly.length} OOS year(s) with fly trades; need ≥ ${MIN_OOS}`;
+  let reason = perTrade
+    ? `${yearly.length} OOS trade(s); need ≥ ${MIN_OOS}`
+    : `${yearly.length} OOS year(s) with fly trades; need ≥ ${MIN_OOS}`;
   if (yearly.length >= MIN_OOS) {
     const ok = metrics.winRate >= 0.6 && metrics.avgPnl > 0 && Math.abs(metrics.tStat) >= 1.5;
     validationStatus = ok ? "passed" : "failed";
@@ -110,4 +130,10 @@ export function flyWalkForward(
   }
 
   return { trades: yearly, metrics, validationStatus, reason };
+}
+
+/** Day of year (1-366) of an ISO date. */
+function dayOfYear(iso: string): number {
+  const t = Date.parse(`${iso}T00:00:00Z`);
+  return Math.floor((t - Date.UTC(Number(iso.slice(0, 4)), 0, 1)) / 86_400_000) + 1;
 }

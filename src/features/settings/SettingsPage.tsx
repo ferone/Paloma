@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import type { IntegrationStatus } from '@shared/api'
 import { api } from '../../api/client'
+import { Link } from 'react-router-dom'
 import { Chip, DataTable, PageHeader, Panel, PanelSkeleton, ErrorNote, type Column } from '../../ui'
+import { ModelPicker } from '../macro/ai/ModelPicker'
 
 interface IntegrationRow {
   key: string
@@ -85,6 +87,20 @@ export default function SettingsPage() {
           <DataTable columns={columns} rows={rows} rowKey={(r) => r.key} />
         )}
       </Panel>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <Panel title="AI analyst model" eyebrow="OpenRouter">
+          <ModelPicker />
+        </Panel>
+        <Panel title="Fund configuration" eyebrow="Portfolio">
+          <p className="text-sm leading-relaxed text-muted">
+            Inception date, base NAV per unit, physical-metal haircut, risk-free rate and the benchmark blend are edited with the ledger, where their effect on NAV is visible.
+          </p>
+          <Link to="/portfolio/ledger" className="mt-4 inline-block text-sm text-brand underline underline-offset-2">
+            Open fund settings in the ledger
+          </Link>
+        </Panel>
+      </div>
     </>
   )
 }

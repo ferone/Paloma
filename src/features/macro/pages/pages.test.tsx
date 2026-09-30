@@ -151,7 +151,7 @@ describe('macro pages render', { timeout: 30_000 }, () => {
     expect(await screen.findByText('Real yields rising')).toBeTruthy()
     expect(screen.getByText('Real yield +0.72pp over 3m: rising')).toBeTruthy()
     expect(screen.getAllByText('Headwind').length).toBeGreaterThan(0)
-    await waitFor(() => expect(screen.getByText('Real yield vs price')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Gold price')).toBeTruthy())
   })
 
   it('positioning: both markets with category tables', async () => {

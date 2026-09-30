@@ -1,25 +1,17 @@
 import { Outlet } from 'react-router-dom'
-import { METALS, UNIVERSE } from '@shared/universe'
+import { UNIVERSE } from '@shared/universe'
 import { useSettings } from '../../store/settings-context'
-import { PageHeader, RouteTabs, Segmented } from '../../ui'
+import { PageHeader, RouteTabs } from '../../ui'
 
 export function IntelligenceLayout() {
-  const { metal, setMetal } = useSettings()
+  // Metal in focus comes from the global switch in the top bar.
+  const { metal } = useSettings()
   return (
     <>
       <PageHeader
-        eyebrow="Research"
+        eyebrow={`Research · ${UNIVERSE[metal].label}`}
         title="Intelligence"
         description="A 20-day direction model per metal, shown with its walk-forward validation. It counts only when it passes."
-        actions={
-          <Segmented
-            ariaLabel="Metal"
-            size="md"
-            value={metal}
-            onChange={setMetal}
-            options={METALS.map((m) => ({ value: m, label: UNIVERSE[m].label }))}
-          />
-        }
       />
       <RouteTabs
         items={[

@@ -5,7 +5,7 @@ import type { OHLCV, TimeRange } from '@shared/markets'
 import { UNIVERSE } from '@shared/universe'
 import { DataTable, EmptyState, ErrorBoundary, Explainer, Panel, Segmented, Skeleton, type Column } from '../../../ui'
 import { fmtDate, fmtNum, fmtPctSigned } from '../../../design/format'
-import { signColor } from '../../../design/tokens'
+import { signColor, CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { useHistories } from '../hooks'
 import { PERIODS, periodReturns, rebase, returnCorrelation, type Period } from '../lib/series'
 import { MACRO_COMPARISON, metalInstruments, seriesColor, shortSymbol, symbolLabel } from '../lib/symbols'
@@ -106,7 +106,7 @@ function PerformanceChart({ symbols }: { symbols: string[] }) {
         <EmptyState title="No overlapping history">The selected instruments have no common dates in this range.</EmptyState>
       ) : (
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
             <LineChart data={rows} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
               <CartesianGrid {...s.grid} />
               <XAxis dataKey="date" tick={s.tick} axisLine={s.axisLine} tickLine={false} tickFormatter={dateTick(range === '5Y' || range === '1Y')} minTickGap={40} />

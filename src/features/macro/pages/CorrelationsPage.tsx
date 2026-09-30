@@ -1,3 +1,4 @@
+import { CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { useMemo, useState, type CSSProperties } from 'react'
 import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { BetaRow, CorrelationFactor, CorrelationResponse } from '@shared/macro'
@@ -72,7 +73,7 @@ function RollingPanel({ data }: { data: CorrelationResponse }) {
   return (
     <Panel title={`Rolling ${data.window}-day correlation with ${UNIVERSE[data.metal].label.toLowerCase()}`} density="dense" provenance={data.provenance}>
       <div className="h-72">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
           <LineChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={c.grid} vertical={false} />
             <ReferenceLine y={0} stroke={c.axis} />

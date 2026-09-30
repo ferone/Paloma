@@ -103,3 +103,37 @@ export function tickMonth(iso: string): string {
   const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(iso.slice(5, 7)) - 1]
   return `${m} ${iso.slice(2, 4)}`
 }
+
+/**
+ * Pearson correlation of daily changes (metal log-return vs driver first
+ * difference) over the overlapping window. Levels would be spuriously
+ * correlated by shared trends; changes are what the stance rules reason about.
+ */
+export function changeCorrelation(metal: SeriesPoint[], driver: SeriesPoint[]): { rho: number; n: number } | null {
+  const joined = joinForwardFill(metal, driver)
+  const xs: number[] = []
+  const ys: number[] = []
+  for (let i = 1; i < joined.length; i++) {
+    const prev = joined[i - 1]
+    const cur = joined[i]
+    if (!(prev.a > 0 && cur.a > 0) || !Number.isFinite(prev.b) || !Number.isFinite(cur.b)) continue
+    const dy = cur.b - prev.b
+    if (dy === 0) continue // forward-filled (e.g. monthly or holiday) — no new information that day
+    xs.push(Math.log(cur.a / prev.a))
+    ys.push(dy)
+  }
+  const n = xs.length
+  if (n < 30) return null
+  const mx = xs.reduce((s, v) => s + v, 0) / n
+  const my = ys.reduce((s, v) => s + v, 0) / n
+  let sxy = 0
+  let sxx = 0
+  let syy = 0
+  for (let i = 0; i < n; i++) {
+    sxy += (xs[i] - mx) * (ys[i] - my)
+    sxx += (xs[i] - mx) ** 2
+    syy += (ys[i] - my) ** 2
+  }
+  if (sxx === 0 || syy === 0) return null
+  return { rho: sxy / Math.sqrt(sxx * syy), n }
+}

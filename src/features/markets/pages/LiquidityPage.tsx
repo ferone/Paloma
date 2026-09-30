@@ -1,3 +1,4 @@
+import { CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { useId, useMemo, useState } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { LiquidityHistoryResponse, LiquiditySnapshot, ModeledSplit } from '@shared/markets'
@@ -96,7 +97,7 @@ function Snapshot({ data: d }: { data: LiquiditySnapshot }) {
           <EmptyState compact title="No futures volume history returned" />
         ) : (
           <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
               <BarChart data={d.futuresVolume} margin={{ left: 0, right: 4, top: 8, bottom: 0 }}>
                 <CartesianGrid {...s.grid} />
                 <XAxis dataKey="date" tick={s.tick} axisLine={s.axisLine} tickLine={false} tickFormatter={dateTick(false)} minTickGap={24} />
@@ -286,7 +287,7 @@ function HistoryBody({ data: d, view }: { data: LiquidityHistoryResponse; view: 
         <Stat label={`${perBar[0].toUpperCase()}${perBar.slice(1)}s`} value={fmtNum(d.summary.sessions, 0)} size="md" />
       </div>
       <div className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
           <AreaChart data={rows} margin={{ left: 0, right: 8, top: 16, bottom: 0 }}>
             <defs>
               {layers.map((l) => (

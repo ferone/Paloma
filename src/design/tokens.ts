@@ -54,3 +54,9 @@ export function signColor(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return 'text-muted'
   return v > 0 ? 'text-pos-text' : v < 0 ? 'text-neg-text' : 'text-foreground/80'
 }
+
+/**
+ * First-render size for recharts ResponsiveContainer. It measures its parent
+ * after mount; without this it renders at -1×-1 once and logs a warning.
+ */
+export const CHART_INITIAL_SIZE = { width: 600, height: 240 } as const

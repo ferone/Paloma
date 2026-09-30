@@ -10,7 +10,7 @@ export interface TabItem {
 /** Route-driven sub-navigation within a section (deep-linkable, back-button safe). */
 export function RouteTabs({ items }: { items: TabItem[] }) {
   return (
-    <nav aria-label="Section" className="-mt-2 mb-6 flex gap-5 overflow-x-auto border-b border-border">
+    <nav aria-label="Section" className="-mt-2 mb-6 flex gap-5 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {items.map((t) => (
         <NavLink
           key={t.to}

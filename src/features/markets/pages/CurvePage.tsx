@@ -19,7 +19,7 @@ import { UNIVERSE } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
 import { Chip, DataTable, EmptyState, ErrorBoundary, ErrorNote, Explainer, HelpTip, Panel, PanelSkeleton, Stat, type Column, type ChipTone } from '../../../ui'
 import { fmtAge, fmtCompact, fmtDate, fmtNum, fmtPct, fmtPctSigned, fmtSigned } from '../../../design/format'
-import { signColor } from '../../../design/tokens'
+import { signColor, CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { useCurve, useCurveHistory } from '../hooks'
 import { useChartTheme } from '../charts/chartTheme'
 import { dateTick, rechartsStyle } from '../charts/recharts'
@@ -118,7 +118,7 @@ function CurveChart({ curve: c }: { curve: CurveResponse }) {
   return (
     <Panel density="dense" title="Price by expiry" eyebrow={`COMEX ${c.root} · USD/oz`} provenance={{ source: 'Yahoo Finance listed contract months', asOf: c.provenance.asOf, note: 'Hollow points: stale (no recent trade)' }}>
       <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
           <ComposedChart margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
             <CartesianGrid {...s.grid} />
             <XAxis
@@ -168,7 +168,7 @@ function CarryChart({ curve: c }: { curve: CurveResponse }) {
         <EmptyState compact title="Not enough live contracts">Carry needs at least two traded contract months.</EmptyState>
       ) : (
         <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
             <ComposedChart data={data} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
               <CartesianGrid {...s.grid} />
               <XAxis dataKey="label" tick={s.tick} axisLine={s.axisLine} tickLine={false} interval={0} />
@@ -187,7 +187,8 @@ function CarryChart({ curve: c }: { curve: CurveResponse }) {
               <ReferenceLine y={0} stroke={t.border} />
               <Bar dataKey="carryPct" isAnimationActive={false} radius={[2, 2, 0, 0]}>
                 {data.map((x) => (
-                  <Cell key={x.symbol} fill={x.stale ? t.alpha(t.faint, 0.35) : t.alpha(t.series[1], 0.85)} />
+                  // Neutral ink bars; the T-bill line is the only accent. Stale months are outlines.
+                  <Cell key={x.symbol} fill={x.stale ? 'transparent' : t.alpha(t.muted, 0.5)} stroke={x.stale ? t.faint : 'none'} strokeDasharray={x.stale ? '3 2' : undefined} />
                 ))}
               </Bar>
             </ComposedChart>
@@ -252,7 +253,7 @@ function CarryHistory() {
         </EmptyState>
       ) : (
         <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
             <LineChart data={pts} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
               <CartesianGrid {...s.grid} />
               <XAxis dataKey="date" tick={s.tick} axisLine={s.axisLine} tickLine={false} tickFormatter={dateTick(false)} minTickGap={30} />

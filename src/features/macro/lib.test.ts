@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fmtChange, fmtLevel, joinForwardFill, thin } from './lib'
+import { changeCorrelation, fmtChange, fmtLevel, joinForwardFill, thin } from './lib'
 
 describe('macro client helpers', () => {
   it('formats levels and changes by unit', () => {
@@ -32,5 +32,22 @@ describe('macro client helpers', () => {
     const t = thin(xs, 100)
     expect(t.length).toBeLessThanOrEqual(101)
     expect(t.at(-1)).toBe(999)
+  })
+})
+
+describe('changeCorrelation', () => {
+  const day = (i: number) => new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10)
+
+  it('is +1 when driver changes move with metal returns and −1 when opposite', () => {
+    const metal = Array.from({ length: 60 }, (_, i) => ({ date: day(i), value: 100 * Math.exp(0.01 * Math.sin(i) * i) }))
+    const same = metal.map((p, i) => ({ date: p.date, value: i === 0 ? 0 : Math.log(p.value / metal[0].value) }))
+    const opposite = same.map((p) => ({ ...p, value: -p.value }))
+    expect(changeCorrelation(metal, same)!.rho).toBeCloseTo(1, 6)
+    expect(changeCorrelation(metal, opposite)!.rho).toBeCloseTo(-1, 6)
+  })
+
+  it('needs at least 30 informative days', () => {
+    const metal = Array.from({ length: 10 }, (_, i) => ({ date: day(i), value: 100 + i }))
+    expect(changeCorrelation(metal, metal)).toBeNull()
   })
 })

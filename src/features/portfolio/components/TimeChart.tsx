@@ -1,3 +1,4 @@
+import { CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { fmtDate } from '../../../design/format'
 import { useChartColors } from './useChartColors'
@@ -64,7 +65,7 @@ export function TimeChart<T extends { date: string }>({ data, series, format, he
           ))}
         </ul>
       )}
-      <ResponsiveContainer width="100%" height={height}>
+      <ResponsiveContainer width="100%" height={height} initialDimension={CHART_INITIAL_SIZE}>
         {kind === 'area' ? (
           <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
             {common}

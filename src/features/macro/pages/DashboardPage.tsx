@@ -6,8 +6,8 @@ import { useSettings } from '../../../store/settings-context'
 import { Button, Chip, DataTable, EmptyState, ErrorNote, Explainer, HelpTip, Panel, PanelSkeleton, Segmented, type Column } from '../../../ui'
 import { fmtDate, fmtNum, fmtSigned } from '../../../design/format'
 import { useMacroDashboard, useMacroRefresh, useMacroSeries } from '../api'
-import { STANCE_LABEL, STANCE_TONE, fmtChange, fmtLevel, isoYearsAgo } from '../lib'
-import { PairChart } from '../components/PairChart'
+import { STANCE_LABEL, STANCE_TONE, fmtChange, fmtLevel, isoYearsAgo, changeCorrelation } from '../lib'
+import { DriverChart, MetalPriceChart } from '../components/PairChart'
 
 export default function DashboardPage() {
   const { metal } = useSettings()
@@ -209,35 +209,40 @@ function SmallMultiples({ d }: { d: MacroDashboard }) {
           <EmptyState title={`No ${UNIVERSE[d.metal].label.toLowerCase()} price history cached`}>Run a data refresh to cache Yahoo daily closes.</EmptyState>
         </Panel>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {PAIRS.map((p) => {
-            const s = byId.get(p.id)
-            return (
-              <Panel
-                key={p.id}
-                title={p.label}
-                density="dense"
-                provenance={{
-                  source: `FRED ${p.id} · Yahoo ${UNIVERSE[d.metal].spot}`,
-                  asOf: s?.provenance.asOf ?? null,
-                }}
-              >
-                {s && s.points.length ? (
-                  <PairChart
-                    id={`pair-${p.id}`}
-                    metalLabel={UNIVERSE[d.metal].label}
-                    metalColor={d.metal}
-                    metal={metal.points}
-                    driverLabel={s.label}
-                    driverUnit={s.unit}
-                    driver={s.points}
-                  />
-                ) : (
-                  <EmptyState compact title="No data for this series yet" />
-                )}
-              </Panel>
-            )
-          })}
+        <div className="space-y-4">
+          <Panel
+            density="dense"
+            title={`${UNIVERSE[d.metal].label} price`}
+            provenance={{ source: `Yahoo ${UNIVERSE[d.metal].spot} daily close`, asOf: metal.provenance.asOf, note: 'Hover any chart: all panels follow the same date' }}
+          >
+            <MetalPriceChart label={UNIVERSE[d.metal].label} color={d.metal} points={metal.points} />
+          </Panel>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {PAIRS.map((p) => {
+              const s = byId.get(p.id)
+              const corr = s && s.points.length ? changeCorrelation(metal.points, s.points) : null
+              return (
+                <Panel
+                  key={p.id}
+                  title={s?.label ?? p.id}
+                  density="dense"
+                  actions={
+                    corr ? (
+                      <span
+                        className="num text-2xs text-muted"
+                        title={`Correlation of daily changes with ${UNIVERSE[d.metal].label.toLowerCase()} over the selected range (${corr.n} days)`}
+                      >
+                        ρ <span className={corr.rho > 0.15 ? 'text-pos-text' : corr.rho < -0.15 ? 'text-neg-text' : 'text-foreground'}>{fmtSigned(corr.rho, 2)}</span>
+                      </span>
+                    ) : null
+                  }
+                  provenance={{ source: `FRED ${p.id}`, asOf: s?.provenance.asOf ?? null }}
+                >
+                  {s && s.points.length ? <DriverChart label={s.label} unit={s.unit} points={s.points} /> : <EmptyState compact title="No data for this series yet" />}
+                </Panel>
+              )
+            })}
+          </div>
         </div>
       )}
     </section>

@@ -5,7 +5,7 @@ import { METALS, UNIVERSE, type Metal } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
 import { Chip, DataTable, EmptyState, ErrorNote, Explainer, HelpTip, Panel, PanelSkeleton, Segmented, Stat, type Column } from '../../../ui'
 import { fmtCompact, fmtDate, fmtNum, fmtPct, fmtPctSigned, fmtSigned } from '../../../design/format'
-import { signColor } from '../../../design/tokens'
+import { signColor, CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { useCot } from '../api'
 import { tickMonth, useChartColors } from '../lib'
 import { cotStanceLabel } from '../cot'
@@ -132,7 +132,7 @@ function CotChart({ data, metal }: { data: CotResponse; metal: Metal }) {
         <Segmented ariaLabel="COT chart range" value={range} options={RANGES} onChange={setRange} />
       </div>
       <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
           <LineChart data={shown} margin={{ top: 6, right: 6, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={c.grid} vertical={false} />
             <ReferenceArea y1={band.p85} y2={hi + pad} fill={c.bandCrowded} fillOpacity={0.08} ifOverflow="extendDomain" />

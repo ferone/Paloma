@@ -28,7 +28,8 @@ export function useQuantContext(): QuantOutletContext {
 }
 
 export function QuantLayout() {
-  const { metal, setMetal } = useSettings()
+  // Metal in focus comes from the global switch in the top bar.
+  const { metal } = useSettings()
   const [mode, setMode] = useState<QuantMode>(readMode)
   useEffect(() => {
     try {
@@ -46,21 +47,11 @@ export function QuantLayout() {
   return (
     <>
       <PageHeader
-        eyebrow="Research"
+        eyebrow={`Research · ${metal === 'gold' ? 'Gold' : 'Silver'}`}
         title="Quant Lab"
         description="Calendar spreads, butterflies, roll-clean seasonals and gold/silver relative value on COMEX futures, each with out-of-sample validation and an explicit verdict."
         actions={
           <>
-            <Segmented<Metal>
-              ariaLabel="Metal"
-              size="md"
-              value={metal}
-              onChange={setMetal}
-              options={[
-                { value: 'gold', label: 'Gold' },
-                { value: 'silver', label: 'Silver' },
-              ]}
-            />
             <Segmented<QuantMode>
               ariaLabel="Verdict mode"
               size="md"

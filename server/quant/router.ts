@@ -1,8 +1,261 @@
-import { Router } from 'express'
+import { Router, type Response } from "express";
+import type {
+  BacktestView,
+  CurvePointView,
+  CurveView,
+  GatesResponse,
+  OpportunitiesResponse,
+  QuantEmpty,
+  QuantMode,
+  QuantOpportunity,
+  QuantSnapshot,
+  RecomputeResponse,
+  RelativeValueDetail,
+} from "../../shared/quant.js";
+import { METALS, UNIVERSE, futuresProduct, yahooContractSymbol, type Metal } from "../../shared/universe.js";
+import { JobBusyError, jobStatus, registerJob, runJob } from "../jobs/registry.js";
+import { getBatchQuotes } from "../services/yahoo-finance.service.js";
+import { hasContractData, runQuantEngine } from "./service.js";
+import { latestRun, listInstruments, readInstrumentDetail, readReport, readSeasonalityDetail } from "./store.js";
+import { QUANT_SOURCE, curvePoints, curveRegime, engineInfo } from "./run/compute.js";
 
-// Domain router for /api/quant. Owned by the quant workstream; see CLAUDE.md.
-export const router = Router()
+// Domain router for /api/quant. Every data endpoint answers with either its
+// payload or an explicit QuantEmpty state (no bars / not computed / computing).
+export const router = Router();
 
-router.get('/health', (_req, res) => {
-  res.json({ domain: 'quant', status: 'ok' })
-})
+export const QUANT_JOB = "quant.recompute";
+
+registerJob(
+  QUANT_JOB,
+  "Recompute the Quant Lab: continuous legs, spreads, flies, seasonals, relative value, backtests",
+  async (ctx) => {
+    ctx.progress(0.05, "Stitching contracts and running the engine");
+    const s = await runQuantEngine();
+    ctx.progress(1, s.message);
+    return s.message;
+  },
+);
+
+const autoRecompute = () => process.env.QUANT_AUTO_RECOMPUTE !== "0";
+
+/** The honest empty state for the current situation (may start the engine). */
+function emptyState(): QuantEmpty {
+  if (!hasContractData()) {
+    return {
+      status: "no_data",
+      message: "No COMEX contract history is stored yet, so the Quant Lab has nothing to analyze.",
+      action: "Run the Databento backfill (GLBX.MDP3, 2010 → today) in the Data Center, then recompute.",
+    };
+  }
+  if (jobStatus(QUANT_JOB)?.state === "running") {
+    return { status: "computing", message: "The engine is running on the stored contract history.", action: "This page refreshes when it finishes (≈ 1 minute)." };
+  }
+  if (autoRecompute()) {
+    try {
+      runJob(QUANT_JOB);
+      return { status: "computing", message: "Contract history found; the engine has started its first run.", action: "This page refreshes when it finishes (≈ 1 minute)." };
+    } catch {
+      // fall through to not_computed
+    }
+  }
+  return { status: "not_computed", message: "Contract history is stored but the engine has not run yet.", action: "Recompute the Quant Lab." };
+}
+
+function sendEmpty(res: Response): void {
+  res.json(emptyState());
+}
+
+function parseMetal(v: unknown): Metal {
+  return v === "silver" ? "silver" : "gold";
+}
+function parseMode(v: unknown): QuantMode {
+  return v === "aggressive" ? "aggressive" : "conservative";
+}
+
+/** Relative-value rows belong to both metals' views. */
+const forMetal = (metal: Metal) => (o: QuantOpportunity) => o.metal === metal || o.product === "GS";
+
+router.get("/health", (_req, res) => {
+  res.json({ domain: "quant", status: "ok" });
+});
+
+router.get("/status", (_req, res) => {
+  const run = latestRun();
+  res.json({ run, job: jobStatus(QUANT_JOB) ?? null, hasData: hasContractData() });
+});
+
+router.get("/snapshot", (req, res) => {
+  const metal = parseMetal(req.query.metal);
+  const run = latestRun();
+  const opps = readReport<Record<QuantMode, QuantOpportunity[]>>("opportunities");
+  if (!run || !opps) return sendEmpty(res);
+  const rows = opps.conservative.filter(forMetal(metal));
+  const aggressive = opps.aggressive.filter(forMetal(metal));
+  const body: QuantSnapshot = {
+    metal,
+    asOf: run.generatedAt,
+    dataThrough: run.dataThrough,
+    engine: engineInfo(),
+    counts: {
+      instruments: rows.length,
+      buys: aggressive.filter((o) => o.verdict.action === "BUY").length,
+      sells: aggressive.filter((o) => o.verdict.action === "SELL").length,
+      passedOos: rows.filter((o) => o.oos === "passed").length,
+    },
+    top: rows.slice(0, 8),
+    provenance: { source: QUANT_SOURCE, asOf: run.dataThrough },
+    mlCounted: rows.filter((o) => o.mlCounted).length,
+  };
+  res.json(body);
+});
+
+router.get("/opportunities", (req, res) => {
+  const metal = parseMetal(req.query.metal);
+  const mode = parseMode(req.query.mode);
+  const run = latestRun();
+  const opps = readReport<Record<QuantMode, QuantOpportunity[]>>("opportunities");
+  if (!run || !opps) return sendEmpty(res);
+  const body: OpportunitiesResponse = {
+    metal,
+    mode,
+    asOf: run.generatedAt,
+    dataThrough: run.dataThrough,
+    rows: opps[mode].filter(forMetal(metal)),
+    provenance: { source: QUANT_SOURCE, asOf: run.dataThrough, note: `${mode} verdicts; ranked by the fixed-weight QT composite` },
+  };
+  res.json(body);
+});
+
+router.get("/instruments", (req, res) => {
+  if (!latestRun()) return sendEmpty(res);
+  res.json(listInstruments(req.query.metal ? parseMetal(req.query.metal) : undefined));
+});
+
+router.get("/instrument/:id", (req, res) => {
+  if (!latestRun()) return sendEmpty(res);
+  const d = readInstrumentDetail(req.params.id);
+  if (!d) return res.status(404).json({ error: `Unknown or unanalyzed instrument: ${req.params.id}` });
+  res.json(d);
+});
+
+router.get("/seasonality/:id", (req, res) => {
+  if (!latestRun()) return sendEmpty(res);
+  const d = readSeasonalityDetail(req.params.id);
+  if (!d) return res.status(404).json({ error: `No seasonality for ${req.params.id}` });
+  res.json(d);
+});
+
+router.get("/relative-value", (req, res) => {
+  const pair = String(req.query.pair ?? "gold-silver");
+  if (pair !== "gold-silver") return res.status(400).json({ error: "Only pair=gold-silver is supported" });
+  if (!latestRun()) return sendEmpty(res);
+  const rv = readReport<RelativeValueDetail | null>("relative-value");
+  if (!rv) {
+    const empty: QuantEmpty = {
+      status: "no_data",
+      message: "The gold/silver relative value needs both GC and SI contract history.",
+      action: "Backfill both GC and SI in the Data Center, then recompute.",
+    };
+    return res.json(empty);
+  }
+  res.json(rv);
+});
+
+router.get("/backtest", (req, res) => {
+  const metal = parseMetal(req.query.metal);
+  const mode = parseMode(req.query.mode);
+  if (!latestRun()) return sendEmpty(res);
+  const b = readReport<BacktestView>(`backtest:${metal}:${mode}`);
+  if (!b) return res.json({ status: "no_data", message: `No ${UNIVERSE[metal].label.toLowerCase()} history long enough to replay.`, action: "Backfill more history in the Data Center." } satisfies QuantEmpty);
+  res.json(b);
+});
+
+router.get("/gates", (req, res) => {
+  const metal = parseMetal(req.query.metal);
+  if (!latestRun()) return sendEmpty(res);
+  const g = readReport<GatesResponse>(`gates:${metal}`);
+  if (!g) return res.json({ status: "no_data", message: "No point-in-time decisions to ablate yet.", action: "Backfill more history in the Data Center." } satisfies QuantEmpty);
+  res.json(g);
+});
+
+router.post("/recompute", (_req, res) => {
+  try {
+    const s = runJob(QUANT_JOB);
+    const body: RecomputeResponse = { job: QUANT_JOB, state: s.state, startedAt: s.startedAt };
+    res.status(202).json(body);
+  } catch (err) {
+    if (err instanceof JobBusyError) {
+      const s = jobStatus(QUANT_JOB);
+      res.status(409).json({ job: QUANT_JOB, state: "running", startedAt: s?.startedAt ?? null, error: err.message });
+    } else throw err;
+  }
+});
+
+// ── term structure (stored bars + Yahoo live fallback) ──────────────────────
+const liveCache = new Map<string, { at: number; value: { asOf: string; points: CurvePointView[] } | null; note: string | null }>();
+const LIVE_TTL_MS = 5 * 60_000;
+
+async function yahooCurve(root: string): Promise<{ value: { asOf: string; points: CurvePointView[] } | null; note: string | null }> {
+  const hit = liveCache.get(root);
+  if (hit && Date.now() - hit.at < LIVE_TTL_MS) return hit;
+  const product = futuresProduct(root);
+  if (!product) return { value: null, note: null };
+  const today = new Date();
+  const y0 = today.getUTCFullYear();
+  const m0 = today.getUTCMonth() + 1;
+  const wanted: { symbol: string; month: number; year: number }[] = [];
+  for (let k = 0; k < 30 && wanted.length < 8; k++) {
+    const total = y0 * 12 + (m0 - 1) + k;
+    const year = Math.floor(total / 12);
+    const month = (total % 12) + 1;
+    if (product.activeMonths.includes(month)) wanted.push({ symbol: yahooContractSymbol(root, month, year), month, year });
+  }
+  let result: { value: { asOf: string; points: CurvePointView[] } | null; note: string | null };
+  try {
+    const quotes = await getBatchQuotes(wanted.map((w) => w.symbol));
+    const by = new Map(quotes.map((q) => [q.symbol, q]));
+    const asOf = today.toISOString().slice(0, 10);
+    const rows = wanted
+      .map((w) => ({ w, q: by.get(w.symbol) }))
+      .filter((x) => x.q && x.q.price > 0)
+      .map(({ w, q }) => ({ symbol: w.symbol.replace(".CMX", ""), month: w.month, year: w.year, lastTrade: null, price: q!.price, volume: q!.volume || null, openInterest: null }));
+    result = rows.length >= 2
+      ? { value: { asOf, points: curvePoints(root, asOf, rows, "yahoo") }, note: "Yahoo Finance delayed quotes for the listed active months (live fallback)." }
+      : { value: null, note: "Yahoo returned no quotes for the listed contract months." };
+  } catch {
+    result = { value: null, note: "Yahoo live quotes unavailable right now." };
+  }
+  liveCache.set(root, { at: Date.now(), ...result });
+  return result;
+}
+
+router.get("/curve/:root", async (req, res) => {
+  const root = req.params.root.toUpperCase();
+  const product = futuresProduct(root);
+  if (!product) return res.status(404).json({ error: `Unknown futures root ${root}` });
+  const metal = METALS.find((m) => UNIVERSE[m].futures.some((f) => f.root === root))!;
+  const wantLive = req.query.live !== "0";
+  const stored = readReport<CurveView>(`curve:${root}`);
+  const live = wantLive ? await yahooCurve(root) : { value: null, note: null };
+  if (!stored && !live.value) return sendEmpty(res);
+  if (stored) {
+    res.json({ ...stored, live: live.value, liveNote: live.note } satisfies CurveView);
+    return;
+  }
+  // Live-only fallback: no stored bars for this root yet.
+  const points = live.value!.points;
+  const act = points.filter((p) => p.active);
+  const body: CurveView = {
+    root,
+    metal,
+    asOf: live.value!.asOf,
+    regime: curveRegime(points),
+    frontCarry: act[1]?.annualizedCarry ?? null,
+    points,
+    prior: null,
+    live: null,
+    liveNote: "No stored Databento bars for this product yet — showing Yahoo delayed quotes only.",
+    provenance: { source: "Yahoo Finance (delayed)", asOf: live.value!.asOf, note: "Live fallback until the Databento backfill runs" },
+  };
+  res.json(body);
+});

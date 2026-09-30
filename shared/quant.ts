@@ -1,0 +1,534 @@
+// Quant Lab API contracts (/api/quant/*). Owned by the quant domain.
+// Server: server/quant/*. Client: src/features/quant/*.
+import type { Provenance } from './api.js'
+import type { Metal } from './universe.js'
+
+export type QuantMode = 'conservative' | 'aggressive'
+export type OosStatus = 'passed' | 'failed' | 'untested'
+export type QuantTier = 'STRONG' | 'MODERATE' | 'WATCH' | 'AVOID'
+export type QuantKind = 'outright' | 'calendar' | 'butterfly' | 'seasonal' | 'ratio' | 'inter'
+/** User-facing action: BUY = go long the structure, SELL = go short it, AVOID = stand aside. */
+export type QuantAction = 'BUY' | 'SELL' | 'AVOID'
+
+/**
+ * Returned instead of data when there is nothing to show yet:
+ *  - no_data: contract_bars is empty (run the Databento backfill in the Data Center);
+ *  - not_computed: bars exist but the engine has not run yet;
+ *  - computing: the quant.recompute job is running now.
+ */
+export interface QuantEmpty {
+  status: 'no_data' | 'not_computed' | 'computing'
+  /** Why there is nothing to show. */
+  message: string
+  /** What the user should do about it. */
+  action: string
+}
+
+export function isQuantEmpty(x: unknown): x is QuantEmpty {
+  const st = typeof x === 'object' && x !== null ? (x as { status?: unknown }).status : undefined
+  return st === 'no_data' || st === 'not_computed' || st === 'computing'
+}
+
+export interface EngineInfo {
+  profile: string
+  configVersion: number
+  /** z-score lookback (bars). */
+  N: number
+  /** Seasonal drift / holding horizon (bars). */
+  H: number
+  tiers: { strong: number; moderate: number; watch: number }
+  ouBounds: { min: number; max: number }
+}
+
+export interface ScoreView {
+  z: number
+  score: number
+  base: number
+  seasonFactor: number
+  fundFactor: number
+  volFactor: number | null
+  tier: QuantTier
+  avoidOverride: boolean
+}
+
+export interface OuView {
+  n: number
+  b: number
+  mu: number | null
+  theta: number | null
+  halfLife: number | null
+  sigmaEq: number | null
+  r2: number
+  tradable: boolean
+  reason: string
+  /** Adaptive lookback (bars) and the z computed on it. */
+  nEff: number | null
+  zEff: number | null
+  expectedDays: number | null
+}
+
+export interface CarryView {
+  regime: 'contango' | 'backwardation' | 'flat'
+  /** c1 − c0 in price units. */
+  slope: number
+  slopePctile: number | null
+  slopeMomZ: number | null
+  trending: boolean
+  alignment: 'aligned' | 'conflict' | 'neutral' | null
+  detail: string | null
+}
+
+export interface GatesView {
+  ouTradable: boolean
+  carryConflict: boolean
+  /** Structural-move gate: the front outright / curve slope is breaking its noise band. null = not applicable. */
+  structural: boolean | null
+  structuralDetail: string | null
+}
+
+export interface VerdictView {
+  mode: QuantMode
+  /** The engine decision (BUY = take the trade in `direction`). */
+  decision: 'BUY' | 'AVOID'
+  action: QuantAction
+  direction: 'long' | 'short' | null
+  /** Plain-language instruction, e.g. "Short the calendar: sell GCZ26, buy GCG27". */
+  instruction: string
+  reasons: string[]
+  blockers: string[]
+  confidence: 'high' | 'medium' | 'low'
+}
+
+export interface OosYear {
+  year: number
+  netPnl: number
+}
+
+export interface OosView {
+  status: OosStatus
+  method: 'seasonal-window' | 'z-fade'
+  reason: string
+  trades: number
+  winRate: number
+  avgPnl: number
+  totalPnl: number
+  sharpe: number
+  tStat: number
+  maxDrawdown: number
+  /** Unit of the P&L figures, e.g. "$ per contract, net of $35 costs". */
+  pnlUnit: string
+  yearly: OosYear[]
+  regime: {
+    survives: boolean
+    exRegimeStatus: OosStatus
+    regimesHit: string[]
+    excludedTrades: number
+    note: string
+  } | null
+}
+
+export interface KellyView {
+  /** Full Kelly fraction f* = p − (1 − p)/b (may be ≤ 0 ⇒ no bet). */
+  fullKelly: number
+  /** Suggested fraction of risk capital = max(0, half of f*), capped at 25%. */
+  halfKelly: number
+  winRate: number
+  /** Average win ÷ average loss (OOS, net). */
+  payoff: number
+  trades: number
+  note: string
+}
+
+export interface ContractLegView {
+  /** Continuous leg, e.g. "GC.c.0". */
+  leg: string
+  /** Real contract on the as-of date, e.g. "GCZ26" (null when unresolved). */
+  contract: string | null
+  side: 'long' | 'short'
+  /** Contracts per 1 unit of the structure (e.g. 2 for the fly body). */
+  qty: number
+}
+
+export interface CapacityView {
+  medianAdv: number
+  tier: 'deep' | 'moderate' | 'thin' | 'unknown'
+  suggestedMaxContracts: number
+  note: string
+}
+
+export interface TradePlanView {
+  side: 1 | -1 | 0
+  entry: number
+  target: number
+  stop: number | null
+  /** $ per 1 structure (per contract set). */
+  expectedUsd: number
+  riskUsd: number | null
+  rewardRisk: number | null
+  entryZone: [number, number] | null
+  pointValue: number
+  /** Unit of entry/target/stop, e.g. "$/oz" or "ratio". */
+  unit: string
+  legs: ContractLegView[]
+  capacity: CapacityView
+  kelly: KellyView | null
+  note: string
+}
+
+export interface SeasonalWindowView {
+  entryDoy: number
+  exitDoy: number
+  /** Calendar labels of the entry/exit day, e.g. "12 Mar". */
+  entryLabel: string
+  exitLabel: string
+  side: 'long' | 'short'
+  years: number
+  winRate: number
+  avgPnl: number
+  medianPnl: number
+  tStat: number
+  profitFactor: number
+  avgMae: number
+  avgMfe: number
+  /** Today inside this window? */
+  active: boolean
+  perYear: { year: number; entryDate: string; exitDate: string; pnl: number; mae: number; mfe: number }[]
+}
+
+export interface MlView {
+  pConverge: number | null
+  pUp: number | null
+  expectedMove: number | null
+  horizonDays: number
+  validationStatus: OosStatus
+  /** True only when validationStatus === 'passed' (then it moves the rank). */
+  counted: boolean
+}
+
+export interface LensView {
+  key: string
+  label: string
+  stance: 'supports' | 'contradicts' | 'neutral' | 'absent'
+  weight: number
+  detail: string
+}
+
+export interface DecisionView {
+  conviction: number
+  convictionLabel: 'high' | 'moderate' | 'low' | 'conflicted'
+  trap: boolean
+  headline: string
+  lenses: LensView[]
+}
+
+/** One row of the ranked scanner. */
+export interface QuantOpportunity {
+  id: string
+  metal: Metal
+  label: string
+  kind: QuantKind
+  product: string
+  asOf: string
+  value: number
+  unit: string
+  z: number | null
+  zEff: number | null
+  halfLife: number | null
+  score: number | null
+  tier: QuantTier
+  qtRank: number
+  verdict: VerdictView
+  carry: 'aligned' | 'conflict' | 'neutral' | null
+  gates: GatesView
+  oos: OosStatus
+  survivesRegime: boolean | null
+  mlProb: number | null
+  mlCounted: boolean
+  /** Active seasonal window, if today is inside one. */
+  window: { side: 'long' | 'short'; entryLabel: string; exitLabel: string; winRate: number } | null
+  evidence: string[]
+}
+
+export interface QuantSnapshot {
+  metal: Metal
+  asOf: string
+  dataThrough: string | null
+  engine: EngineInfo
+  counts: { instruments: number; buys: number; sells: number; passedOos: number }
+  top: QuantOpportunity[]
+  provenance: Provenance
+  /** ML predictions were read and used (validated) for this many instruments. */
+  mlCounted: number
+}
+
+export interface OpportunitiesResponse {
+  metal: Metal
+  mode: QuantMode
+  asOf: string
+  dataThrough: string | null
+  rows: QuantOpportunity[]
+  provenance: Provenance
+}
+
+export interface SeriesBandPoint {
+  date: string
+  value: number
+  mean: number | null
+  sd: number | null
+  z: number | null
+}
+
+export interface StructuralPoint {
+  date: string
+  /** σ-distance of the front outright from its trailing noise band. */
+  outZ: number | null
+  /** σ-distance of the curve slope (c1 − c0) from its trailing noise band. */
+  slopeZ: number | null
+}
+
+export interface InstrumentDetail {
+  id: string
+  label: string
+  kind: QuantKind
+  metal: Metal
+  product: string
+  unit: string
+  pointValue: number
+  asOf: string
+  dataThrough: string | null
+  legs: ContractLegView[]
+  /** Value with its rolling mean/σ (the z-band chart). */
+  series: SeriesBandPoint[]
+  bandWindow: number
+  score: ScoreView | null
+  ou: OuView | null
+  carry: CarryView | null
+  gates: GatesView
+  structural: { k: number; n: number; points: StructuralPoint[] } | null
+  /** Butterfly curvature (mid − avg(wings)), flies only. */
+  curvature: { date: string; value: number }[] | null
+  verdicts: Record<QuantMode, VerdictView>
+  decision: DecisionView
+  plan: TradePlanView
+  oos: OosView
+  ml: MlView | null
+  qtRank: number
+  evidence: string[]
+  window: SeasonalWindowView | null
+  caveats: string[]
+  provenance: Provenance
+}
+
+export interface EnvelopePoint {
+  doy: number
+  p10: number | null
+  p25: number | null
+  p50: number | null
+  p75: number | null
+  p90: number | null
+  mean: number | null
+}
+
+export interface YearPath {
+  /** Contract/calendar year the path belongs to. */
+  year: number
+  points: { doy: number; value: number }[]
+}
+
+export interface MonthlyReturnsView {
+  basis: 'pct' | 'abs'
+  years: number[]
+  cells: { year: number; month: number; ret: number | null }[]
+  summary: { month: number; pctPositive: number; median: number; avg: number; best: number; worst: number }[]
+}
+
+export interface SeasonalityDetail {
+  id: string
+  label: string
+  kind: QuantKind
+  metal: Metal
+  unit: string
+  /** 1 = calendar day-of-year axis; > 1 = season-day axis starting at this day-of-year. */
+  originDoy: number
+  /** Ticks for the x-axis on the (possibly shifted) day axis. */
+  monthTicks: { doy: number; label: string }[]
+  rebase: 'absolute' | 'rebaseZero' | 'rebasePct'
+  envelope: EnvelopePoint[]
+  current: YearPath | null
+  perYear: YearPath[]
+  monthly: MonthlyReturnsView
+  windows: SeasonalWindowView[]
+  oos: OosView
+  asOf: string
+  dataThrough: string | null
+  provenance: Provenance
+}
+
+export interface RatioBandPoint {
+  date: string
+  value: number
+  mean: number | null
+  sd: number | null
+}
+
+export interface RelativeValueDetail {
+  pair: 'gold-silver'
+  asOf: string
+  dataThrough: string | null
+  ratio: {
+    latest: number
+    z: number | null
+    zLong: number | null
+    percentile: number | null
+    bandWindow: number
+    series: RatioBandPoint[]
+    ou: OuView | null
+    oos: OosView
+    verdicts: Record<QuantMode, VerdictView>
+    /** Contracts of SI per 1 GC for a dollar-neutral ratio trade at the current prices. */
+    hedge: { goldContracts: number; silverContracts: number; note: string }
+  }
+  spread: {
+    latest: number
+    z: number | null
+    sigma: number | null
+    /** SI contracts per 1 GC that equalise trailing dollar volatility. */
+    volParityRatio: number | null
+    series: SeriesBandPoint[]
+    ou: OuView | null
+    oos: OosView
+    verdicts: Record<QuantMode, VerdictView>
+  }
+  provenance: Provenance
+}
+
+export interface CurvePointView {
+  symbol: string
+  month: number
+  year: number
+  label: string
+  lastTrade: string | null
+  /** Calendar days from the curve date to the contract's last trade. */
+  days: number | null
+  price: number
+  volume: number | null
+  openInterest: number | null
+  active: boolean
+  source: 'databento' | 'yahoo'
+  /** Annualized carry vs the front ACTIVE contract (fraction; 0.03 = 3%/yr). */
+  annualizedCarry: number | null
+}
+
+export interface CurveView {
+  root: string
+  metal: Metal
+  asOf: string | null
+  regime: 'contango' | 'backwardation' | 'flat' | 'mixed' | 'unknown'
+  /** Annualized carry between the first two active contracts. */
+  frontCarry: number | null
+  points: CurvePointView[]
+  /** Same curve ~1 month earlier (stored bars), for comparison. */
+  prior: { asOf: string; points: { label: string; days: number | null; price: number }[] } | null
+  live: { asOf: string; points: CurvePointView[] } | null
+  liveNote: string | null
+  provenance: Provenance
+}
+
+export interface EquityPointView {
+  date: string
+  model: number
+  passive: number
+  drawdown: number
+}
+
+export interface HistogramBin {
+  from: number
+  to: number
+  count: number
+}
+
+export interface BacktestInstrumentRow {
+  instrumentId: string
+  label: string
+  decisions: number
+  buys: number
+  modelPnl: number
+  passivePnl: number
+  modelAvg: number
+  passiveAvg: number
+  modelWinRate: number
+}
+
+export interface BacktestDecisionRow {
+  date: string
+  instrumentId: string
+  z: number
+  score: number
+  direction: -1 | 0 | 1
+  verdict: 'BUY' | 'AVOID'
+  validationStatus: OosStatus
+  exitDate: string
+  modelPnl: number
+  passivePnl: number
+}
+
+export interface BacktestView {
+  metal: Metal
+  mode: QuantMode
+  start: string
+  end: string
+  horizonDays: number
+  dollarsAtRisk: number
+  costPerTrade: number
+  totals: {
+    decisions: number
+    buys: number
+    modelPnl: number
+    passivePnl: number
+    modelAvg: number
+    passiveAvg: number
+    modelWinRate: number
+    passiveWinRate: number
+    maxDrawdown: number
+    verdict: 'made money' | 'lost money' | 'flat'
+  }
+  equity: EquityPointView[]
+  histogram: HistogramBin[]
+  byInstrument: BacktestInstrumentRow[]
+  decisions: BacktestDecisionRow[]
+  provenance: Provenance
+}
+
+export interface GateAblationRow {
+  gate: 'ou' | 'carry'
+  label: string
+  keptTrades: number
+  removedTrades: number
+  keptAvg: number
+  removedAvg: number
+  allAvg: number
+  upliftPerTrade: number
+  exShockUplift: number
+  verdict: 'helps' | 'hurts' | 'neutral' | 'insufficient'
+}
+
+export interface GatesResponse {
+  metal: Metal
+  decisions: number
+  rows: GateAblationRow[]
+  note: string
+  provenance: Provenance
+}
+
+export interface RecomputeResponse {
+  job: string
+  state: string
+  startedAt: string | null
+}
+
+export interface InstrumentListItem {
+  id: string
+  label: string
+  kind: QuantKind
+  metal: Metal
+}

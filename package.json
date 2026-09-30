@@ -26,7 +26,9 @@
     "macro:refresh": "tsx server/macro/cli.ts",
     "ai:report": "tsx server/ai/cli.ts",
     "portfolio:seed-demo": "tsx server/portfolio/seed-demo.ts",
-    "portfolio:clear-demo": "tsx server/portfolio/seed-demo.ts --clear"
+    "portfolio:clear-demo": "tsx server/portfolio/seed-demo.ts --clear",
+    "quant:recompute": "tsx server/quant/cli.ts",
+    "quant:test": "vitest run server/quant src/charts src/features/quant"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

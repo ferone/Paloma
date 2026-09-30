@@ -53,6 +53,12 @@ export interface EstimateRequest {
 export interface BackfillRequest extends EstimateRequest {
   /** Explicit spending cap (USD). Required to exceed DATABENTO_BUDGET. */
   maxCost?: number
+  /**
+   * Months per request window (default 1). Cost is identical — Databento bills by
+   * data, not requests — so large backfills of light schemas (ohlcv-1d) run far
+   * faster with 12. Keep statistics at 1: it is heavy and slow server-side.
+   */
+  windowMonths?: number
 }
 
 /** 402 body when a pull would exceed its allowed cost. */

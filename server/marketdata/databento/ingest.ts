@@ -44,14 +44,14 @@ export function saturdayOnOrBefore(date: string): string {
 }
 
 /**
- * Split [start, end) into ~monthly windows whose boundaries fall on Saturdays,
+ * Split [start, end) into windows of `months` (default 1) whose boundaries fall on Saturdays,
  * so a Sunday-evening bar always travels with its Monday. PURE.
  */
-export function monthlyWindows(start: string, end: string): { start: string; end: string }[] {
+export function monthlyWindows(start: string, end: string, months = 1): { start: string; end: string }[] {
   const out: { start: string; end: string }[] = []
   let cur = start
   while (cur < end) {
-    let next = addMonths(cur, 1)
+    let next = addMonths(cur, Math.max(1, Math.floor(months)))
     next = addDays(next, (6 - dow(next) + 7) % 7) // forward to Saturday
     if (next <= cur) next = addDays(cur, 7)
     if (next > end) next = end
@@ -101,7 +101,7 @@ export async function ingestDatabento(req: BackfillRequest, deps: IngestDeps, ct
   const limit = costLimit(deps.budget, req.maxCost)
   ctx.log(`Estimate $${est.total.toFixed(4)} for ${req.roots.join(',')} ${est.start}→${est.end} (limit $${limit.toFixed(2)})`)
 
-  const windows = monthlyWindows(est.start, est.end)
+  const windows = monthlyWindows(est.start, est.end, req.windowMonths)
   const steps = req.roots.length * windows.length * schemas.length
   let done = 0
   const result: IngestResult = { estimate: est, spent: 0, bars: 0, openInterest: 0, contracts: 0, frontMonthRows: 0, skippedSpreads: 0 }

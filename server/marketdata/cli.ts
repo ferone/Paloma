@@ -28,7 +28,7 @@ const ctx: JobContext = {
 function request() {
   const roots = (args.roots ? args.roots.split(',') : [...DATABENTO_ROOTS]) as DatabentoRoot[]
   const schemas = (args.schemas ? args.schemas.split(',') : [...DATABENTO_SCHEMAS]) as DatabentoSchema[]
-  return { roots, schemas, start: args.start ?? DATABENTO_HISTORY_START, end: args.end, maxCost: args.maxCost ? Number(args.maxCost) : undefined }
+  return { roots, schemas, start: args.start ?? DATABENTO_HISTORY_START, end: args.end, maxCost: args.maxCost ? Number(args.maxCost) : undefined, windowMonths: args.windowMonths ? Number(args.windowMonths) : undefined }
 }
 
 async function main(cmd: string | undefined): Promise<void> {

@@ -82,6 +82,14 @@ describe('windows', () => {
     expect(w.at(-1)!.end).toBe('2026-04-15')
     for (let i = 1; i < w.length; i++) expect(w[i].start).toBe(w[i - 1].end)
   })
+  it('supports multi-month windows with the same Saturday boundaries and full coverage', () => {
+    const w = monthlyWindows('2010-06-06', '2013-01-01', 12)
+    expect(w).toHaveLength(3)
+    expect(w[0].start).toBe('2010-06-06')
+    expect(w.at(-1)!.end).toBe('2013-01-01')
+    for (const x of w.slice(0, -1)) expect(new Date(`${x.end}T00:00:00Z`).getUTCDay()).toBe(6)
+    for (let i = 1; i < w.length; i++) expect(w[i].start).toBe(w[i - 1].end)
+  })
   it('resumes from the Saturday on/before the latest stored date', () => {
     expect(saturdayOnOrBefore('2026-09-08')).toBe('2026-09-05')
     expect(saturdayOnOrBefore('2026-09-05')).toBe('2026-09-05')

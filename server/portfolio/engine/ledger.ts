@@ -37,7 +37,12 @@ export interface EnginePoint {
   pnl: Record<string, number>
   /** Cumulative P&L since inception per instrument (plus CASH_KEY). */
   cumPnl: Record<string, number>
-  /** Cumulative sum of daily P&L / prior NAV per instrument (plus CASH_KEY). */
+  /**
+   * Cumulative growth-weighted contribution per instrument (plus CASH_KEY):
+   * Σ_t (P&L_t / NAV_{t−1}) × NAV/unit_{t−1} / base. For a period starting
+   * after point s, (cumContrib_end − cumContrib_s) × base / NAV/unit_s sums
+   * exactly to the period's TWR across instruments (no linking residual).
+   */
   cumContrib: Record<string, number>
 }
 
@@ -331,7 +336,8 @@ export function runLedger(
     if (cashPnl) pnl[CASH_KEY] = cashPnl
     for (const [id, d] of Object.entries(pnl)) {
       cumPnl[id] = (cumPnl[id] ?? 0) + d
-      if (denom > 0) cumContrib[id] = (cumContrib[id] ?? 0) + d / denom
+      const growth = (prevNpu ?? settings.baseNavPerUnit) / settings.baseNavPerUnit
+      if (denom > 0) cumContrib[id] = (cumContrib[id] ?? 0) + (d / denom) * growth
     }
 
     const base = prevNpu ?? (navPerUnit != null ? settings.baseNavPerUnit : null)

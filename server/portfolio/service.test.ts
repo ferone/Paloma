@@ -135,6 +135,10 @@ describe('portfolio repositories + service', () => {
 
     const att = buildAttribution(c)
     expect(att.totalPnl).toBeCloseTo(s.totalPnl, 6)
+    expect(att.residual).toBeCloseTo(0, 10)
+    const later = buildAttribution(c, '2024-02-01')
+    expect(later.residual).toBeCloseTo(0, 10)
+    expect(later.byHolding.reduce((sum, r) => sum + r.contribution, 0)).toBeCloseTo(later.twr!, 10)
     expect(att.bySleeve.map((r) => r.key).sort()).toEqual(['cash', 'etf', 'futures'].filter((k) => att.bySleeve.some((r) => r.key === k)).sort())
 
     const risk = await buildRisk(c)

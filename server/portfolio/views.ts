@@ -533,11 +533,13 @@ export function buildAttribution(c: Computed, from?: string | null, to?: string 
   const start = startIdx >= 0 ? pts[startIdx] : null
   if (start && start.date >= end.date) return empty
 
+  // Growth-weighted contributions are stored relative to the base NAV/unit; rescale to the period start.
+  const linkScale = start?.navPerUnit ? c.settings.baseNavPerUnit / start.navPerUnit : 1
   const keys = new Set([...Object.keys(end.cumPnl), ...Object.keys(start?.cumPnl ?? {})])
   const byHolding: AttributionRow[] = []
   for (const k of keys) {
     const pnl = (end.cumPnl[k] ?? 0) - (start?.cumPnl[k] ?? 0)
-    const contribution = (end.cumContrib[k] ?? 0) - (start?.cumContrib[k] ?? 0)
+    const contribution = ((end.cumContrib[k] ?? 0) - (start?.cumContrib[k] ?? 0)) * linkScale
     if (Math.abs(pnl) < 0.005 && Math.abs(contribution) < 1e-9) continue
     const inst = c.instruments.get(k)
     byHolding.push({
@@ -579,7 +581,7 @@ export function buildAttribution(c: Computed, from?: string | null, to?: string 
     byHolding,
     bySleeve: group(sleeveOf, (g) => SLEEVE_LABEL[g as Sleeve] ?? g),
     byMetal: group(metalOf, (g) => (g === 'gold' ? 'Gold' : g === 'silver' ? 'Silver' : g === 'cash' ? 'Cash' : 'Other')),
-    provenance: provenance(c, 'Contribution = Σ daily P&L ÷ prior-day NAV; residual is compounding'),
+    provenance: provenance(c, 'Contribution = Σ daily P&L ÷ prior-day NAV, growth-linked so contributions sum to TWR'),
   }
 }
 

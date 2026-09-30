@@ -1,6 +1,7 @@
 // Orchestrates a NAV recompute: ledger + cached/fetched closes → engine run →
 // persisted snapshots/units → published PortfolioSummaryLite artifact.
 // Results are cached in memory and invalidated on every ledger mutation.
+import { getDb } from '../db/client.js'
 import { writeArtifact } from '../db/repo.js'
 import { registerJob } from '../jobs/registry.js'
 import { ARTIFACTS, type PortfolioSummaryLite } from '../../shared/artifacts.js'
@@ -27,6 +28,11 @@ const MAX_AGE_MS = 15 * 60_000
 let version = 0
 let cache: { v: number; at: number; c: Computed } | null = null
 let inflight: { v: number; p: Promise<Computed> } | null = null
+let lastStamp = -1
+
+function auditStamp(): number {
+  return (getDb().prepare('SELECT COALESCE(MAX(id), 0) AS n FROM pf_audit_log').get() as { n: number }).n
+}
 
 export function today(): string {
   return new Date().toISOString().slice(0, 10)
@@ -81,6 +87,12 @@ export function toLite(s: PortfolioSummaryLite): PortfolioSummaryLite {
 /** Latest computation (cached ≤ 15 min unless the ledger changed). `force` refetches prices. */
 export function getComputed(opts: { force?: boolean } = {}): Promise<Computed> {
   const force = !!opts.force
+  // Another process (e.g. the demo seed CLI) may have written to the ledger.
+  const stamp = auditStamp()
+  if (stamp !== lastStamp) {
+    lastStamp = stamp
+    version++
+  }
   if (!force && cache && cache.v === version && Date.now() - cache.at < MAX_AGE_MS) return Promise.resolve(cache.c)
   if (!force && inflight && inflight.v === version) return inflight.p
   const v = version
@@ -105,6 +117,7 @@ export function invalidate(): void {
 
 /** Test helper: forget cached state (e.g. after swapping the DB). */
 export function resetCache(): void {
+  lastStamp = -1
   version++
   cache = null
   inflight = null

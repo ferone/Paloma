@@ -109,6 +109,12 @@ describe('ledger engine', () => {
     expect(totalPnl).toBeCloseTo(d4.nav - (10_000 + 11_000 - 5_000), 6)
     expect(d4.cumPnl.GLD).toBeCloseTo(50 * (99 - 100), 8)
     expect(d4.cumPnl.GC).toBeCloseTo(100 * (2020 - 2000) - 5, 8)
+
+    // Growth-linked contributions sum exactly to TWR, from inception and from a later start
+    const linked = Object.values(d4.cumContrib).reduce((s, x) => s + x, 0)
+    expect(linked).toBeCloseTo(d4.navPerUnit! / 100 - 1, 12)
+    const fromD2 = Object.keys(d4.cumContrib).reduce((s, k) => s + ((d4.cumContrib[k] ?? 0) - (d2.cumContrib[k] ?? 0)) * (100 / d2.navPerUnit!), 0)
+    expect(fromD2).toBeCloseTo(d4.navPerUnit! / d2.navPerUnit! - 1, 12)
   })
 
   it('realizes futures P&L to cash on close and tracks income, fees and physical haircut', () => {

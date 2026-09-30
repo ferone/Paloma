@@ -501,7 +501,7 @@ export interface AttributionRow {
   key: string
   label: string
   pnl: number
-  /** Sum of daily P&L / prior-day NAV over the period (fraction). */
+  /** Growth-linked contribution to TWR over the period (fraction); rows sum to `twr`. */
   contribution: number
   startValue: number
   endValue: number
@@ -513,7 +513,7 @@ export interface AttributionResponse {
   totalPnl: number
   /** Chain-linked TWR over the period. */
   twr: number | null
-  /** TWR minus the sum of contributions (compounding / cross effects). */
+  /** TWR minus the sum of contributions (≈ 0; non-zero only with data gaps or zero-unit periods). */
   residual: number | null
   byHolding: AttributionRow[]
   bySleeve: AttributionRow[]

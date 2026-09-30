@@ -71,3 +71,129 @@ function daysAgo(days: number): Date {
   d.setDate(d.getDate() - days)
   return d
 }
+
+// ── Additions for the markets domain (server/markets). The functions above keep
+// their signatures and shapes: other domains depend on them. ──────────────────
+
+/** Richer quote fields used by the term-structure, ETF and liquidity views. */
+export interface DetailedQuote {
+  symbol: string
+  shortName: string
+  quoteType: string
+  price: number | null
+  previousClose: number | null
+  change: number | null
+  /** Percent units (1.2 = 1.2%), as Yahoo reports it. */
+  changePercent: number | null
+  open: number | null
+  dayHigh: number | null
+  dayLow: number | null
+  volume: number | null
+  avgVolume3M: number | null
+  openInterest: number | null
+  /** YYYY-MM-DD, futures only. */
+  expireDate: string | null
+  marketState: string
+  /** ISO time of the last trade. */
+  lastTrade: string | null
+}
+
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+const toDate = (v: unknown): Date | null => {
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v
+  if (typeof v === 'number') return new Date(v < 1e12 ? v * 1000 : v)
+  if (typeof v === 'string' && v) {
+    const d = new Date(v)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  return null
+}
+
+function toDetailed(q: any): DetailedQuote {
+  return {
+    symbol: String(q.symbol),
+    shortName: String(q.shortName ?? q.longName ?? q.symbol).replace(/^"|"$/g, ''),
+    quoteType: String(q.quoteType ?? ''),
+    price: num(q.regularMarketPrice),
+    previousClose: num(q.regularMarketPreviousClose),
+    change: num(q.regularMarketChange),
+    changePercent: num(q.regularMarketChangePercent),
+    open: num(q.regularMarketOpen),
+    dayHigh: num(q.regularMarketDayHigh),
+    dayLow: num(q.regularMarketDayLow),
+    volume: num(q.regularMarketVolume),
+    avgVolume3M: num(q.averageDailyVolume3Month),
+    openInterest: num(q.openInterest),
+    expireDate: toDate(q.expireIsoDate ?? q.expireDate)?.toISOString().slice(0, 10) ?? null,
+    marketState: String(q.marketState ?? 'CLOSED'),
+    lastTrade: toDate(q.regularMarketTime)?.toISOString() ?? null,
+  }
+}
+
+/**
+ * Batched Yahoo quote request (40 symbols per call). Unknown symbols (e.g. a
+ * contract month that is not listed yet) are simply absent from the result.
+ */
+export async function getDetailedQuotes(symbols: string[]): Promise<DetailedQuote[]> {
+  const out: DetailedQuote[] = []
+  for (let i = 0; i < symbols.length; i += 40) {
+    const chunk = symbols.slice(i, i + 40)
+    const res: any = await yahooFinance.quote(chunk, {}, { validateResult: false })
+    const arr: any[] = Array.isArray(res) ? res : res ? [res] : []
+    for (const q of arr) if (q?.symbol) out.push(toDetailed(q))
+  }
+  return out
+}
+
+export interface FundProfile {
+  symbol: string
+  /** Latest published NAV per share (usually the prior close). */
+  navPrice: number | null
+  totalAssets: number | null
+  /** Fraction (0.004 = 0.40%). */
+  expenseRatio: number | null
+}
+
+/** NAV, AUM and expense ratio from quoteSummary. Closed-end trusts (PHYS, PSLV) report no NAV. */
+export async function getFundProfile(symbol: string): Promise<FundProfile> {
+  const r: any = await yahooFinance.quoteSummary(
+    symbol,
+    { modules: ['summaryDetail', 'defaultKeyStatistics', 'fundProfile'] },
+    { validateResult: false },
+  )
+  return {
+    symbol,
+    navPrice: num(r?.summaryDetail?.navPrice),
+    totalAssets: num(r?.summaryDetail?.totalAssets) ?? num(r?.defaultKeyStatistics?.totalAssets),
+    expenseRatio: num(r?.fundProfile?.feesExpensesInvestment?.annualReportExpenseRatio),
+  }
+}
+
+export interface DailyBarLite {
+  /** YYYY-MM-DD */
+  date: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+/** Bars from an explicit start date; bars without a close are dropped. */
+export async function getBarsSince(
+  symbol: string,
+  from: Date,
+  interval: '1d' | '1wk' | '1mo' = '1d',
+): Promise<DailyBarLite[]> {
+  const result: any = await yahooFinance.chart(symbol, { period1: from, period2: new Date(), interval })
+  return (result.quotes || [])
+    .filter((q: any) => typeof q.close === 'number' && Number.isFinite(q.close))
+    .map((q: any) => ({
+      date: (q.date instanceof Date ? q.date.toISOString() : String(q.date)).slice(0, 10),
+      open: q.open ?? q.close,
+      high: q.high ?? q.close,
+      low: q.low ?? q.close,
+      close: q.close,
+      volume: q.volume ?? 0,
+    }))
+}

@@ -308,3 +308,41 @@ export const REGION_DATA = [
     ],
   },
 ]
+
+// ── Metal-aware instrument sets for /api/markets/liquidity ─────────────────
+// Real, observable volumes only. The source/region splits above are modeled
+// and exist for gold only; silver deliberately has no such split.
+
+export interface LiquidityInstrumentDef {
+  symbol: string
+  name: string
+  kind: 'future' | 'etf'
+  /** Troy ounces per contract (futures only) for dollar volume. */
+  ozPerContract?: number
+  /**
+   * false when Yahoo's daily history for this symbol is not usable for volume
+   * (SI=F's continuous series follows thin delivery months, e.g. ~100 lots/day
+   * while the Dec contract trades ~30k). Such symbols are left out of history.
+   */
+  historyReliable?: boolean
+}
+
+export const LIQUIDITY_INSTRUMENTS: Record<'gold' | 'silver', LiquidityInstrumentDef[]> = {
+  gold: [
+    { symbol: 'GC=F', name: 'COMEX Gold Futures (front)', kind: 'future', ozPerContract: 100 },
+    { symbol: 'GLD', name: 'SPDR Gold Shares', kind: 'etf' },
+    { symbol: 'IAU', name: 'iShares Gold Trust', kind: 'etf' },
+    { symbol: 'GLDM', name: 'SPDR Gold MiniShares', kind: 'etf' },
+    { symbol: 'SGOL', name: 'abrdn Physical Gold Shares', kind: 'etf' },
+    { symbol: 'PHYS', name: 'Sprott Physical Gold Trust', kind: 'etf' },
+  ],
+  silver: [
+    { symbol: 'SI=F', name: 'COMEX Silver Futures (front)', kind: 'future', ozPerContract: 5000, historyReliable: false },
+    { symbol: 'SLV', name: 'iShares Silver Trust', kind: 'etf' },
+    { symbol: 'SIVR', name: 'abrdn Physical Silver Shares', kind: 'etf' },
+    { symbol: 'PSLV', name: 'Sprott Physical Silver Trust', kind: 'etf' },
+  ],
+}
+
+/** Stable keys for SOURCE_BREAKDOWN rows (same order). */
+export const SOURCE_KEYS = ['institutional', 'centralBanks', 'privateRetail', 'jewelry', 'mining'] as const

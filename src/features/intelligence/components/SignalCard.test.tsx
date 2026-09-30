@@ -25,23 +25,23 @@ const base: MlPrediction = {
 describe('SignalCard', () => {
   it('labels a failed model as informational only, with the gate reasons', () => {
     render(<SignalCard metal="gold" prediction={base} />)
-    expect(screen.getByText('Not validated — informational only.')).toBeInTheDocument()
-    expect(screen.getByText(/AUC 0.458 < 0.55; p 0.723/)).toBeInTheDocument()
-    expect(screen.getByText('failed')).toBeInTheDocument()
+    expect(screen.getByText('Not validated — informational only.')).toBeTruthy()
+    expect(screen.getByText(/AUC 0.458 < 0.55; p 0.723/)).toBeTruthy()
+    expect(screen.getByText('failed')).toBeTruthy()
     const p = screen.getByText('58.6%')
     expect(p.className).toMatch(/text-muted/)
-    expect(screen.getByText(/Model run #12/)).toBeInTheDocument()
+    expect(screen.getByText(/Model run #12/)).toBeTruthy()
   })
 
   it('shows a passed model at full emphasis without the caveat banner', () => {
     render(<SignalCard metal="silver" prediction={{ ...base, metal: 'silver', validationStatus: 'passed', reasons: [] }} />)
     expect(screen.queryByText('Not validated — informational only.')).toBeNull()
     expect(screen.getByText('58.6%').className).toMatch(/text-foreground/)
-    expect(screen.getByText(/silver rose/)).toBeInTheDocument()
+    expect(screen.getByText(/silver rose/)).toBeTruthy()
   })
 
   it('renders an explicit empty state without a prediction', () => {
     render(<SignalCard metal="gold" prediction={undefined} />)
-    expect(screen.getByText('No prediction yet')).toBeInTheDocument()
+    expect(screen.getByText('No prediction yet')).toBeTruthy()
   })
 })

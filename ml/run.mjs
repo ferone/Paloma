@@ -7,7 +7,8 @@
  *   1. env `ML_PYTHON` if set (absolute path or a command on PATH, used as-is)
  *   2. ml/.venv/Scripts/python.exe   (Windows venv)
  *   3. ml/.venv/bin/python           (POSIX venv)
- *   4. `python3`, then `python` on PATH, preferring one that can import
+ *   4. `python3`, then `python` on PATH (`python` first on Windows, where
+ *      `python3` is usually the Store alias stub), preferring one that can import
  *      sklearn/pandas/joblib (else the first that runs at all)
  *
  * The server uses the same order (server/ml/python.ts).
@@ -28,7 +29,7 @@ function resolvePython() {
   }
   // Prefer an interpreter that can import the pipeline deps; else the first that runs.
   let runnable = null
-  for (const cmd of ['python3', 'python']) {
+  for (const cmd of process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']) {
     try {
       if (spawnSync(cmd, ['-c', 'import sklearn, pandas, joblib'], { stdio: 'pipe', windowsHide: true }).status === 0) return cmd
       if (!runnable && spawnSync(cmd, ['--version'], { stdio: 'pipe', windowsHide: true }).status === 0) runnable = cmd

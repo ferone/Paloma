@@ -27,7 +27,7 @@ export function resolvePython(): string | null {
   // On PATH: prefer an interpreter that can import the pipeline deps (several
   // Pythons often coexist); else the first that runs at all.
   let runnable: string | null = null
-  for (const cmd of ['python3', 'python']) {
+  for (const cmd of process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']) {
     try {
       if (spawnSync(cmd, ['-c', 'import sklearn, pandas, joblib'], { stdio: 'pipe', windowsHide: true }).status === 0) {
         cachedPython = cmd

@@ -74,7 +74,7 @@ let registered = false
 export function registerMarketdataJobs(): void {
   if (registered) return
   registered = true
-  registerJob(JOB_YAHOO, 'Yahoo daily history: futures fronts, ETFs, miners, DXY/10Y/VIX/SPY/TIP/13W; listed COMEX months', (ctx) => ingestYahoo(ctx))
-  registerJob(JOB_DATABENTO_INCREMENTAL, `Databento GC/MGC/SI/SIL since last stored date (cost-guarded, ≤ $${INCREMENTAL_CAP})`, runIncremental)
+  registerJob(JOB_YAHOO, 'Yahoo daily history: futures fronts, spot, ETFs, miners, DXY/10Y/VIX/SPY/TIP/13W; listed futures months', (ctx) => ingestYahoo(ctx))
+  registerJob(JOB_DATABENTO_INCREMENTAL, `Databento ${DATABENTO_ROOTS.join('/')} since last stored date (cost-guarded, ≤ $${INCREMENTAL_CAP})`, runIncremental)
   registerJob(JOB_DATABENTO_BACKFILL, 'Databento backfill (params: roots, start, end, schemas, maxCost)', runBackfill)
 }

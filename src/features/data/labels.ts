@@ -1,11 +1,12 @@
 // Human labels for datasets and sources shown across the Data Center.
+import { DATABENTO_ROOTS } from '@shared/marketdata'
 
 export const DATASET_LABEL: Record<string, { label: string; detail: string }> = {
   prices_daily: { label: 'Daily prices', detail: 'Futures fronts, ETFs, miners, macro references; Databento continuous front months' },
-  contracts: { label: 'Futures contracts', detail: 'GC · MGC · SI · SIL contract months with last-trade and first-notice dates' },
+  contracts: { label: 'Futures contracts', detail: `${DATABENTO_ROOTS.join(' · ')} contract months with last-trade and first-notice dates` },
   contract_bars: { label: 'Contract bars', detail: 'Daily OHLCV and open interest per contract month' },
   macro_series: { label: 'Macro series', detail: 'FRED and derived series (real yields, dollar, ratios)' },
-  cot_reports: { label: 'CFTC positioning', detail: 'Disaggregated Commitments of Traders, weekly' },
+  cot_reports: { label: 'CFTC positioning', detail: 'Commitments of Traders (disaggregated, or TFF for financial futures), weekly' },
   pf_transactions: { label: 'Transactions', detail: 'Portfolio ledger' },
   pf_nav_snapshots: { label: 'NAV snapshots', detail: 'Daily fund NAV' },
   pf_physical_items: { label: 'Physical holdings', detail: 'Allocated bullion items' },

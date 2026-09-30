@@ -1,5 +1,6 @@
 import { MONTH_CODES } from '../../shared/universe.js'
 import type { ContractRow } from '../db/shared-repo.js'
+import { contractExpiry as quantContractExpiry } from '../quant/universe/contracts.js'
 
 // Contract-month symbology and COMEX expiry rules (ported from
 // CommodityFutures lib/universe/contracts.ts). PURE: never reads "now".
@@ -72,39 +73,19 @@ export function parseCanonical(symbol: string, roots: readonly string[]): Parsed
 }
 
 // ── Expiry rules ────────────────────────────────────────────────────────────
-// COMEX metals are physically delivered: trading ends the 3rd-last business
-// day of the delivery month; first notice is the last business day of the prior
-// month. Micro contracts (MGC, SIL) follow their parent. Weekends handled;
-// exchange holidays are NOT (documented approximation).
+// One source of truth: the quant engine's documented CME/COMEX/NYMEX rules
+// (server/quant/universe/contracts.ts). COMEX metals: last trade = 3rd-last
+// business day of the delivery month, first notice = last business day of the
+// prior month. Cash-settled products (CME bitcoin) have no first notice.
+// Weekends handled; exchange holidays are NOT (documented approximation).
 
 export const EXPIRY_NOTE =
-  'Approx: last trade = 3rd-last business day of the delivery month; first notice = last business day of the prior month. Weekends handled, exchange holidays not.'
-
-function iso(y: number, m: number, d: number): string {
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-}
-function isWeekend(y: number, m: number, d: number): boolean {
-  const w = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
-  return w === 0 || w === 6
-}
-function daysInMonth(y: number, m: number): number {
-  return new Date(Date.UTC(y, m, 0)).getUTCDate()
-}
-function nthLastBusinessDay(y: number, m: number, n: number): string {
-  let count = 0
-  for (let d = daysInMonth(y, m); d >= 1; d--) {
-    if (!isWeekend(y, m, d) && ++count === n) return iso(y, m, d)
-  }
-  return iso(y, m, 1)
-}
-
-const METAL_ROOTS = new Set(['GC', 'MGC', 'SI', 'SIL'])
+  'Approx: last trade and first notice follow the documented CME rules per product (cash-settled contracts have no first notice). Weekends handled, exchange holidays not.'
 
 export function contractExpiry(root: string, month: number, year: number): { lastTrade: string | null; firstNotice: string | null } {
-  if (!METAL_ROOTS.has(root)) return { lastTrade: null, firstNotice: null }
-  const pm = month === 1 ? 12 : month - 1
-  const py = month === 1 ? year - 1 : year
-  return { lastTrade: nthLastBusinessDay(year, month, 3), firstNotice: nthLastBusinessDay(py, pm, 1) }
+  const e = quantContractExpiry(root, month, year)
+  if (!e) return { lastTrade: null, firstNotice: null }
+  return { lastTrade: e.lastTrade, firstNotice: e.cashSettled ? null : e.firstNotice }
 }
 
 export function contractRow(c: ParsedContract): ContractRow {

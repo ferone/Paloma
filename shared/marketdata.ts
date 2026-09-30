@@ -1,9 +1,14 @@
 // Contracts for the market-data domain (/api/marketdata). Owned by the
 // marketdata workstream. Server and client both import from here.
+import { ASSETS, UNIVERSE, futuresRoots } from './universe.js'
 
-/** Futures roots pulled from Databento GLBX.MDP3 (`<root>.FUT` parent symbology). */
-export const DATABENTO_ROOTS = ['GC', 'MGC', 'SI', 'SIL'] as const
-export type DatabentoRoot = (typeof DATABENTO_ROOTS)[number]
+/**
+ * Futures roots pulled from Databento GLBX.MDP3 (`<root>.FUT` parent
+ * symbology): every futures product in the universe, in universe order.
+ */
+export const DATABENTO_ROOTS = futuresRoots() as unknown as readonly [string, ...string[]]
+/** A futures root from the universe (validated at the API boundary with `isDatabentoRoot`). */
+export type DatabentoRoot = string
 
 export const DATABENTO_SCHEMAS = ['ohlcv-1d', 'statistics'] as const
 export type DatabentoSchema = (typeof DATABENTO_SCHEMAS)[number]
@@ -16,6 +21,12 @@ export const DATABENTO_HISTORY_START = '2010-06-06'
 export function continuousSymbol(root: string): string {
   return `${root}.c.0`
 }
+
+/** CFTC market keys of every asset with a COT report (cot_reports.market). */
+export const COT_MARKETS: readonly string[] = ASSETS.flatMap((a) => {
+  const cot = UNIVERSE[a].cot
+  return cot ? [cot.market] : []
+})
 
 export function isDatabentoRoot(x: unknown): x is DatabentoRoot {
   return typeof x === 'string' && (DATABENTO_ROOTS as readonly string[]).includes(x)

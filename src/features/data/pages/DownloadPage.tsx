@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react'
 import { RiDownload2Line } from 'react-icons/ri'
-import { GENERIC_EXPORT_TABLES, MARKET_EXPORT_DATASETS, type ExportDataset, type ExportFormat } from '@shared/marketdata'
+import { COT_MARKETS, DATABENTO_ROOTS, GENERIC_EXPORT_TABLES, MARKET_EXPORT_DATASETS, type ExportDataset, type ExportFormat } from '@shared/marketdata'
 import { fmtAge, fmtNum } from '../../../design/format'
 import { Chip, ErrorNote, Field, Input, Panel, PanelSkeleton, Segmented, Select } from '../../../ui'
 import { useArtifacts, useFreshness, useSymbols } from '../api'
@@ -8,10 +8,10 @@ import { ARTIFACT_LABEL, datasetLabel } from '../labels'
 
 const SYMBOL_HINT: Partial<Record<ExportDataset, string>> = {
   prices_daily: 'Symbol, e.g. GC=F, GLD, GC.c.0',
-  contracts: 'Root (GC, MGC, SI, SIL) or contract, e.g. GCZ26',
+  contracts: `Root (${DATABENTO_ROOTS.join(', ')}) or contract, e.g. GCZ26`,
   contract_bars: 'Root (all months) or contract, e.g. GCZ26',
   macro_series: 'Series id, e.g. DFII10',
-  cot_reports: 'Market: GOLD or SILVER',
+  cot_reports: `Market: ${COT_MARKETS.join(', ')}`,
 }
 const HAS_SOURCE: ExportDataset[] = ['prices_daily', 'contract_bars', 'macro_series']
 const HAS_DATES = (d: ExportDataset) => d !== 'contracts'
@@ -49,8 +49,8 @@ export default function DownloadPage() {
 
   const suggestions = useMemo(() => {
     if (dataset === 'prices_daily') return [...new Set(symbols.data?.map((s) => s.symbol) ?? [])]
-    if (dataset === 'contracts' || dataset === 'contract_bars') return ['GC', 'MGC', 'SI', 'SIL']
-    if (dataset === 'cot_reports') return ['GOLD', 'SILVER']
+    if (dataset === 'contracts' || dataset === 'contract_bars') return [...DATABENTO_ROOTS]
+    if (dataset === 'cot_reports') return [...COT_MARKETS]
     return []
   }, [dataset, symbols.data])
 

@@ -6,6 +6,7 @@ import { Chip, Panel } from '../../../ui'
 import { useInstrument } from '../api'
 import { QuantQuery } from '../components/QuantQuery'
 import { ActionChip, OosChip } from '../components/chips'
+import { BasisExplainer, BasisStats, BasisTicket, BasisVsBillPanel, ExcessCarryBandsPanel } from '../components/BasisPanels'
 import { CurvaturePanel, OosPanel, SignalStats, StructuralPanel, ZBandPanel } from '../components/InstrumentPanels'
 import { TradeTicket } from '../components/TradeTicket'
 import { WhyVerdict } from '../components/WhyVerdict'
@@ -39,10 +40,16 @@ function Instrument({ d }: { d: InstrumentDetail }) {
             {KIND_LABEL[d.kind]} · {RELATIVE_VALUE_PAIRS.find((p) => p.id === d.product)?.label ?? UNIVERSE[d.metal]?.label ?? d.metal}
           </div>
           <h2 className="display mt-1 text-2xl text-foreground">{d.label}</h2>
-          <p className="num mt-1 text-xs text-muted">
-            {last ? `${fmtValue(last.value, d.unit)} ${d.unit === 'ratio' ? '' : d.unit}` : '—'}
-            {d.kind !== 'ratio' ? ` · ${fmtUsd(d.pointValue, 0)} per point` : ''} · data through {d.dataThrough ?? '—'}
-          </p>
+          {d.kind === 'basis' ? (
+            <p className="num mt-1 text-xs text-muted">
+              excess carry {last ? `${fmtValue(last.value, d.unit)} p.a.` : '—'} · {fmtUsd(d.pointValue, 2)} per bp per contract · data through {d.dataThrough ?? '—'}
+            </p>
+          ) : (
+            <p className="num mt-1 text-xs text-muted">
+              {last ? `${fmtValue(last.value, d.unit)} ${d.unit === 'ratio' ? '' : d.unit}` : '—'}
+              {d.kind !== 'ratio' ? ` · ${fmtUsd(d.pointValue, 0)} per point` : ''} · data through {d.dataThrough ?? '—'}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ActionChip verdict={d.verdicts[mode]} />
@@ -57,7 +64,7 @@ function Instrument({ d }: { d: InstrumentDetail }) {
               Seasonality →
             </Link>
           )}
-          {(d.kind === 'ratio' || d.kind === 'inter') && (
+          {(d.kind === 'ratio' || d.kind === 'inter' || d.kind === 'basis') && (
             <Link to="/quant/relative-value" className="text-xs text-brand underline underline-offset-2">
               Relative value →
             </Link>
@@ -65,20 +72,40 @@ function Instrument({ d }: { d: InstrumentDetail }) {
         </div>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <ZBandPanel d={d} />
-          {d.kind !== 'seasonal' && <SignalStats d={d} />}
-          <CurvaturePanel d={d} />
-          <StructuralPanel d={d} />
+      {d.kind === 'basis' && d.basis ? (
+        <>
+          <div className="rounded-lg border border-border bg-surface p-4">
+            <BasisStats d={d} />
+          </div>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <BasisVsBillPanel d={d} />
+              <ExcessCarryBandsPanel d={d} />
+              <SignalStats d={d} />
+            </div>
+            <div className="space-y-4">
+              <WhyVerdict d={d} mode={mode} />
+              <BasisTicket d={d} mode={mode} />
+              <BasisExplainer settlement={d.basis.settlement} />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <ZBandPanel d={d} />
+            {d.kind !== 'seasonal' && <SignalStats d={d} />}
+            <CurvaturePanel d={d} />
+            <StructuralPanel d={d} />
+          </div>
+          <div className="space-y-4">
+            <WhyVerdict d={d} mode={mode} />
+            <TradeTicket d={d} mode={mode} />
+          </div>
         </div>
-        <div className="space-y-4">
-          <WhyVerdict d={d} mode={mode} />
-          <TradeTicket d={d} mode={mode} />
-        </div>
-      </div>
+      )}
 
-      <OosPanel oos={d.oos} asOf={d.asOf} />
+      <OosPanel oos={d.oos} asOf={d.asOf} unit={d.kind === 'basis' ? 'bp' : 'usd'} />
 
       {d.window && (
         <Panel density="dense" title="Seasonal window in play" eyebrow="Found on prior seasons only" provenance={{ source: 'Engine (findWindows.ts)', asOf: d.asOf }}>

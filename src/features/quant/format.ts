@@ -4,6 +4,8 @@ import type { QuantKind } from '@shared/quant'
 /** Format a structure value in its own unit ($/oz spreads, ratio points, $ dollar-spread, % rebased). */
 export function fmtValue(v: number | null | undefined, unit: string): string {
   if (unit === '%') return v == null ? '—' : `${fmtNum(v, 1)}%`
+  if (unit === '% p.a.') return v == null ? '—' : `${fmtNum(v, 2)}%`
+  if (unit === 'bp p.a.') return v == null ? '—' : `${fmtNum(v, 0)} bp`
   if (unit === 'ratio') return fmtNum(v, 2)
   if (unit === '$') return fmtUsd(v, 0)
   return fmtNum(v, Math.abs(v ?? 0) < 1 ? 3 : 2)

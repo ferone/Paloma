@@ -12,7 +12,7 @@ import type {
   RecomputeResponse,
   RelativeValueDetail,
 } from "../../shared/quant.js";
-import { RELATIVE_VALUE_PAIRS, UNIVERSE, assetOfRoot, futuresProduct, parseAssetId, yahooContractSymbol, type AssetId } from "../../shared/universe.js";
+import { ASSETS, RELATIVE_VALUE_PAIRS, UNIVERSE, assetOfRoot, basisInstrumentId, futuresProduct, parseAssetId, yahooContractSymbol, type AssetId } from "../../shared/universe.js";
 import { belongsToAsset, pairByKey, pairLegs } from "./universe/pairs.js";
 import { JobBusyError, jobStatus, registerJob, runJob } from "../jobs/registry.js";
 import { getBatchQuotes } from "../services/yahoo-finance.service.js";
@@ -136,6 +136,18 @@ router.get("/instruments", (req, res) => {
 router.get("/instrument/:id", (req, res) => {
   if (!latestRun()) return sendEmpty(res);
   const d = readInstrumentDetail(req.params.id);
+  const basisAsset = ASSETS.find((a) => basisInstrumentId(a) === req.params.id);
+  if (!d && basisAsset) {
+    // A declared basis that the engine could not build: say what is missing.
+    const b = UNIVERSE[basisAsset].basis!;
+    const root = UNIVERSE[basisAsset].futures[0].root;
+    const empty: QuantEmpty = {
+      status: "no_data",
+      message: `The ${UNIVERSE[basisAsset].label.toLowerCase()} cash-and-carry basis needs ${root} contract history plus daily ${b.spot} and ${b.rate} closes, and enough overlapping history for a z-score.`,
+      action: `Backfill ${root} and refresh the Yahoo daily history (${b.spot}, ${b.rate}) in the Data Center, then recompute.`,
+    };
+    return res.json(empty);
+  }
   if (!d) return res.status(404).json({ error: `Unknown or unanalyzed instrument: ${req.params.id}` });
   res.json(d);
 });

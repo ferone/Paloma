@@ -114,23 +114,31 @@ export function CurvaturePanel({ d }: { d: InstrumentDetail }) {
 }
 
 /** Walk-forward out-of-sample result with regime robustness and per-year P&L. */
-export function OosPanel({ oos, asOf }: { oos: OosView; asOf: string }) {
+export function OosPanel({ oos, asOf, unit = 'usd' }: { oos: OosView; asOf: string; unit?: 'usd' | 'bp' }) {
   const maxAbs = Math.max(1, ...oos.yearly.map((y) => Math.abs(y.netPnl)))
+  const money = (v: number | null | undefined) => (unit === 'bp' ? (v == null ? '—' : `${fmtNum(v, 0)} bp`) : fmtUsd(v, 0))
+  const per = unit === 'bp' ? 'trade' : 'yr'
   return (
     <Panel
       density="dense"
       title="Out-of-sample validation"
-      eyebrow={oos.method === 'seasonal-window' ? 'Walk-forward: best window on prior years, traded blind on the next' : 'Walk-forward: fade |z| ≥ 1.5 using trailing data only'}
+      eyebrow={
+        oos.method === 'seasonal-window'
+          ? 'Walk-forward: best window on prior years, traded blind on the next'
+          : unit === 'bp'
+            ? 'Walk-forward: harvest when z ≥ 1.5 on trailing data, filled the next day'
+            : 'Walk-forward: fade |z| ≥ 1.5 using trailing data only'
+      }
       actions={<OosChip status={oos.status} fragile={oos.regime ? !oos.regime.survives && oos.status === 'passed' : null} />}
       provenance={{ source: 'Engine (walkForward.ts / flyWalkForward.ts, regimes.ts)', asOf, note: oos.pnlUnit }}
     >
       <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
-        <Stat size="sm" label="OOS years" value={oos.trades} />
+        <Stat size="sm" label={unit === 'bp' ? 'OOS trades' : 'OOS years'} value={oos.trades} />
         <Stat size="sm" label="Win rate" value={fmtPct(oos.winRate, 0)} />
-        <Stat size="sm" label="Avg / yr" value={fmtUsd(oos.avgPnl, 0)} />
+        <Stat size="sm" label={`Avg / ${per}`} value={money(oos.avgPnl)} />
         <Stat size="sm" label="t-stat" value={fmtNum(oos.tStat, 2)} />
         <Stat size="sm" label="Sharpe (per trade)" value={fmtNum(oos.sharpe, 2)} />
-        <Stat size="sm" label="Max drawdown" value={fmtUsd(oos.maxDrawdown, 0)} />
+        <Stat size="sm" label="Max drawdown" value={money(oos.maxDrawdown)} />
       </div>
       <p className="mt-2 text-2xs text-muted">{oos.reason}</p>
       {oos.regime && (
@@ -155,7 +163,7 @@ export function OosPanel({ oos, asOf }: { oos: OosView; asOf: string }) {
                   }}
                 />
               </span>
-              <span className={`num text-right ${signColor(y.netPnl)}`}>{fmtUsd(y.netPnl, 0)}</span>
+              <span className={`num text-right ${signColor(y.netPnl)}`}>{money(y.netPnl)}</span>
             </li>
           ))}
         </ul>

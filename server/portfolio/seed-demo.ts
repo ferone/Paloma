@@ -3,12 +3,18 @@
 //   npm run portfolio:clear-demo   removes every DEMO row, vault item and account
 // Trade prices are real Yahoo closes on each trade date (cached in prices_daily).
 import { getDb } from '../db/client.js'
-import type { TxnType } from '../../shared/portfolio.js'
+import type { CustodyType, TxnType } from '../../shared/portfolio.js'
+import { UNIVERSE } from '../../shared/universe.js'
 import { loadPrices } from './prices.js'
 import * as repo from './repo.js'
 import { getComputed } from './service.js'
 
 const TAG = 'DEMO'
+// The demo ledger is a gold/silver dataset; instrument ids and spot series still come from the universe.
+const GOLD_SPOT = UNIVERSE.gold.spot
+const SILVER_SPOT = UNIVERSE.silver.spot
+const GOLD_PHYS = repo.physicalInstrumentId('gold')
+const SILVER_PHYS = repo.physicalInstrumentId('silver')
 
 function note(text: string): string {
   return `${TAG} · ${text}`
@@ -41,7 +47,7 @@ export async function seedDemo(): Promise<number> {
   const existing = (getDb().prepare(`SELECT COUNT(*) AS n FROM pf_transactions WHERE notes LIKE 'DEMO%'`).get() as { n: number }).n
   if (existing > 0) throw new Error(`Demo data already present (${existing} rows). Run npm run portfolio:clear-demo first.`)
 
-  const symbols = ['GLD', 'IAU', 'SLV', 'GDX', 'PSLV', 'GC=F', 'SI=F', 'MGC=F']
+  const symbols = ['GLD', 'IAU', 'SLV', 'GDX', 'PSLV', GOLD_SPOT, SILVER_SPOT, 'MGC=F']
   const { book, errors } = await loadPrices(symbols, '2021-12-20', { force: true })
   const missing = symbols.filter((s) => !book.has(s))
   if (missing.length) throw new Error(`Cannot seed without closes for ${missing.join(', ')}: ${errors.join('; ')}`)
@@ -53,7 +59,7 @@ export async function seedDemo(): Promise<number> {
     return { date: d, price: Math.round(book.close(symbol, d)!.price * 100) / 100 }
   }
 
-  const account = (name: string, custody: 'broker' | 'vault' | 'bank', institution: string) =>
+  const account = (name: string, custody: CustodyType, institution: string) =>
     repo.listAccounts().find((a) => a.name === name) ?? repo.createAccount({ name, custody, institution, notes: TAG })
   const broker = account('Prime Broker (demo)', 'broker', 'Interactive Brokers')
   const vault = account('Bullion Vault (demo)', 'vault', "Brink's Zurich")
@@ -82,20 +88,20 @@ export async function seedDemo(): Promise<number> {
   trade('2022-09-01', 'buy', 'GDX', 10_000, 'Miners beta')
 
   // Allocated physical: 1 kg gold bar and a 1,000 oz good-delivery silver bar
-  const g = px('GC=F', '2022-02-01')
+  const g = px(GOLD_SPOT, '2022-02-01')
   const goldFine = (1000 / 31.1034768) * 0.9999
   repo.createPhysical(
     {
-      metal: 'gold', form: 'bar', description: '1 kg cast bar', weight: 1, weightUnit: 'kg', purity: 0.9999, serial: 'VP-2201-8841',
+      asset: 'gold', form: 'bar', description: '1 kg cast bar', weight: 1, weightUnit: 'kg', purity: 0.9999, serial: 'VP-2201-8841',
       refiner: 'Valcambi', accountId: vault.id, acquiredDate: g.date, premiumPaid: Math.round(goldFine * 18), storageFeeRateAnnual: 0.0012, status: 'held', notes: TAG,
     },
     { totalCost: Math.round(goldFine * (g.price + 18) * 100) / 100, fees: 75, accountId: vault.id },
   )
   n++
-  const s = px('SI=F', '2022-03-01')
+  const s = px(SILVER_SPOT, '2022-03-01')
   repo.createPhysical(
     {
-      metal: 'silver', form: 'bar', description: '1,000 oz good-delivery bar', weight: 1000, weightUnit: 'oz', purity: 0.999, serial: 'SA-7719304',
+      asset: 'silver', form: 'bar', description: '1,000 oz good-delivery bar', weight: 1000, weightUnit: 'oz', purity: 0.999, serial: 'SA-7719304',
       refiner: 'Asahi Refining', accountId: vault.id, acquiredDate: s.date, premiumPaid: Math.round(999 * 0.6), storageFeeRateAnnual: 0.0025, status: 'held', notes: TAG,
     },
     { totalCost: Math.round(999 * (s.price + 0.6) * 100) / 100, fees: 60, accountId: vault.id },
@@ -103,9 +109,9 @@ export async function seedDemo(): Promise<number> {
   n++
 
   // GC futures round trip (Mar → May 2023), and an open MGC position
-  const o = px('GC=F', '2023-03-01')
+  const o = px(GOLD_SPOT, '2023-03-01')
   add(o.date, 'futures_open', 'GC', 5, o.price, 12.5, broker.id, 'Long GCJ23 ahead of banking stress')
-  const c = px('GC=F', '2023-05-01')
+  const c = px(GOLD_SPOT, '2023-05-01')
   add(c.date, 'futures_close', 'GC', 5, c.price, 12.5, broker.id, 'Close GCJ23 → take profit')
   const m = px('MGC=F', '2026-08-03')
   add(m.date, 'futures_open', 'MGC', 10, m.price, 10, broker.id, 'Tactical long MGCZ26')
@@ -128,13 +134,13 @@ export async function seedDemo(): Promise<number> {
   for (let y = 2022; y <= 2026; y++) {
     for (const q of [3, 6, 9, 12]) {
       const date = `${y}-${String(q).padStart(2, '0')}-${q === 3 || q === 12 ? '31' : '30'}`
-      if (date < '2022-03-31' || !book.dates('GC=F').some((d) => d >= date)) continue
-      const weekday = px('GC=F', date).date
+      if (date < '2022-03-31' || !book.dates(GOLD_SPOT).some((d) => d >= date)) continue
+      const weekday = px(GOLD_SPOT, date).date
       add(weekday, 'fee', 'USD', 12_500, 1, 0, bank.id, `Management fee Q${q / 3} ${y}`)
-      const gv = px('GC=F', date).price * goldFine
-      const sv = px('SI=F', date).price * 999
-      add(weekday, 'storage_fee', 'XAU-PHYS', Math.round((gv * 0.0012) / 4 * 100) / 100, 1, 0, vault.id, `Vault storage Q${q / 3} ${y}`)
-      add(weekday, 'storage_fee', 'XAG-PHYS', Math.round((sv * 0.0025) / 4 * 100) / 100, 1, 0, vault.id, `Vault storage Q${q / 3} ${y}`)
+      const gv = px(GOLD_SPOT, date).price * goldFine
+      const sv = px(SILVER_SPOT, date).price * 999
+      add(weekday, 'storage_fee', GOLD_PHYS, Math.round((gv * 0.0012) / 4 * 100) / 100, 1, 0, vault.id, `Vault storage Q${q / 3} ${y}`)
+      add(weekday, 'storage_fee', SILVER_PHYS, Math.round((sv * 0.0025) / 4 * 100) / 100, 1, 0, vault.id, `Vault storage Q${q / 3} ${y}`)
       const rate = y === 2022 ? 0.01 : y >= 2025 ? 0.04 : 0.05
       add(weekday, 'interest', 'USD', Math.round((500_000 * rate) / 4 * 100) / 100, 1, 0, bank.id, `Deposit interest Q${q / 3} ${y}`)
     }

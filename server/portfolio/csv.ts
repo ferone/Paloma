@@ -14,6 +14,7 @@ import {
   type Transaction,
   type TxnType,
 } from '../../shared/portfolio.js'
+import { ASSETS, UNIVERSE, type AssetSpec } from '../../shared/universe.js'
 import { validateSemantics } from './validate.js'
 
 export const EXPORT_HEADERS = ['trade_date', 'settle_date', 'type', 'instrument', 'account', 'counter_account', 'quantity', 'price', 'fees', 'notes'] as const
@@ -138,19 +139,28 @@ export function parseDate(raw: string | undefined): string | null | 'invalid' {
   return dt.toISOString().slice(0, 10)
 }
 
-const INSTRUMENT_ALIASES: Record<string, string> = {
-  cash: 'USD',
-  usd: 'USD',
-  '$': 'USD',
-  xau: 'XAU-PHYS',
-  'physical gold': 'XAU-PHYS',
-  'gold bar': 'XAU-PHYS',
-  'gold bullion': 'XAU-PHYS',
-  xag: 'XAG-PHYS',
-  'physical silver': 'XAG-PHYS',
-  'silver bar': 'XAG-PHYS',
-  'silver bullion': 'XAG-PHYS',
+/**
+ * Free-text names for cash and each asset's direct holding, derived from the
+ * universe: the instrument-id prefix ('xau' for XAU-PHYS), "physical gold",
+ * "gold bar", "gold bullion" for bullion; "bitcoin custody"/"bitcoin wallet"
+ * style names for custody balances.
+ */
+export function instrumentAliases(specs: AssetSpec[] = ASSETS.map((a) => UNIVERSE[a])): Record<string, string> {
+  const out: Record<string, string> = { cash: 'USD', usd: 'USD', $: 'USD' }
+  for (const spec of specs) {
+    const phys = spec.physical
+    if (!phys) continue
+    const label = spec.label.toLowerCase()
+    const names =
+      phys.kind === 'bullion'
+        ? [phys.instrumentId.split('-')[0], `physical ${label}`, `${label} bar`, `${label} bullion`]
+        : [`${label} custody`, `${label} wallet`, `${label} balance`]
+    for (const n of names) out[norm(n)] = phys.instrumentId
+  }
+  return out
 }
+
+const INSTRUMENT_ALIASES = instrumentAliases()
 
 /** Resolve a symbol to an instrument id: exact id, alias, or futures contract (e.g. GCZ26 → GC). */
 export function resolveInstrument(raw: string, instruments: Map<string, Instrument>): string | null {
@@ -161,7 +171,8 @@ export function resolveInstrument(raw: string, instruments: Map<string, Instrume
   const alias = INSTRUMENT_ALIASES[norm(s)]
   if (alias && instruments.has(alias)) return alias
   const roots = [...instruments.values()].filter((i) => i.kind === 'future').sort((a, b) => b.id.length - a.id.length)
-  const base = up.replace(/=F$/, '').replace(/\.CMX$/, '')
+  // Yahoo continuous (=F) and exchange suffixes (.CMX, .NYM, .CME) are dropped before matching roots.
+  const base = up.replace(/=F$/, '').replace(/\.(CMX|NYM|CME|CBT)$/, '')
   for (const r of roots) {
     if (base === r.id || new RegExp(`^${r.id}[FGHJKMNQUVXZ]\\d{1,2}$`).test(base)) return r.id
     if (r.priceSymbol?.toUpperCase() === up) return r.id

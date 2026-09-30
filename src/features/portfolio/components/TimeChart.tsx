@@ -7,7 +7,7 @@ export interface Series {
   key: string
   label: string
   /** Key into useChartColors(). */
-  color: 'brand' | 'muted' | 'series2' | 'series3' | 'neg' | 'silver'
+  color: 'brand' | 'muted' | 'series2' | 'series3' | 'neg'
   dashed?: boolean
 }
 

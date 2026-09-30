@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import { useMemo, useState } from 'react'
-import { BENCHMARKS, type AttributionRow, type BenchmarkId, type PerformanceStats, type RiskResponse } from '@shared/portfolio'
+import { BENCHMARKS, DEFAULT_BENCHMARK, dominantAssetBeta, type AttributionRow, type BenchmarkId, type PerformanceStats, type RiskResponse } from '@shared/portfolio'
+import { UNIVERSE } from '@shared/universe'
 import { fmtDate, fmtNum, fmtPct, fmtPctSigned, fmtUsd, fmtUsdSigned } from '../../../design/format'
 import { PALETTE, signColor } from '../../../design/tokens'
 import { ErrorNote, Explainer, HelpTip, Panel, PanelSkeleton, Segmented, Stat } from '../../../ui'
@@ -21,7 +22,7 @@ function rangeFrom(r: Range, asOf: string | null): string | undefined {
 
 export default function PerformancePage() {
   const summary = useSummary()
-  const [benchmark, setBenchmark] = useState<BenchmarkId>('GLD')
+  const [benchmark, setBenchmark] = useState<BenchmarkId>(DEFAULT_BENCHMARK)
   const [range, setRange] = useState<Range>('ITD')
   const from = rangeFrom(range, summary.data?.asOf ?? null)
   const perf = usePerformance(benchmark, from)
@@ -42,7 +43,7 @@ export default function PerformancePage() {
     </div>
   )
   const var95 = r?.var.find((v) => v.confidence === 0.95)
-  const betaGold = r?.betas.find((b) => b.symbol === 'GC=F')
+  const assetBeta = r ? dominantAssetBeta(r) : undefined
 
   return (
     <div className={clsx('space-y-6', perf.isPlaceholderData && 'opacity-70 transition-opacity')}>
@@ -99,7 +100,7 @@ export default function PerformancePage() {
             <p className="text-sm text-muted">Needs at least 63 daily returns.</p>
           )}
         </Panel>
-        <RiskPanel risk={r} loading={risk.isLoading} error={risk.error} var95={var95} betaGold={betaGold} />
+        <RiskPanel risk={r} loading={risk.isLoading} error={risk.error} var95={var95} assetBeta={assetBeta} />
       </div>
 
       <Panel
@@ -121,7 +122,7 @@ export default function PerformancePage() {
             <div className="grid gap-8 xl:grid-cols-3">
               <AttributionTable title="By holding" rows={attribution.data.byHolding} />
               <AttributionTable title="By sleeve" rows={attribution.data.bySleeve} />
-              <AttributionTable title="By metal" rows={attribution.data.byMetal} />
+              <AttributionTable title="By asset" rows={attribution.data.byAsset} />
             </div>
           </div>
         ) : (
@@ -174,7 +175,7 @@ function StatsTable({ fund, bench, benchLabel }: { fund: PerformanceStats; bench
   )
 }
 
-function RiskPanel({ risk, loading, error, var95, betaGold }: { risk?: RiskResponse; loading: boolean; error: unknown; var95?: RiskResponse['var'][number]; betaGold?: RiskResponse['betas'][number] }) {
+function RiskPanel({ risk, loading, error, var95, assetBeta }: { risk?: RiskResponse; loading: boolean; error: unknown; var95?: RiskResponse['var'][number]; assetBeta?: ReturnType<typeof dominantAssetBeta> }) {
   if (loading) return <Panel title="Risk"><PanelSkeleton /></Panel>
   if (error || !risk) return <Panel title="Risk"><ErrorNote error={error} /></Panel>
   return (
@@ -186,7 +187,7 @@ function RiskPanel({ risk, loading, error, var95, betaGold }: { risk?: RiskRespo
           <dl className="grid grid-cols-3 gap-4">
             <Stat size="sm" label="VaR 95% (hist.)" value={fmtUsd(var95?.historicalUsd, 0)} hint={fmtPct(var95?.historicalPct)} />
             <Stat size="sm" label="Gross leverage" value={risk.grossLeverage != null ? `${fmtNum(risk.grossLeverage, 2)}×` : '—'} hint={`Gross ${fmtUsd(risk.grossExposure, 0)}`} />
-            <Stat size="sm" label="Beta to gold" value={fmtNum(betaGold?.beta)} hint={`ρ ${fmtNum(betaGold?.correlation)}`} />
+            <Stat size="sm" label={`Beta to ${assetBeta ? UNIVERSE[assetBeta.asset].label.toLowerCase() : 'the asset'}`} value={fmtNum(assetBeta?.beta?.beta)} hint={`ρ ${fmtNum(assetBeta?.beta?.correlation)}`} />
           </dl>
           <table className="w-full text-sm">
             <caption className="sr-only">Value at risk</caption>

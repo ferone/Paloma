@@ -10,6 +10,7 @@ import {
   type Transaction,
   type TxnType,
 } from '@shared/portfolio'
+import { ASSETS, UNIVERSE } from '@shared/universe'
 import { fmtUsd } from '../../../design/format'
 import { Button, ErrorNote, Field, Input, Select, Textarea } from '../../../ui'
 import { apiErrorMessage, useSaveTransaction } from '../api'
@@ -37,21 +38,31 @@ type FormState = {
 
 const KIND_GROUP: Record<string, string> = { cash: 'Cash', etf: 'ETFs', equity: 'Miners', future: 'Futures', physical: 'Physical' }
 
+/** Physical spec of a direct-holding instrument (bullion fine oz, or a custody balance unit). */
+function physicalOf(inst?: Instrument) {
+  return inst?.kind === 'physical' && inst.asset ? UNIVERSE[inst.asset].physical : null
+}
+
 function quantityLabel(type: TxnType, inst?: Instrument): string {
   if (CASH_AMOUNT_TYPES.includes(type)) return 'Amount (USD)'
   if (type === 'futures_open') return 'Contracts (+ long, − short)'
   if (type === 'futures_close') return 'Contracts to close'
   if (inst?.kind === 'cash') return 'Amount (USD)'
-  if (inst?.kind === 'physical') return 'Fine troy ounces'
+  const phys = physicalOf(inst)
+  if (phys) return phys.kind === 'bullion' ? `Fine ${phys.unit === 'oz' ? 'troy ounces' : phys.unit}` : `Quantity (${phys.unit})`
   return 'Shares'
 }
 
 function priceLabel(type: TxnType, inst?: Instrument): string {
-  if (inst?.kind === 'future') return 'Price ($/oz)'
-  if (inst?.kind === 'physical') return 'All-in price ($/fine oz)'
+  if (inst?.kind === 'future' && inst.asset) return `Price (${UNIVERSE[inst.asset].unitLabel})`
+  const phys = physicalOf(inst)
+  if (phys) return `All-in price ($/${phys.kind === 'bullion' ? 'fine ' : ''}${phys.unit})`
   if (type === 'deposit' || type === 'withdrawal') return 'Valuation price'
   return 'Price'
 }
+
+/** First tradable ETF of the first asset: the default instrument for a new buy. */
+const DEFAULT_SECURITY = UNIVERSE[ASSETS[0]].benchmarkEtf
 
 export function TransactionForm({ initial, accounts, instruments, defaultType = 'buy', onDone }: Props) {
   const today = new Date().toISOString().slice(0, 10)
@@ -61,7 +72,7 @@ export function TransactionForm({ initial, accounts, instruments, defaultType = 
     settleDate: initial?.settleDate ?? '',
     accountId: String(initial?.accountId ?? accounts[0]?.id ?? ''),
     counterAccountId: String(initial?.counterAccountId ?? ''),
-    instrumentId: initial?.instrumentId ?? (CASH_AMOUNT_TYPES.includes(defaultType) ? 'USD' : 'GLD'),
+    instrumentId: initial?.instrumentId ?? (CASH_AMOUNT_TYPES.includes(defaultType) ? 'USD' : DEFAULT_SECURITY),
     quantity: initial ? String(initial.quantity) : '',
     price: initial ? String(initial.price) : '',
     fees: initial ? String(initial.fees) : '0',

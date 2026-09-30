@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ASSETS, UNIVERSE, type AssetId } from '@shared/universe'
 import { useTheme } from '../../../app/theme'
 import { cssVar } from '../../../design/tokens'
 
@@ -28,8 +29,8 @@ export function useChartColors() {
       surface3: cssVar('--surface-3'),
       pos: cssVar('--pos'),
       neg: cssVar('--neg'),
-      gold: cssVar('--metal-gold'),
-      silver: cssVar('--metal-silver'),
+      /** Per-asset chart colour, from each spec's `colorVar`. */
+      asset: Object.fromEntries(ASSETS.map((a) => [a, cssVar(UNIVERSE[a].colorVar)])) as Record<AssetId, string>,
       series2: cssVar('--series-2'),
       series3: cssVar('--series-3'),
     }

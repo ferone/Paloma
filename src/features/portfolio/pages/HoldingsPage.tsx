@@ -3,13 +3,14 @@ import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { HoldingView, HoldingsResponse, PortfolioSummary } from '@shared/portfolio'
 import { SLEEVE_LABEL } from '@shared/portfolio'
-import { fmtDate, fmtNum, fmtOz, fmtPct, fmtPctSigned, fmtSigned, fmtUsd, fmtUsdCompact, fmtUsdSigned } from '../../../design/format'
+import { fmtDate, fmtNum, fmtPct, fmtPctSigned, fmtSigned, fmtUsd, fmtUsdCompact, fmtUsdSigned } from '../../../design/format'
 import { signColor } from '../../../design/tokens'
 import { Chip, ErrorNote, HelpTip, Panel, PanelSkeleton, Stat } from '../../../ui'
 import { useAccounts, useHoldings, useSummary } from '../api'
 import { AllocationBar } from '../components/AllocationBar'
-import { METAL_BUCKET_COLOR, SLEEVE_COLOR } from '../components/colors'
+import { ASSET_BUCKET_COLOR, SLEEVE_COLOR } from '../components/colors'
 import { RecordFirstTransaction, Warnings } from '../components/common'
+import { assetLabel, fmtQty, qtyDigits } from '../components/units'
 
 export default function HoldingsPage() {
   const summary = useSummary()
@@ -31,19 +32,21 @@ export default function HoldingsPage() {
             items={s.allocation.map((a) => ({ key: a.sleeve, label: SLEEVE_LABEL[a.sleeve], value: a.value, weight: a.weight, color: SLEEVE_COLOR[a.sleeve] }))}
           />
         </Panel>
-        <Panel title="Allocation by metal" eyebrow="Share of NAV" provenance={{ source: 'Fund ledger', asOf: s.asOf, note: `Gross exposure ${fmtUsdCompact(s.grossExposure)} (${fmtPct(s.nav ? s.grossExposure / s.nav : null, 0)} of NAV)` }}>
+        <Panel title="Allocation by asset" eyebrow="Share of NAV" provenance={{ source: 'Fund ledger', asOf: s.asOf, note: `Gross exposure ${fmtUsdCompact(s.grossExposure)} (${fmtPct(s.nav ? s.grossExposure / s.nav : null, 0)} of NAV)` }}>
           <AllocationBar
-            caption="Allocation by metal"
-            items={s.byMetal.map((m) => ({ key: m.metal, label: m.metal[0].toUpperCase() + m.metal.slice(1), value: m.value, weight: m.weight, color: METAL_BUCKET_COLOR[m.metal] }))}
+            caption="Allocation by asset"
+            items={s.byMetal.map((m) => ({ key: m.metal, label: assetLabel(m.metal), value: m.value, weight: m.weight, color: ASSET_BUCKET_COLOR[m.metal] }))}
           />
-          {s.netExposureOz.length > 0 && (
+          {s.netExposure.length > 0 && (
             <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 border-t border-border pt-3">
-              {s.netExposureOz.map((x) => (
-                <div key={x.metal}>
+              {s.netExposure.map((x) => (
+                <div key={x.asset}>
                   <dt className="label">
-                    <HelpTip term={`${x.metal} exposure`}>Physical fine ounces + futures contracts × oz/contract + ETF value ÷ spot (oz-equivalent). Miners excluded.</HelpTip>
+                    <HelpTip term={`${assetLabel(x.asset)} exposure`}>
+                      Direct holdings + futures contracts × contract size + ETF value ÷ spot ({x.unitLabel}-equivalent). Miners excluded.
+                    </HelpTip>
                   </dt>
-                  <dd className="num mt-0.5 text-foreground">{fmtOz(x.ounces, 1)}</dd>
+                  <dd className="num mt-0.5 text-foreground">{fmtQty(x.exposureUnits, x.unitLabel, 1)}</dd>
                 </div>
               ))}
             </dl>
@@ -115,16 +118,16 @@ function HoldingsTables({ h }: { h: HoldingsResponse }) {
   return (
     <div className="space-y-6">
       <Panel title="ETFs and miners" eyebrow={`${securities.length} positions`} provenance={prov}>
-        {securities.length ? <LotTable rows={securities} accName={accName} unit="sh" /> : <p className="text-sm text-muted">No ETF or miner positions.</p>}
+        {securities.length ? <LotTable rows={securities} accName={accName} digits={() => 0} /> : <p className="text-sm text-muted">No ETF or miner positions.</p>}
       </Panel>
       <div className="grid gap-6 xl:grid-cols-2">
         <Panel
-          title="Allocated physical"
-          eyebrow="Fine troy ounces"
+          title="Direct holdings"
+          eyebrow="Allocated bullion (fine oz) and custody balances"
           actions={<Link to="/portfolio/vault" className="text-xs text-muted underline-offset-2 hover:text-foreground hover:underline">Vault register</Link>}
-          provenance={{ ...prov, note: 'Valued at COMEX front-month spot, net of the configured haircut' }}
+          provenance={{ ...prov, note: "Valued at each asset's reference spot, net of the configured haircut" }}
         >
-          {physical.length ? <LotTable rows={physical} accName={accName} unit="oz" compact /> : <p className="text-sm text-muted">No physical metal on the ledger.</p>}
+          {physical.length ? <LotTable rows={physical} accName={accName} digits={(r) => qtyDigits(r.asset)} compact /> : <p className="text-sm text-muted">No direct holdings on the ledger.</p>}
         </Panel>
         <Panel title="Futures" eyebrow="Contracts marked to the continuous front month" provenance={{ ...prov, note: 'NAV counts variation P&L; notional shown separately' }}>
           {futures.length ? <FuturesTable rows={futures} /> : <p className="text-sm text-muted">No open futures positions.</p>}
@@ -160,7 +163,7 @@ function StaleChip({ row }: { row: HoldingView }) {
   )
 }
 
-function LotTable({ rows, accName, unit, compact }: { rows: HoldingView[]; accName: (id: number | null) => string; unit: string; compact?: boolean }) {
+function LotTable({ rows, accName, digits, compact }: { rows: HoldingView[]; accName: (id: number | null) => string; digits: (r: HoldingView) => number; compact?: boolean }) {
   const [open, setOpen] = useState<Set<string>>(new Set())
   const toggle = (id: string) => setOpen((s) => {
     const n = new Set(s)
@@ -209,7 +212,7 @@ function LotTable({ rows, accName, unit, compact }: { rows: HoldingView[]; accNa
                       <StaleChip row={r} />
                     </span>
                   </td>
-                  <td className="num px-2 text-right">{fmtNum(r.quantity, unit === 'oz' ? 3 : 0)}</td>
+                  <td className="num px-2 text-right">{fmtNum(r.quantity, digits(r))}</td>
                   <td className="num px-2 text-right">{fmtUsd(r.price)}</td>
                   <td className="num px-2 text-right text-foreground">{fmtUsd(r.value, 0)}</td>
                   {!compact && <td className="num px-2 text-right text-muted">{fmtPct(r.weight, 1)}</td>}
@@ -240,7 +243,7 @@ function LotTable({ rows, accName, unit, compact }: { rows: HoldingView[]; accNa
                             <tr key={`${l.txnId}-${i}`}>
                               <td className="px-2 py-1">{fmtDate(l.openDate)}</td>
                               <td className="px-2 py-1 font-sans">{accName(l.accountId)}</td>
-                              <td className="px-2 py-1 text-right">{fmtNum(l.quantity, unit === 'oz' ? 3 : 0)}</td>
+                              <td className="px-2 py-1 text-right">{fmtNum(l.quantity, digits(r))}</td>
                               <td className="px-2 py-1 text-right">{fmtUsd(l.unitCost, 4)}</td>
                               <td className="px-2 py-1 text-right">{fmtUsd(l.costBasis, 0)}</td>
                               <td className="px-2 py-1 text-right">{fmtUsd(l.marketValue, 0)}</td>
@@ -275,7 +278,7 @@ function FuturesTable({ rows }: { rows: HoldingView[] }) {
           <tr className="border-b border-border">
             <th scope="col" className={clsx(th, 'text-left')}>Contract</th>
             <th scope="col" className={clsx(th, 'text-right')}>Contracts</th>
-            <th scope="col" className={clsx(th, 'text-right')}>Ounces</th>
+            <th scope="col" className={clsx(th, 'text-right')}>Exposure</th>
             <th scope="col" className={clsx(th, 'text-right')}>Avg entry</th>
             <th scope="col" className={clsx(th, 'text-right')}>Mark</th>
             <th scope="col" className={clsx(th, 'text-right')}>Notional</th>
@@ -290,7 +293,7 @@ function FuturesTable({ rows }: { rows: HoldingView[] }) {
                 <span className="ml-2 text-xs text-muted">{r.quantity > 0 ? 'Long' : 'Short'}</span> <StaleChip row={r} />
               </td>
               <td className="num px-2 text-right">{fmtSigned(r.quantity, 0)}</td>
-              <td className="num px-2 text-right">{fmtNum(r.ounces, 0)}</td>
+              <td className="num px-2 text-right">{fmtQty(r.exposureUnits, r.unitLabel, 0)}</td>
               <td className="num px-2 text-right text-muted">{fmtUsd(r.avgCost)}</td>
               <td className="num px-2 text-right">{fmtUsd(r.price)}</td>
               <td className="num px-2 text-right text-muted">{fmtUsd(r.notional, 0)}</td>

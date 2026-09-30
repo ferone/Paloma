@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "db:migrate": "tsx server/db/migrate-cli.ts",
-    "macro:refresh": "tsx server/macro/cli.ts"
+    "macro:refresh": "tsx server/macro/cli.ts",
+    "ai:report": "tsx server/ai/cli.ts"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

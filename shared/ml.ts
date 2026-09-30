@@ -30,6 +30,14 @@ export interface FeatureSpec {
   source: 'yahoo' | 'fred' | 'cftc' | 'contracts' | 'calendar'
   /** Optional features may be absent (their feed not loaded yet); the model drops them. */
   optional: boolean
+  /**
+   * Asset classes for which an otherwise-core feature is optional because its
+   * input starts much later than the asset's price history (e.g. spot bitcoin
+   * ETFs launched in 2024; a 3-year seasonal needs 3 years). Core features
+   * drop every row where they are missing, so without this a late feed would
+   * truncate the whole training set.
+   */
+  optionalFor?: AssetClass[]
   /** Asset classes the feature applies to (default: every class). */
   classes?: AssetClass[]
   /** Explicit asset allow-list (default: every asset of the allowed classes). */
@@ -67,10 +75,10 @@ export const FEATURES: FeatureSpec[] = [
   { id: 'vix_level', label: 'VIX level', group: 'cross-asset', source: 'yahoo', optional: false, description: '^VIX close.' },
   { id: 'vix_chg20', label: 'VIX 20d change', group: 'cross-asset', source: 'yahoo', optional: false, description: 'Change in ^VIX over 20 days.' },
   { id: 'spy_mom20', label: 'S&P 500 20d momentum', group: 'cross-asset', source: 'yahoo', optional: false, description: 'ln change of SPY over 20 days.' },
-  { id: 'etf_volume_z', label: 'ETF volume z (flows proxy)', group: 'flows', source: 'yahoo', optional: false, description: 'z-score (120d) of the 5-day mean log volume of the asset\'s benchmark ETF (GLD for gold, SLV for silver).' },
+  { id: 'etf_volume_z', label: 'ETF volume z (flows proxy)', group: 'flows', source: 'yahoo', optional: false, optionalFor: ['crypto'], description: 'z-score (120d) of the 5-day mean log volume of the asset\'s benchmark ETF (GLD for gold, SLV for silver).' },
   { id: 'doy_sin', label: 'Day of year (sin)', group: 'seasonal', source: 'calendar', optional: false, description: 'sin(2π·doy/365.25).' },
   { id: 'doy_cos', label: 'Day of year (cos)', group: 'seasonal', source: 'calendar', optional: false, description: 'cos(2π·doy/365.25).' },
-  { id: 'seasonal_drift', label: 'Seasonal drift', group: 'seasonal', source: 'yahoo', optional: false, description: 'Mean 20-day forward return from the same ±10 calendar days in prior years, using only windows fully completed by t (≥3 years).' },
+  { id: 'seasonal_drift', label: 'Seasonal drift', group: 'seasonal', source: 'yahoo', optional: false, classes: ['precious', 'industrial'], description: 'Mean 20-day forward return from the same ±10 calendar days in prior years, using only windows fully completed by t (≥3 years).' },
   { id: 'real_yield_chg20', label: 'Real yield 20d change', group: 'macro', source: 'fred', optional: true, description: 'Change in 10y TIPS yield (FRED DFII10) over 20 observations, lagged one day.' },
   { id: 'breakeven_chg20', label: 'Breakeven 20d change', group: 'macro', source: 'fred', optional: true, description: 'Change in 10y breakeven inflation (FRED T10YIE) over 20 observations, lagged one day.' },
   { id: 'usd_broad_mom20', label: 'Broad dollar 20d momentum', group: 'macro', source: 'fred', optional: true, description: 'ln change of the trade-weighted dollar (FRED DTWEXBGS) over 20 observations, lagged one day.' },
@@ -90,6 +98,11 @@ export function featureApplies(f: FeatureSpec, asset: AssetId): boolean {
   if (f.onlyFor && !f.onlyFor.includes(asset)) return false
   if (f.needsPair && !RELATIVE_VALUE_PAIRS.some((p) => p.numerator === asset || p.denominator === asset)) return false
   return true
+}
+
+/** Whether a feature is optional for this asset (always-optional, or optional for its class). */
+export function isOptionalFor(f: FeatureSpec, asset: AssetId): boolean {
+  return f.optional || (f.optionalFor?.includes(UNIVERSE[asset].assetClass) ?? false)
 }
 
 /** The features modelled for an asset, in catalogue order. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FEATURES, FEATURE_IDS, ML_INSTRUMENT, featureApplies, featuresFor, type FeatureSpec } from '../../shared/ml.js'
+import { FEATURES, FEATURE_IDS, ML_INSTRUMENT, featureApplies, featuresFor, isOptionalFor, type FeatureSpec } from '../../shared/ml.js'
 import { buildCurveSeries } from './curve.js'
 import {
   asOf,
@@ -265,5 +265,20 @@ describe('helpers', () => {
     expect(cv).toHaveLength(2)
     expect(cv[0]).toMatchObject({ c1: 2000, c2: 2010, c3: 2020, monthsApart: 2 })
     expect(cv[1]).toMatchObject({ c1: 2012, c2: 2023, c3: null, monthsApart: 2 })
+  })
+})
+
+describe('class-conditional optional features', () => {
+  const f = (id: string) => FEATURES.find((x) => x.id === id)!
+  it('keeps late-starting feeds core for metals but optional for crypto', () => {
+    for (const id of ['etf_volume_z']) {
+      expect(isOptionalFor(f(id), 'gold')).toBe(false)
+      expect(isOptionalFor(f(id), 'silver')).toBe(false)
+      expect(isOptionalFor(f(id), 'btc')).toBe(true)
+    }
+    expect(isOptionalFor(f('mom20'), 'btc')).toBe(false)
+    // Seasonal drift is not modelled for crypto: too few years to estimate a day-of-year effect.
+    expect(featureApplies(f('seasonal_drift'), 'btc')).toBe(false)
+    expect(featureApplies(f('seasonal_drift'), 'gold')).toBe(true)
   })
 })

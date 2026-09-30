@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { ASSETS, MACRO_SYMBOLS, RELATIVE_VALUE_PAIRS, UNIVERSE, type AssetId } from '../../shared/universe.js'
-import { featuresFor } from '../../shared/ml.js'
+import { featuresFor, isOptionalFor } from '../../shared/ml.js'
 import { readDailyBars, upsertDailyBars, type DailyBar } from '../db/repo.js'
 import { listContracts, readMacro, readRootBars } from '../db/shared-repo.js'
 import { readSpeculator } from '../macro/cot-repo.js'
@@ -163,7 +163,7 @@ export function exportFeatures(metal: AssetId, dir = mlDataDir()): ExportedFeatu
     dataFrom: m.rows[0]?.date ?? null,
     dataThrough: m.rows.at(-1)?.date ?? null,
     missing: m.missing,
-    features: featuresFor(metal).map((f) => ({ id: f.id, optional: f.optional })),
+    features: featuresFor(metal).map((f) => ({ id: f.id, optional: isOptionalFor(f, metal) })),
   }
   writeFileSync(metaPath, JSON.stringify(meta, null, 2))
   return { csvPath, metaPath, rows: m.rows.length, dataFrom: meta.dataFrom, dataThrough: meta.dataThrough, missing: m.missing }

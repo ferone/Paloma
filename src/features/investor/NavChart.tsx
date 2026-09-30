@@ -78,15 +78,15 @@ export function NavChart({ series, benchmarkLabel, height = 220 }: { series: Poi
             {fmtDate(series[i].date)}
           </text>
         ))}
-        <path d={geo.bench} fill="none" style={{ stroke: PALETTE.silver }} strokeWidth={1.25} />
-        <path d={geo.fund} fill="none" style={{ stroke: PALETTE.gold }} strokeWidth={2} strokeLinejoin="round" />
+        <path d={geo.bench} fill="none" style={{ stroke: PALETTE.muted }} strokeWidth={1.25} />
+        <path d={geo.fund} fill="none" style={{ stroke: PALETTE.brand }} strokeWidth={2} strokeLinejoin="round" />
       </svg>
       <figcaption className="mt-2 flex gap-5 text-2xs text-muted">
         <span className="flex items-center gap-1.5">
-          <span aria-hidden className="h-0.5 w-4 rounded" style={{ background: PALETTE.gold }} /> Fund NAV per unit
+          <span aria-hidden className="h-0.5 w-4 rounded" style={{ background: PALETTE.brand }} /> Fund NAV per unit
         </span>
         <span className="flex items-center gap-1.5">
-          <span aria-hidden className="h-0.5 w-4 rounded" style={{ background: PALETTE.silver }} /> {benchmarkLabel}
+          <span aria-hidden className="h-0.5 w-4 rounded" style={{ background: PALETTE.muted }} /> {benchmarkLabel}
         </span>
         <span>Both rebased to 100</span>
       </figcaption>

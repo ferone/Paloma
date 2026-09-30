@@ -3,10 +3,10 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from '../db/client.js'
 import { getSetting, setSetting } from '../db/repo.js'
-import { METALS, UNIVERSE } from '../../shared/universe.js'
+import { UNIVERSE, type AssetId, type AssetSpec } from '../../shared/universe.js'
 import {
   DEFAULT_PORTFOLIO_SETTINGS,
-  toTroyOz,
+  physicalQuantity,
   type Account,
   type AccountInput,
   type AuditEntry,
@@ -30,27 +30,36 @@ const SETTINGS_KEY = 'portfolio.settings'
 // Instruments (seeded from the universe)
 // --------------------------------------------------------------------------
 
-export function universeInstruments(): Instrument[] {
-  const out: Instrument[] = [{ id: 'USD', name: 'US dollar cash', kind: 'cash', metal: null, priceSymbol: null, ozPerContract: null }]
-  for (const m of METALS) {
-    const spec = UNIVERSE[m]
-    for (const etf of spec.etfs) out.push({ id: etf, name: `${etf} (${spec.label} ETF)`, kind: 'etf', metal: m, priceSymbol: etf, ozPerContract: null })
-    if (spec.miners) out.push({ id: spec.miners, name: `${spec.miners} (${spec.label} miners)`, kind: 'equity', metal: m, priceSymbol: spec.miners, ozPerContract: null })
-    for (const f of spec.futures) out.push({ id: f.root, name: f.name, kind: 'future', metal: m, priceSymbol: f.yahoo, ozPerContract: f.ozPerContract })
-    out.push({
-      id: m === 'gold' ? 'XAU-PHYS' : 'XAG-PHYS',
-      name: `Physical ${spec.label.toLowerCase()} (allocated)`,
-      kind: 'physical',
-      metal: m,
-      priceSymbol: spec.spot,
-      ozPerContract: null,
-    })
+/**
+ * Every instrument the fund can trade, derived from the universe: the asset's
+ * ETFs, its miners proxy (optional), its futures (with `pointValue` and
+ * `contractSize`) and, only when `spec.physical` is set, its physical holding.
+ * The universe is a parameter so tests can seed assets outside it.
+ */
+export function universeInstruments(universe: Partial<Record<AssetId, AssetSpec>> = UNIVERSE): Instrument[] {
+  const out: Instrument[] = [{ id: 'USD', name: 'US dollar cash', kind: 'cash', asset: null, priceSymbol: null, pointValue: null, contractSize: null }]
+  for (const spec of Object.values(universe) as AssetSpec[]) {
+    const a = spec.id
+    const base = { asset: a, pointValue: null, contractSize: null }
+    for (const etf of spec.etfs) out.push({ ...base, id: etf, name: `${etf} (${spec.label} ETF)`, kind: 'etf', priceSymbol: etf })
+    if (spec.miners) out.push({ ...base, id: spec.miners, name: `${spec.miners} (${spec.label} miners)`, kind: 'equity', priceSymbol: spec.miners })
+    for (const f of spec.futures) out.push({ id: f.root, name: f.name, kind: 'future', asset: a, priceSymbol: f.yahoo, pointValue: f.pointValue, contractSize: f.contractSize })
+    if (spec.physical) {
+      out.push({ ...base, id: spec.physical.instrumentId, name: physicalInstrumentName(spec), kind: 'physical', priceSymbol: spec.spot })
+    }
   }
   return out
 }
 
-export function physicalInstrumentId(metal: 'gold' | 'silver'): string {
-  return metal === 'gold' ? 'XAU-PHYS' : 'XAG-PHYS'
+function physicalInstrumentName(spec: AssetSpec): string {
+  return spec.physical?.kind === 'custody' ? `${spec.label} (custody)` : `Physical ${spec.label.toLowerCase()} (allocated)`
+}
+
+/** Ledger instrument of an asset's direct holding (vault bullion or custody balance). */
+export function physicalInstrumentId(asset: AssetId): string {
+  const phys = UNIVERSE[asset].physical
+  if (!phys) throw new Error(`${UNIVERSE[asset].label} cannot be held directly`)
+  return phys.instrumentId
 }
 
 let seeded = false
@@ -61,10 +70,10 @@ export function ensureInstruments(): void {
   const db = getDb()
   if (seeded && seededDb === db) return
   const stmt = db.prepare(
-    `INSERT INTO pf_instruments (id, name, kind, metal, price_symbol, oz_per_contract)
-     VALUES (@id, @name, @kind, @metal, @priceSymbol, @ozPerContract)
+    `INSERT INTO pf_instruments (id, name, kind, metal, price_symbol, point_value, contract_size)
+     VALUES (@id, @name, @kind, @asset, @priceSymbol, @pointValue, @contractSize)
      ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind, metal = excluded.metal,
-       price_symbol = excluded.price_symbol, oz_per_contract = excluded.oz_per_contract`,
+       price_symbol = excluded.price_symbol, point_value = excluded.point_value, contract_size = excluded.contract_size`,
   )
   db.transaction(() => universeInstruments().forEach((i) => stmt.run(i)))()
   seeded = true
@@ -74,7 +83,10 @@ export function ensureInstruments(): void {
 export function listInstruments(): Instrument[] {
   ensureInstruments()
   return getDb()
-    .prepare(`SELECT id, name, kind, metal, price_symbol AS priceSymbol, oz_per_contract AS ozPerContract FROM pf_instruments ORDER BY kind, id`)
+    .prepare(
+      `SELECT id, name, kind, metal AS asset, price_symbol AS priceSymbol, point_value AS pointValue, contract_size AS contractSize
+       FROM pf_instruments ORDER BY kind, id`,
+    )
     .all() as Instrument[]
 }
 
@@ -323,7 +335,7 @@ export function rollbackBatch(id: string): { batch: ImportBatch; removed: number
 // Physical items
 // --------------------------------------------------------------------------
 
-const PHYS_COLS = `id, metal, form, description, weight, weight_unit AS weightUnit, purity, fine_oz AS fineOz, serial,
+const PHYS_COLS = `id, metal AS asset, form, description, weight, weight_unit AS weightUnit, purity, fine_oz AS fineQty, serial,
   refiner, account_id AS accountId, acquisition_txn_id AS acquisitionTxnId, acquired_date AS acquiredDate,
   premium_paid AS premiumPaid, storage_fee_rate_annual AS storageFeeRateAnnual, status, notes`
 
@@ -335,15 +347,26 @@ export function getPhysical(id: number): PhysicalItem | undefined {
   return getDb().prepare(`SELECT ${PHYS_COLS} FROM pf_physical_items WHERE id = ?`).get(id) as PhysicalItem | undefined
 }
 
-function physParams(p: PhysicalData) {
+/** Asset specs the register resolves against; a parameter so tests can register assets outside the universe. */
+export type SpecLookup = (asset: AssetId) => AssetSpec | undefined
+const universeSpec: SpecLookup = (a) => UNIVERSE[a]
+
+function physicalSpecOf(asset: AssetId, specOf: SpecLookup) {
+  const spec = specOf(asset)
+  if (!spec?.physical) throw new Error(`${spec?.label ?? asset} cannot be held directly`)
+  return spec.physical
+}
+
+function physParams(p: PhysicalData, specOf: SpecLookup) {
+  const phys = physicalSpecOf(p.asset, specOf)
   return {
-    metal: p.metal,
+    asset: p.asset,
     form: p.form,
     description: p.description,
     weight: p.weight,
     weightUnit: p.weightUnit,
     purity: p.purity,
-    fineOz: toTroyOz(p.weight, p.weightUnit) * p.purity,
+    fineQty: physicalQuantity(phys, p),
     serial: p.serial ?? null,
     refiner: p.refiner ?? null,
     accountId: p.accountId ?? null,
@@ -357,23 +380,28 @@ function physParams(p: PhysicalData) {
 }
 
 /**
- * Create a vault item. With `purchase`, also records the matching `buy` of the
- * metal's physical instrument (fine oz at totalCost / fine oz) and links it.
+ * Create a register item (vault bullion or a custody balance). With `purchase`,
+ * also records the matching `buy` of the asset's physical instrument (fine
+ * quantity at totalCost / fine quantity) and links it.
  */
-export function createPhysical(p: PhysicalData, purchase?: { totalCost: number; fees: number; accountId: number } | null): PhysicalItem {
+export function createPhysical(
+  p: PhysicalData,
+  purchase?: { totalCost: number; fees: number; accountId: number } | null,
+  specOf: SpecLookup = universeSpec,
+): PhysicalItem {
   const db = getDb()
   return db.transaction(() => {
-    const params = physParams(p)
+    const params = physParams(p, specOf)
     if (purchase) {
       const txn = createTransaction({
         tradeDate: p.acquiredDate ?? new Date().toISOString().slice(0, 10),
         settleDate: null,
         accountId: purchase.accountId,
         counterAccountId: null,
-        instrumentId: physicalInstrumentId(p.metal),
+        instrumentId: physicalSpecOf(p.asset, specOf).instrumentId,
         type: 'buy',
-        quantity: params.fineOz,
-        price: purchase.totalCost / params.fineOz,
+        quantity: params.fineQty,
+        price: purchase.totalCost / params.fineQty,
         fees: purchase.fees,
         notes: `${p.description}${p.serial ? ` · serial ${p.serial}` : ''}${p.notes ? ` · ${p.notes}` : ''}`,
       })
@@ -385,7 +413,7 @@ export function createPhysical(p: PhysicalData, purchase?: { totalCost: number; 
         .prepare(
           `INSERT INTO pf_physical_items (metal, form, description, weight, weight_unit, purity, fine_oz, serial, refiner, account_id,
              acquisition_txn_id, acquired_date, premium_paid, storage_fee_rate_annual, status, notes)
-           VALUES (@metal, @form, @description, @weight, @weightUnit, @purity, @fineOz, @serial, @refiner, @accountId,
+           VALUES (@asset, @form, @description, @weight, @weightUnit, @purity, @fineQty, @serial, @refiner, @accountId,
              @acquisitionTxnId, @acquiredDate, @premiumPaid, @storageFeeRateAnnual, @status, @notes)`,
         )
         .run(params).lastInsertRowid,
@@ -396,18 +424,18 @@ export function createPhysical(p: PhysicalData, purchase?: { totalCost: number; 
   })()
 }
 
-export function updatePhysical(id: number, p: PhysicalData): PhysicalItem | undefined {
+export function updatePhysical(id: number, p: PhysicalData, specOf: SpecLookup = universeSpec): PhysicalItem | undefined {
   const db = getDb()
   return db.transaction(() => {
     const before = getPhysical(id)
     if (!before) return undefined
     db.prepare(
-      `UPDATE pf_physical_items SET metal = @metal, form = @form, description = @description, weight = @weight,
-         weight_unit = @weightUnit, purity = @purity, fine_oz = @fineOz, serial = @serial, refiner = @refiner,
+      `UPDATE pf_physical_items SET metal = @asset, form = @form, description = @description, weight = @weight,
+         weight_unit = @weightUnit, purity = @purity, fine_oz = @fineQty, serial = @serial, refiner = @refiner,
          account_id = @accountId, acquisition_txn_id = @acquisitionTxnId, acquired_date = @acquiredDate,
          premium_paid = @premiumPaid, storage_fee_rate_annual = @storageFeeRateAnnual, status = @status, notes = @notes,
          updated_at = datetime('now') WHERE id = @id`,
-    ).run({ ...physParams(p), id })
+    ).run({ ...physParams(p, specOf), id })
     const after = getPhysical(id)!
     audit('physical_item', id, 'update', before, after)
     return after
@@ -438,7 +466,7 @@ export interface SnapshotRow {
   grossExposure: number
   netFlow: number
   bySleeve: Record<string, number>
-  byMetal: Record<string, number>
+  byAsset: Record<string, number>
 }
 
 export function replaceDerived(units: UnitEntry[], snapshots: SnapshotRow[]): void {
@@ -453,9 +481,9 @@ export function replaceDerived(units: UnitEntry[], snapshots: SnapshotRow[]): vo
     for (const e of units) u.run(e)
     const s = db.prepare(
       `INSERT INTO pf_nav_snapshots (date, nav, units, nav_per_unit, cash, gross_exposure, net_flow, by_sleeve, by_metal)
-       VALUES (@date, @nav, @units, @navPerUnit, @cash, @grossExposure, @netFlow, @bySleeve, @byMetal)`,
+       VALUES (@date, @nav, @units, @navPerUnit, @cash, @grossExposure, @netFlow, @bySleeve, @byAsset)`,
     )
-    for (const r of snapshots) s.run({ ...r, bySleeve: JSON.stringify(r.bySleeve), byMetal: JSON.stringify(r.byMetal) })
+    for (const r of snapshots) s.run({ ...r, bySleeve: JSON.stringify(r.bySleeve), byAsset: JSON.stringify(r.byAsset) })
   })()
 }
 
@@ -472,10 +500,10 @@ export function listSnapshots(from?: string): SnapshotRow[] {
   const rows = getDb()
     .prepare(
       `SELECT date, nav, units, nav_per_unit AS navPerUnit, cash, gross_exposure AS grossExposure, net_flow AS netFlow,
-         by_sleeve AS bySleeve, by_metal AS byMetal FROM pf_nav_snapshots WHERE (? IS NULL OR date >= ?) ORDER BY date`,
+         by_sleeve AS bySleeve, by_metal AS byAsset FROM pf_nav_snapshots WHERE (? IS NULL OR date >= ?) ORDER BY date`,
     )
-    .all(from ?? null, from ?? null) as (Omit<SnapshotRow, 'bySleeve' | 'byMetal'> & { bySleeve: string; byMetal: string })[]
-  return rows.map((r) => ({ ...r, bySleeve: JSON.parse(r.bySleeve), byMetal: JSON.parse(r.byMetal) }))
+    .all(from ?? null, from ?? null) as (Omit<SnapshotRow, 'bySleeve' | 'byAsset'> & { bySleeve: string; byAsset: string })[]
+  return rows.map((r) => ({ ...r, bySleeve: JSON.parse(r.bySleeve), byAsset: JSON.parse(r.byAsset) }))
 }
 
 // --------------------------------------------------------------------------

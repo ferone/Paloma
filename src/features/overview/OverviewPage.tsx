@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import clsx from 'clsx'
-import type { OverviewResponse } from '@shared/overview'
+import { pairRatio, type OverviewResponse } from '@shared/overview'
+import { RELATIVE_VALUE_PAIRS } from '@shared/universe'
+import { assetBucketLabel as assetLabel } from '@shared/portfolio'
 import type { PortfolioSummaryLite, QuantOpportunityLite, MlPredictionLite, MacroDriverLite, Sleeve } from '@shared/artifacts'
 import { api } from '../../api/client'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
@@ -10,7 +12,7 @@ import { fmtAge, fmtNum, fmtPct, fmtPctSigned, fmtSigned, fmtUsd, fmtUsdCompact,
 import { PALETTE, signColor, TIER } from '../../design/tokens'
 
 const SLEEVE_LABEL: Record<Sleeve, string> = {
-  physical: 'Physical metal',
+  physical: 'Direct holdings',
   etf: 'ETFs',
   futures: 'Futures',
   equity: 'Equities',
@@ -122,10 +124,10 @@ function FundPanel({ portfolio, generatedAt }: { portfolio: PortfolioSummaryLite
           </ul>
           {portfolio.byMetal.length > 0 && (
             <p className="mt-3 text-2xs text-muted">
-              By metal:{' '}
+              By asset:{' '}
               {portfolio.byMetal
                 .filter((m) => m.value !== 0)
-                .map((m) => `${m.metal[0].toUpperCase()}${m.metal.slice(1)} ${fmtPct(m.weight, 0)}`)
+                .map((m) => `${assetLabel(m.metal)} ${fmtPct(m.weight, 0)}`)
                 .join(' · ')}
             </p>
           )}
@@ -147,9 +149,6 @@ function AllocationBar({ items }: { items: PortfolioSummaryLite['allocation'] })
 }
 
 function MarketStrip({ data }: { data: OverviewResponse }) {
-  const gold = data.markets.find((m) => m.symbol === 'GC=F')
-  const silver = data.markets.find((m) => m.symbol === 'SI=F')
-  const ratio = gold && silver && silver.price > 0 ? gold.price / silver.price : null
   return (
     <section aria-label="Markets" className="rounded-lg border border-border bg-surface">
       <dl className="grid grid-cols-2 divide-border sm:grid-cols-4 lg:grid-cols-7 lg:divide-x">
@@ -165,11 +164,16 @@ function MarketStrip({ data }: { data: OverviewResponse }) {
             </div>
           )
         })}
-        <div className="px-4 py-3">
-          <dt className="label">Gold / silver</dt>
-          <dd className="num mt-1 text-base text-foreground">{fmtNum(ratio, 2)}</dd>
-          <dd className="text-2xs text-muted">oz silver per oz gold</dd>
-        </div>
+        {RELATIVE_VALUE_PAIRS.map((pair) => {
+          const { ratio, caption } = pairRatio(pair, data.markets)
+          return (
+            <div key={pair.id} className="px-4 py-3">
+              <dt className="label">{pair.label}</dt>
+              <dd className="num mt-1 text-base text-foreground">{fmtNum(ratio, 2)}</dd>
+              <dd className="text-2xs text-muted">{caption}</dd>
+            </div>
+          )
+        })}
       </dl>
     </section>
   )
@@ -260,7 +264,7 @@ function MlPanel({ predictions, generatedAt }: { predictions: MlPredictionLite[]
             return (
               <li key={p.instrumentId}>
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm capitalize text-foreground">{p.metal}</span>
+                  <span className="text-sm text-foreground">{assetLabel(p.metal)}</span>
                   <span className={clsx('num text-sm', validated ? 'text-foreground' : 'text-muted')}>P(up) {fmtPct(pUp, 0)}</span>
                 </div>
                 <div className="relative mt-1.5 h-1.5 rounded-full bg-surface-2">

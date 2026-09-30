@@ -28,7 +28,7 @@ vi.mock('../../api/client', () => {
 const EMPTY = {
   '/summary': {
     empty: true, asOf: '2026-09-30', nav: 0, navPerUnit: null, unitsOutstanding: null, dayReturn: null, mtdReturn: null, ytdReturn: null,
-    sinceInceptionReturn: null, dayPnl: null, allocation: [], byMetal: [], inceptionDate: null, cash: 0, grossExposure: 0, netExposureOz: [],
+    sinceInceptionReturn: null, dayPnl: null, allocation: [], byMetal: [], inceptionDate: null, cash: 0, grossExposure: 0, netExposure: [],
     unrealizedPnl: 0, realizedPnl: 0, income: 0, expenses: 0, totalPnl: 0, netContributions: 0, transactionCount: 0, warnings: [],
     provenance: { source: 'Fund ledger', asOf: null },
   },

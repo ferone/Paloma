@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
 import {
   BENCHMARKS,
+  DEFAULT_BENCHMARK,
   TXN_TYPES,
   accountInputSchema,
   importCommitSchema,
@@ -76,7 +77,7 @@ router.get(
   wrap(async (req, res) => {
     const benchmark = z
       .enum(BENCHMARKS.map((b) => b.id) as [BenchmarkId, ...BenchmarkId[]])
-      .default('GLD')
+      .default(DEFAULT_BENCHMARK)
       .parse(str(req.query.benchmark))
     const from = isoDate.optional().parse(str(req.query.from))
     res.json(await buildPerformance(await getComputed(), benchmark, from))

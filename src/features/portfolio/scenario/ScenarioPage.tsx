@@ -1,6 +1,7 @@
 import { useQueries } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { useMemo, useState, type FormEvent } from 'react'
+import { DEFAULT_PORTFOLIO_SETTINGS } from '@shared/portfolio'
 import { ASSETS as ASSET_IDS, MACRO_SYMBOLS, UNIVERSE } from '@shared/universe'
 import { api } from '../../../api/client'
 import { fmtDate, fmtNum, fmtPct, fmtPctSigned, fmtUsd, fmtUsdCompact } from '../../../design/format'
@@ -10,12 +11,14 @@ import { TimeChart } from '../components/TimeChart'
 import { simulate, type Allocation, type Bar, type Rebalance } from './math'
 
 const ASSETS: { symbol: string; group: string }[] = [
-  ...UNIVERSE.gold.etfs.map((s) => ({ symbol: s, group: 'Gold' })),
-  ...UNIVERSE.silver.etfs.map((s) => ({ symbol: s, group: 'Silver' })),
+  ...ASSET_IDS.flatMap((a) => UNIVERSE[a].etfs.map((s) => ({ symbol: s, group: UNIVERSE[a].label }))),
   ...ASSET_IDS.flatMap((a) => (UNIVERSE[a].miners ? [{ symbol: UNIVERSE[a].miners!, group: 'Miners' }] : [])),
   { symbol: MACRO_SYMBOLS.spx, group: 'Other' },
   { symbol: MACRO_SYMBOLS.tips, group: 'Other' },
 ]
+
+/** Starting mix: the default benchmark blend (the precious sleeve), in whole percent. */
+const DEFAULT_MIX = Object.fromEntries(DEFAULT_PORTFOLIO_SETTINGS.blend.map((b) => [b.symbol, Math.round(b.weight * 100)]))
 
 interface Input_ {
   amount: number
@@ -48,8 +51,8 @@ export default function ScenarioPage() {
   const [start, setStart] = useState(`${Number(today.slice(0, 4)) - 3}-01-01`)
   const [end, setEnd] = useState(today)
   const [rebalance, setRebalance] = useState<Rebalance>('none')
-  const [selected, setSelected] = useState<string[]>(['GLD', 'SLV'])
-  const [weights, setWeights] = useState<Record<string, number>>({ GLD: 70, SLV: 30 })
+  const [selected, setSelected] = useState<string[]>(Object.keys(DEFAULT_MIX))
+  const [weights, setWeights] = useState<Record<string, number>>(DEFAULT_MIX)
   const [input, setInput] = useState<Input_ | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 

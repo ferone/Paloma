@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react'
-import { CUSTODY_TYPES, accountInputSchema, type Account, type CustodyType, type PortfolioSettings } from '@shared/portfolio'
+import { CUSTODY_LABEL, CUSTODY_TYPES, DEFAULT_PORTFOLIO_SETTINGS, accountInputSchema, type Account, type CustodyType, type PortfolioSettings } from '@shared/portfolio'
 import { fmtDate, fmtNum, fmtPct } from '../../../design/format'
 import { Button, Chip, ErrorNote, Field, Input, Panel, PanelSkeleton, Select } from '../../../ui'
 import { apiErrorMessage, useBatches, useDeleteAccount, usePortfolioSettings, useRollbackBatch, useSaveAccount, useSaveSettings } from '../api'
+
+/** "GLD:70, SLV:30": the default blend in the text syntax the settings field accepts. */
+const BLEND_EXAMPLE = DEFAULT_PORTFOLIO_SETTINGS.blend.map((b) => `${b.symbol}:${Math.round(b.weight * 100)}`).join(', ')
 
 export function AccountsPanel({ accounts }: { accounts: Account[] }) {
   const save = useSaveAccount()
@@ -40,7 +43,7 @@ export function AccountsPanel({ accounts }: { accounts: Account[] }) {
               {a.institution && <span className="ml-2 text-xs text-muted">{a.institution}</span>}
             </span>
             <span className="flex items-center gap-2">
-              <Chip>{a.custody}</Chip>
+              <Chip>{CUSTODY_LABEL[a.custody]}</Chip>
               <Button
                 size="sm"
                 variant="ghost"
@@ -64,7 +67,7 @@ export function AccountsPanel({ accounts }: { accounts: Account[] }) {
           <Select value={custody} onChange={(e) => setCustody(e.target.value as CustodyType)}>
             {CUSTODY_TYPES.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {CUSTODY_LABEL[c]}
               </option>
             ))}
           </Select>
@@ -111,7 +114,7 @@ function SettingsForm({ settings, effective }: { settings: PortfolioSettings; ef
         const [symbol, w] = s.split(':').map((x) => x.trim())
         return { symbol: symbol.toUpperCase(), weight: Number(w) / 100 }
       })
-    if (legs.some((l) => !l.symbol || !Number.isFinite(l.weight))) return setErr('Blend must look like "GLD:70, SLV:30"')
+    if (legs.some((l) => !l.symbol || !Number.isFinite(l.weight))) return setErr(`Blend must look like "${BLEND_EXAMPLE}"`)
     setErr(null)
     save.mutate({
       inceptionDate: inception || null,

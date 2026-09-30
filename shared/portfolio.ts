@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import type { Provenance } from './api.js'
 import type { PortfolioSummaryLite, Sleeve } from './artifacts.js'
-import type { InstrumentKind, Metal } from './universe.js'
+import { ASSETS, UNIVERSE, type AssetId, type AssetSpec, type InstrumentKind, type PhysicalSpec, type PriceUnit } from './universe.js'
 
 export type { Sleeve } from './artifacts.js'
 
@@ -11,20 +11,30 @@ export type { Sleeve } from './artifacts.js'
 // Ledger entities
 // ---------------------------------------------------------------------------
 
-export const CUSTODY_TYPES = ['broker', 'vault', 'bank'] as const
+export const CUSTODY_TYPES = ['broker', 'vault', 'bank', 'wallet', 'exchange'] as const
 export type CustodyType = (typeof CUSTODY_TYPES)[number]
+export const CUSTODY_LABEL: Record<CustodyType, string> = {
+  broker: 'Broker',
+  vault: 'Vault',
+  bank: 'Bank',
+  wallet: 'Wallet (self-custody)',
+  exchange: 'Exchange account',
+}
 
 /**
  * Transaction semantics (quantity is always the number of units the type
  * speaks about; `price` is per unit; `fees` are extra cash paid):
- * - buy / sell            ETF, equity or physical metal. Quantity in shares or
- *                         fine troy oz. Cash −(q·p + fees) / +(q·p − fees).
+ * - buy / sell            ETF, equity or a physical holding. Quantity in shares
+ *                         or the asset's physical unit (fine troy oz for
+ *                         bullion; e.g. BTC for a custody balance).
+ *                         Cash −(q·p + fees) / +(q·p − fees).
  * - futures_open          Quantity = signed contracts (+ long, − short); price
- *                         = entry $/oz. Only fees move cash (variation margin
- *                         is marked through NAV, not as a cash payment).
+ *                         = entry price in the asset's quote (spec.unitLabel).
+ *                         Only fees move cash (variation margin is marked
+ *                         through NAV, not as a cash payment).
  * - futures_close         Quantity = contracts closed (> 0), FIFO against the
- *                         open position; price = exit $/oz. Realized P&L is
- *                         credited to cash.
+ *                         open position; price = exit price. Realized P&L
+ *                         (Δprice × pointValue × contracts) is credited to cash.
  * - subscription / redemption  Investor cash in/out (USD amount in quantity,
  *                         price 1). Issues/cancels units at that day's NAV/unit.
  * - deposit / withdrawal  In-kind contribution/withdrawal of an instrument
@@ -100,15 +110,17 @@ export interface Account {
 }
 
 export interface Instrument {
-  /** Stable id: ETF/equity ticker, futures root, 'XAU-PHYS', 'XAG-PHYS', 'USD'. */
+  /** Stable id: ETF/equity ticker, futures root, a spec's `physical.instrumentId`, 'USD'. */
   id: string
   name: string
   kind: InstrumentKind
-  metal: Metal | null
+  asset: AssetId | null
   /** Yahoo symbol used to value the instrument. null for cash. */
   priceSymbol: string | null
-  /** Troy oz per contract (futures only). */
-  ozPerContract: number | null
+  /** Dollars per 1.00 price move per contract (futures only; the universe `pointValue`). */
+  pointValue: number | null
+  /** Units of the underlying per contract, in the asset's `priceUnit` (futures only). */
+  contractSize: number | null
 }
 
 export interface Transaction {
@@ -129,22 +141,29 @@ export interface Transaction {
   updatedAt: string
 }
 
-export const PHYSICAL_FORMS = ['bar', 'coin', 'round'] as const
+/** `bar` / `coin` / `round`: bullion. `balance`: a custody balance (wallet or exchange account). */
+export const PHYSICAL_FORMS = ['bar', 'coin', 'round', 'balance'] as const
 export type PhysicalForm = (typeof PHYSICAL_FORMS)[number]
-export const WEIGHT_UNITS = ['oz', 'g', 'kg'] as const
+export const BULLION_FORMS: readonly PhysicalForm[] = ['bar', 'coin', 'round']
+/** Weight units for bullion (converted to fine troy oz). */
+export const BULLION_WEIGHT_UNITS = ['oz', 'g', 'kg'] as const
+export type BullionWeightUnit = (typeof BULLION_WEIGHT_UNITS)[number]
+/** Every unit a register item may be recorded in: bullion weights plus custody units. */
+export const WEIGHT_UNITS = ['oz', 'g', 'kg', 'BTC'] as const
 export type WeightUnit = (typeof WEIGHT_UNITS)[number]
 
 export interface PhysicalItem {
   id: number
-  metal: Metal
+  asset: AssetId
   form: PhysicalForm
   description: string
+  /** Bullion: gross weight in `weightUnit`. Custody: the balance, in the asset's physical unit. */
   weight: number
   weightUnit: WeightUnit
-  /** Fineness, e.g. 0.9999. */
+  /** Fineness, e.g. 0.9999 (1 for custody balances). */
   purity: number
-  /** weight (in troy oz) × purity. */
-  fineOz: number
+  /** Fine quantity in the asset's physical unit: bullion weight (troy oz) × purity; custody = the balance. */
+  fineQty: number
   serial: string | null
   refiner: string | null
   accountId: number | null
@@ -190,15 +209,23 @@ export interface PortfolioSettings {
   blend: { symbol: string; weight: number }[]
 }
 
+/**
+ * Default benchmark blend: the precious-metals sleeve, weighted by policy and
+ * resolved to each asset's `benchmarkEtf`. Assets without a weight are left
+ * out of the default blend (the blend is editable in Fund setup).
+ */
+export const DEFAULT_BLEND_WEIGHTS: Partial<Record<AssetId, number>> = { gold: 0.7, silver: 0.3 }
+
+export function defaultBlend(): { symbol: string; weight: number }[] {
+  return ASSETS.filter((a) => DEFAULT_BLEND_WEIGHTS[a]).map((a) => ({ symbol: UNIVERSE[a].benchmarkEtf, weight: DEFAULT_BLEND_WEIGHTS[a]! }))
+}
+
 export const DEFAULT_PORTFOLIO_SETTINGS: PortfolioSettings = {
   inceptionDate: null,
   baseNavPerUnit: 100,
   physicalHaircut: 0,
   riskFree: 0,
-  blend: [
-    { symbol: 'GLD', weight: 0.7 },
-    { symbol: 'SLV', weight: 0.3 },
-  ],
+  blend: defaultBlend(),
 }
 
 // ---------------------------------------------------------------------------
@@ -243,27 +270,33 @@ export const transactionInputSchema = z
   })
 export type TransactionInput = z.input<typeof transactionInputSchema>
 
-export const physicalItemInputSchema = z.object({
-  metal: z.enum(['gold', 'silver']),
-  form: z.enum(PHYSICAL_FORMS),
-  description: z.string().trim().min(1).max(200),
-  weight: z.number().positive(),
-  weightUnit: z.enum(WEIGHT_UNITS),
-  purity: z.number().gt(0).max(1),
-  serial: z.string().trim().max(80).nullish(),
-  refiner: z.string().trim().max(120).nullish(),
-  accountId: z.number().int().positive().nullish(),
-  acquisitionTxnId: z.number().int().positive().nullish(),
-  acquiredDate: isoDate.nullish(),
-  premiumPaid: z.number().nonnegative().nullish(),
-  storageFeeRateAnnual: z.number().min(0).max(0.2).nullish(),
-  status: z.enum(['held', 'sold']).default('held'),
-  notes: z.string().max(2000).nullish(),
-  /** When set, also records a `buy` of the metal's physical instrument at this all-in total cost. */
-  recordPurchase: z
-    .object({ totalCost: z.number().positive(), fees: z.number().nonnegative().default(0), accountId: z.number().int().positive() })
-    .nullish(),
-})
+export const physicalItemInputSchema = z
+  .object({
+    asset: z.enum(ASSETS as [AssetId, ...AssetId[]]).refine((a) => UNIVERSE[a].physical != null, 'This asset cannot be held directly'),
+    form: z.enum(PHYSICAL_FORMS),
+    description: z.string().trim().min(1).max(200),
+    weight: z.number().positive(),
+    weightUnit: z.enum(WEIGHT_UNITS),
+    purity: z.number().gt(0).max(1),
+    serial: z.string().trim().max(80).nullish(),
+    refiner: z.string().trim().max(120).nullish(),
+    accountId: z.number().int().positive().nullish(),
+    acquisitionTxnId: z.number().int().positive().nullish(),
+    acquiredDate: isoDate.nullish(),
+    premiumPaid: z.number().nonnegative().nullish(),
+    storageFeeRateAnnual: z.number().min(0).max(0.2).nullish(),
+    status: z.enum(['held', 'sold']).default('held'),
+    notes: z.string().max(2000).nullish(),
+    /** When set, also records a `buy` of the asset's physical instrument at this all-in total cost. */
+    recordPurchase: z
+      .object({ totalCost: z.number().positive(), fees: z.number().nonnegative().default(0), accountId: z.number().int().positive() })
+      .nullish(),
+  })
+  .superRefine((p, ctx) => {
+    const phys = UNIVERSE[p.asset].physical
+    if (!phys) return
+    for (const i of physicalItemIssues(phys, p)) ctx.addIssue({ code: 'custom', path: [i.path], message: i.message })
+  })
 export type PhysicalItemInput = z.input<typeof physicalItemInputSchema>
 
 export const settingsInputSchema = z.object({
@@ -321,11 +354,19 @@ export interface HoldingView {
   name: string
   kind: InstrumentKind
   sleeve: Sleeve
-  metal: Metal | null
-  /** Shares, fine oz or contracts (signed). */
+  asset: AssetId | null
+  /** Shares, physical units (fine oz, BTC…) or contracts (signed). */
   quantity: number
-  /** Troy-oz exposure (physical oz; futures contracts × oz/contract). null for ETFs. */
-  ounces: number | null
+  /**
+   * Signed exposure in the asset's unit (`unitLabel`): the physical quantity;
+   * futures contracts × contractSize; ETFs value ÷ spot (unit-equivalent).
+   * null for miners/equities, cash, or when no price is available.
+   */
+  exposureUnits: number | null
+  /** Unit of `exposureUnits`: the asset's `priceUnit` (oz, lb, BTC). null without an asset. */
+  unitLabel: PriceUnit | null
+  /** Signed USD exposure to the underlying (notional × direction). null for miners/equities and cash. */
+  exposureNotional: number | null
   price: number | null
   priceDate: string | null
   /** True when the mark is a fallback (last trade price) or older than 5 days. */
@@ -375,7 +416,8 @@ export interface PortfolioSummary extends PortfolioSummaryLite {
   inceptionDate: string | null
   cash: number
   grossExposure: number
-  netExposureOz: { metal: Metal; ounces: number }[]
+  /** Net exposure per asset, each in its own unit (miners excluded). */
+  netExposure: AssetExposure[]
   unrealizedPnl: number
   realizedPnl: number
   income: number
@@ -387,6 +429,12 @@ export interface PortfolioSummary extends PortfolioSummaryLite {
   provenance: Provenance
 }
 
+export interface AssetExposure {
+  asset: AssetId
+  exposureUnits: number
+  unitLabel: PriceUnit
+}
+
 export interface NavPointView {
   date: string
   nav: number
@@ -396,7 +444,7 @@ export interface NavPointView {
   grossExposure: number
   netFlow: number
   bySleeve: Partial<Record<Sleeve, number>>
-  byMetal: Partial<Record<Metal | 'cash' | 'other', number>>
+  byAsset: Partial<Record<AssetId | 'cash' | 'other', number>>
 }
 
 export interface NavSeriesResponse {
@@ -422,13 +470,21 @@ export interface UnitsResponse {
   provenance: Provenance
 }
 
-export type BenchmarkId = 'GLD' | 'SLV' | 'GC=F' | 'blend'
+/** "Gold (GC=F)": an asset's reference price series. */
+export function spotLabel(spec: AssetSpec): string {
+  return `${spec.label} (${spec.spot})`
+}
+
+/** A Yahoo symbol listed in BENCHMARKS, or 'blend' (the settings blend). */
+export type BenchmarkId = string
+/** From the universe: each asset's benchmark ETF, then each asset's reference series, then the blend. */
 export const BENCHMARKS: { id: BenchmarkId; label: string }[] = [
-  { id: 'GLD', label: 'GLD' },
-  { id: 'SLV', label: 'SLV' },
-  { id: 'GC=F', label: 'Gold (GC=F)' },
+  ...ASSETS.map((a) => ({ id: UNIVERSE[a].benchmarkEtf, label: UNIVERSE[a].benchmarkEtf })),
+  ...ASSETS.map((a) => ({ id: UNIVERSE[a].spot, label: spotLabel(UNIVERSE[a]) })),
   { id: 'blend', label: 'Blend' },
 ]
+/** Default benchmark: the first asset's benchmark ETF. */
+export const DEFAULT_BENCHMARK: BenchmarkId = UNIVERSE[ASSETS[0]].benchmarkEtf
 
 export interface DrawdownInfo {
   maxDrawdown: number
@@ -510,7 +566,7 @@ export interface RiskResponse {
   drawdown: DrawdownInfo
   grossExposure: number
   grossLeverage: number | null
-  exposureByMetal: { metal: Metal; ounces: number; notional: number }[]
+  exposureByAsset: (AssetExposure & { notional: number })[]
   provenance: Provenance
 }
 
@@ -534,7 +590,7 @@ export interface AttributionResponse {
   residual: number | null
   byHolding: AttributionRow[]
   bySleeve: AttributionRow[]
-  byMetal: AttributionRow[]
+  byAsset: AttributionRow[]
   provenance: Provenance
 }
 
@@ -583,7 +639,18 @@ export interface PhysicalItemView extends PhysicalItem {
 
 export interface VaultResponse {
   items: PhysicalItemView[]
-  totals: { metal: Metal; items: number; fineOz: number; value: number; premiumPaid: number; storageAccrued: number; ledgerOz: number }[]
+  totals: {
+    asset: AssetId
+    /** Unit of `fineQty` and `ledgerQty` (the physical spec's unit). */
+    unitLabel: PhysicalSpec['unit']
+    items: number
+    fineQty: number
+    value: number
+    premiumPaid: number
+    storageAccrued: number
+    /** Net quantity of the asset's physical instrument on the ledger. */
+    ledgerQty: number
+  }[]
   haircut: number
   warnings: string[]
   provenance: Provenance
@@ -618,9 +685,60 @@ export const SLEEVE_LABEL: Record<Sleeve, string> = {
   equity: 'Miners',
 }
 
-/** Troy ounces for a weight in the given unit. */
-export function toTroyOz(weight: number, unit: WeightUnit): number {
+/** Troy ounces for a bullion weight. Bullion only (`physical.kind === 'bullion'`). */
+export function toTroyOz(weight: number, unit: BullionWeightUnit): number {
   if (unit === 'oz') return weight
   if (unit === 'g') return weight / 31.1034768
   return (weight * 1000) / 31.1034768
+}
+
+function isBullionUnit(u: WeightUnit): u is BullionWeightUnit {
+  return (BULLION_WEIGHT_UNITS as readonly string[]).includes(u)
+}
+
+/**
+ * Fine quantity of a register item in the asset's physical unit.
+ * Bullion: weight in troy oz × purity. Custody: the balance itself.
+ * Takes the spec (not an AssetId) so assets outside the universe can be tested.
+ */
+export function physicalQuantity(phys: PhysicalSpec, item: { weight: number; weightUnit: WeightUnit; purity: number }): number {
+  if (phys.kind === 'custody') return item.weight
+  if (!isBullionUnit(item.weightUnit)) throw new Error(`${item.weightUnit} is not a bullion weight unit`)
+  return toTroyOz(item.weight, item.weightUnit) * item.purity
+}
+
+/** Checks a register item against its asset's physical spec (form, unit, purity). */
+export function physicalItemIssues(phys: PhysicalSpec, item: { form: PhysicalForm; weightUnit: WeightUnit; purity: number }): { path: string; message: string }[] {
+  const out: { path: string; message: string }[] = []
+  if (phys.kind === 'custody') {
+    if (item.form !== 'balance') out.push({ path: 'form', message: 'Custody holdings are recorded as a balance' })
+    if (item.weightUnit !== phys.unit) out.push({ path: 'weightUnit', message: `Custody balances are recorded in ${phys.unit}` })
+    if (item.purity !== 1) out.push({ path: 'purity', message: 'Custody balances have no fineness (use 1)' })
+  } else {
+    if (!BULLION_FORMS.includes(item.form)) out.push({ path: 'form', message: 'Bullion is a bar, coin or round' })
+    if (!isBullionUnit(item.weightUnit)) out.push({ path: 'weightUnit', message: 'Bullion weight is in oz, g or kg' })
+  }
+  return out
+}
+
+/** Unit a holding's exposure is measured in: the asset's price unit (oz, lb, BTC). */
+export function exposureUnitOf(asset: AssetId | null): PriceUnit | null {
+  return asset ? UNIVERSE[asset].priceUnit : null
+}
+
+/** Label of an allocation bucket key: an asset's label, 'Cash', or 'Other'. */
+export function assetBucketLabel(key: string): string {
+  if (key === 'cash') return 'Cash'
+  return (UNIVERSE as Partial<Record<string, AssetSpec>>)[key]?.label ?? 'Other'
+}
+
+/** Beta of the fund to its dominant asset's reference series (from a RiskResponse). */
+export function dominantAssetBeta(risk: Pick<RiskResponse, 'exposureByAsset' | 'betas'>): { asset: AssetId; beta: BetaEstimate | undefined } {
+  const asset = dominantAsset(risk.exposureByAsset)
+  return { asset, beta: risk.betas.find((b) => b.symbol === UNIVERSE[asset].spot) }
+}
+
+/** The asset with the largest absolute notional exposure; the first asset when flat. */
+export function dominantAsset(exposure: { asset: AssetId; notional: number }[]): AssetId {
+  return [...exposure].sort((a, b) => Math.abs(b.notional) - Math.abs(a.notional))[0]?.asset ?? ASSETS[0]
 }

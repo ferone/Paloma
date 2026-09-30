@@ -5,6 +5,7 @@ import { getDb } from '../db/client.js'
 import { writeArtifact } from '../db/repo.js'
 import { registerJob } from '../jobs/registry.js'
 import { ARTIFACTS, type PortfolioSummaryLite } from '../../shared/artifacts.js'
+import { ASSETS, UNIVERSE, type AssetId } from '../../shared/universe.js'
 import type { Account, Instrument, PhysicalItem, PortfolioSettings, Transaction } from '../../shared/portfolio.js'
 import { runLedger, type EngineRun } from './engine/ledger.js'
 import { loadPrices, type LoadedPrices } from './prices.js'
@@ -49,15 +50,14 @@ async function compute(force: boolean): Promise<Computed> {
 
   const used = new Set(txns.map((t) => t.instrumentId))
   const symbols = [...used].map((id) => instruments.get(id)?.priceSymbol).filter((s): s is string => !!s)
-  if (txns.length || physical.length) symbols.push('GC=F', 'SI=F')
+  // Reference series of every asset in play: ETF unit-equivalents and register valuations read them.
+  if (txns.length || physical.length) symbols.push(...referenceSymbols(instruments, used, physical))
   const priceFrom = inception ?? physical.map((p) => p.acquiredDate).filter((d): d is string => !!d).sort()[0] ?? today()
   const prices = symbols.length ? await loadPrices(symbols, priceFrom, { force }) : await loadPrices([], priceFrom)
 
-  // Valuation calendar: every date any held instrument printed a close.
   const heldSymbols = [...used].map((id) => instruments.get(id)?.priceSymbol).filter((s): s is string => !!s)
-  const dates = new Set<string>()
-  for (const s of heldSymbols.length ? heldSymbols : ['GC=F']) for (const d of prices.book.dates(s)) if (inception && d >= inception) dates.add(d)
-  const run = runLedger(txns, instruments, prices.book, [...dates], settings)
+  const dates = valuationDates(heldSymbols.length ? heldSymbols : [UNIVERSE[ASSETS[0]].spot], prices.book, inception)
+  const run = runLedger(txns, instruments, prices.book, dates, settings)
 
   const c: Computed = { txns, instruments, accounts, physical, settings, run, prices, inception, computedAt: new Date().toISOString() }
 
@@ -72,11 +72,43 @@ async function compute(force: boolean): Promise<Computed> {
       grossExposure: p.grossExposure,
       netFlow: p.netFlow,
       bySleeve: p.bySleeve as Record<string, number>,
-      byMetal: p.byMetal as Record<string, number>,
+      byAsset: p.byAsset as Record<string, number>,
     })),
   )
   writeArtifact(ARTIFACTS.portfolioSummary, toLite(buildSummary(c)))
   return c
+}
+
+/**
+ * Spot symbols of every asset referenced by a traded instrument or a register
+ * item, in universe order.
+ */
+export function referenceSymbols(instruments: Map<string, Instrument>, used: Set<string>, physical: PhysicalItem[]): string[] {
+  const assets = new Set<AssetId>(physical.map((p) => p.asset))
+  for (const id of used) {
+    const a = instruments.get(id)?.asset
+    if (a) assets.add(a)
+  }
+  return ASSETS.filter((a) => assets.has(a)).map((a) => UNIVERSE[a].spot)
+}
+
+function isWeekday(iso: string): boolean {
+  const d = new Date(`${iso}T00:00:00Z`).getUTCDay()
+  return d !== 0 && d !== 6
+}
+
+/**
+ * Valuation calendar: the fund NAV is struck on fund business days only, i.e.
+ * every weekday on which any held instrument printed a close. Assets that
+ * trade 24x7 (session '24x7', e.g. BTC) are marked at their close on those
+ * business days (carry-forward lookup), so a weekend move lands in Monday's
+ * NAV rather than creating Saturday/Sunday NAV points.
+ */
+export function valuationDates(symbols: string[], book: { dates(symbol: string): string[] }, inception: string | null): string[] {
+  const dates = new Set<string>()
+  if (!inception) return []
+  for (const s of symbols) for (const d of book.dates(s)) if (d >= inception && isWeekday(d)) dates.add(d)
+  return [...dates]
 }
 
 export function toLite(s: PortfolioSummaryLite): PortfolioSummaryLite {

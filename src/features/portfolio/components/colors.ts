@@ -1,5 +1,5 @@
 import type { Sleeve } from '@shared/portfolio'
-import { PALETTE } from '../../../design/tokens'
+import { ASSET_COLOR, PALETTE } from '../../../design/tokens'
 
 export const SLEEVE_COLOR: Record<Sleeve, string> = {
   etf: PALETTE.series[0],
@@ -9,9 +9,9 @@ export const SLEEVE_COLOR: Record<Sleeve, string> = {
   cash: PALETTE.series[5],
 }
 
-export const METAL_BUCKET_COLOR: Record<string, string> = {
-  gold: PALETTE.gold,
-  silver: PALETTE.silver,
+/** Colour per allocation bucket: each asset's colour, plus cash and other. */
+export const ASSET_BUCKET_COLOR: Record<string, string> = {
+  ...ASSET_COLOR,
   cash: PALETTE.series[5],
   other: PALETTE.series[4],
 }

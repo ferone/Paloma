@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { ARTIFACTS, type MacroDashboardLite, type MlPredictionsLite, type PortfolioSummaryLite, type QuantSnapshotLite } from '../../shared/artifacts.js'
-import type { MarketTick, OverviewResponse } from '../../shared/overview.js'
-import { MACRO_SYMBOLS, UNIVERSE } from '../../shared/universe.js'
+import { assetTicks, type MarketTick, type OverviewResponse } from '../../shared/overview.js'
+import { MACRO_SYMBOLS } from '../../shared/universe.js'
 import { readArtifact } from '../db/repo.js'
 import { getBatchQuotes } from '../services/yahoo-finance.service.js'
 import { cacheMiddleware } from '../middleware/cache.js'
@@ -10,9 +10,9 @@ import { cacheMiddleware } from '../middleware/cache.js'
 // as artifacts. Reads only — never recomputes another domain's state.
 export const router = Router()
 
+// Every universe asset, then the macro references.
 const STRIP: { symbol: string; label: string }[] = [
-  { symbol: UNIVERSE.gold.spot, label: 'Gold' },
-  { symbol: UNIVERSE.silver.spot, label: 'Silver' },
+  ...assetTicks(),
   { symbol: MACRO_SYMBOLS.dxy, label: 'Dollar index' },
   { symbol: MACRO_SYMBOLS.us10y, label: 'US 10y yield' },
   { symbol: MACRO_SYMBOLS.vix, label: 'VIX' },

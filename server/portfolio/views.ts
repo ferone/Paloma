@@ -1,12 +1,17 @@
 // Response builders: turn an engine run into the /api/portfolio shapes.
 import type { Provenance } from '../../shared/api.js'
-import type { Metal } from '../../shared/universe.js'
-import { METALS, UNIVERSE } from '../../shared/universe.js'
+import type { AssetId, AssetSpec } from '../../shared/universe.js'
+import { ASSETS, MACRO_SYMBOLS, UNIVERSE, physicalAssets } from '../../shared/universe.js'
 import {
   BENCHMARKS,
   EXTERNAL_FLOW_TYPES,
   SLEEVE_LABEL,
+  assetBucketLabel,
+  exposureUnitOf,
   sleeveOfKind,
+  spotLabel,
+  type AssetExposure,
+  type PhysicalItem,
   type AttributionResponse,
   type AttributionRow,
   type BenchmarkId,
@@ -57,8 +62,8 @@ function npuSeries(c: Computed): DatedValue[] {
   return c.run.points.filter((p) => p.navPerUnit != null).map((p) => ({ date: p.date, value: p.navPerUnit! }))
 }
 
-function spotOf(c: Computed, metal: Metal, date: string): number | null {
-  return c.prices.book.close(UNIVERSE[metal].spot, date)?.price ?? null
+function spotOf(c: Computed, asset: AssetId, date: string): number | null {
+  return c.prices.book.close(UNIVERSE[asset].spot, date)?.price ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +81,7 @@ export function buildHoldingViews(c: Computed): HoldingView[] {
     const mark = c.run.marks.get(id)
     const price = mark?.price ?? null
     const mult = multiplierOf(inst)
-    const v = price != null ? valuePosition(inst, p.lots, price, c.settings.physicalHaircut) : { value: 0, notional: 0, ounces: null }
+    const v = price != null ? valuePosition(inst, p.lots, price, c.settings.physicalHaircut) : { value: 0, notional: 0, exposureUnits: null }
     const qty = p.lots.reduce((s, l) => s + l.qty, 0)
     const isFut = inst.kind === 'future'
     const costBasis = isFut ? p.lots.reduce((s, l) => s + Math.abs(l.qty) * mult * l.unitCost, 0) : p.lots.reduce((s, l) => s + l.qty * l.unitCost, 0)
@@ -97,19 +102,23 @@ export function buildHoldingViews(c: Computed): HoldingView[] {
         holdingDays: daysBetween(l.openDate, asOf),
       }
     })
-    let ounces = v.ounces
-    if (ounces == null && inst.metal && (inst.kind === 'etf') && price != null) {
-      const spot = spotOf(c, inst.metal, asOf)
-      ounces = spot ? v.value / spot : null
+    let exposureUnits = v.exposureUnits
+    if (exposureUnits == null && inst.asset && inst.kind === 'etf' && price != null) {
+      const spot = spotOf(c, inst.asset, asOf)
+      exposureUnits = spot ? v.value / spot : null
     }
+    // Direct exposure to the underlying: ETFs, futures and physical. Miners (equity) are a beta proxy, not the asset.
+    const direct = inst.asset != null && inst.kind !== 'equity' && inst.kind !== 'cash'
     out.push({
       instrumentId: id,
       name: inst.name,
       kind: inst.kind,
       sleeve: sleeveOfKind(inst.kind),
-      metal: inst.metal,
+      asset: inst.asset,
       quantity: qty,
-      ounces,
+      exposureUnits,
+      unitLabel: exposureUnitOf(inst.asset),
+      exposureNotional: direct ? v.notional * Math.sign(qty) : null,
       price,
       priceDate: mark?.date ?? null,
       priceStale: !mark || mark.fallback || mark.date < isoDaysAgo(asOf, 5),
@@ -156,6 +165,22 @@ function prevMonthEnd(date: string): string {
   return isoDaysAgo(`${date.slice(0, 7)}-01`, 1)
 }
 
+/**
+ * Per-asset exposure over the holdings with direct exposure (miners excluded):
+ * units in the asset's own unit and signed notional. Every asset, universe order.
+ */
+function exposureByAsset(holdings: HoldingView[]): (AssetExposure & { notional: number })[] {
+  return ASSETS.map((asset) => {
+    const hs = holdings.filter((h) => h.asset === asset && h.exposureNotional != null)
+    return {
+      asset,
+      exposureUnits: hs.reduce((s, h) => s + (h.exposureUnits ?? 0), 0),
+      unitLabel: UNIVERSE[asset].priceUnit,
+      notional: hs.reduce((s, h) => s + h.exposureNotional!, 0),
+    }
+  })
+}
+
 export function buildSummary(c: Computed): PortfolioSummary {
   const last = c.run.points.at(-1)
   const base = c.settings.baseNavPerUnit
@@ -175,7 +200,7 @@ export function buildSummary(c: Computed): PortfolioSummary {
     inceptionDate: c.inception,
     cash: 0,
     grossExposure: 0,
-    netExposureOz: [],
+    netExposure: [],
     unrealizedPnl: 0,
     realizedPnl: 0,
     income: 0,
@@ -196,7 +221,8 @@ export function buildSummary(c: Computed): PortfolioSummary {
     .filter(([, v]) => Math.abs(v) > 0.005)
     .map(([sleeve, value]) => ({ sleeve, value, weight: w(value) }))
     .sort((a, b) => b.value - a.value)
-  const byMetal = (Object.entries(last.byMetal) as [Metal | 'cash' | 'other', number][])
+  // `metal` is the published artifact's field name (shared/artifacts.ts); it holds an AssetId.
+  const byMetal = (Object.entries(last.byAsset) as [AssetId | 'cash' | 'other', number][])
     .filter(([, v]) => Math.abs(v) > 0.005)
     .map(([metal, value]) => ({ metal, value, weight: w(value) }))
     .sort((a, b) => b.value - a.value)
@@ -211,10 +237,9 @@ export function buildSummary(c: Computed): PortfolioSummary {
     if (EXTERNAL_FLOW_TYPES.includes(t.type)) netContributions += (t.type === 'subscription' || t.type === 'deposit' ? 1 : -1) * t.quantity * t.price
   }
 
-  const netExposureOz = METALS.map((metal) => ({
-    metal,
-    ounces: holdings.filter((h) => h.metal === metal && h.kind !== 'equity').reduce((s, h) => s + (h.ounces ?? 0), 0),
-  })).filter((x) => Math.abs(x.ounces) > 1e-6)
+  const netExposure = exposureByAsset(holdings)
+    .filter((x) => Math.abs(x.exposureUnits) > 1e-6)
+    .map(({ asset, exposureUnits, unitLabel }) => ({ asset, exposureUnits, unitLabel }))
 
   const lastNpu = last.navPerUnit
   return {
@@ -233,7 +258,7 @@ export function buildSummary(c: Computed): PortfolioSummary {
     byMetal,
     cash: last.cash,
     grossExposure: last.grossExposure,
-    netExposureOz,
+    netExposure,
     unrealizedPnl: holdings.reduce((s, h) => s + h.unrealizedPnl, 0),
     realizedPnl: [...c.run.positions.values()].reduce((s, p) => s + p.realized, 0),
     income,
@@ -260,7 +285,7 @@ export function buildNavSeries(c: Computed, from?: string): NavSeriesResponse {
         grossExposure: p.grossExposure,
         netFlow: p.netFlow,
         bySleeve: p.bySleeve,
-        byMetal: p.byMetal,
+        byAsset: p.byAsset,
       })),
     provenance: provenance(c),
   }
@@ -437,20 +462,25 @@ export async function buildPerformance(c: Computed, benchmark: BenchmarkId, from
 // Risk
 // ---------------------------------------------------------------------------
 
-const BETA_REFS = [
-  { symbol: 'SPY', label: 'S&P 500 (SPY)' },
-  { symbol: 'DX-Y.NYB', label: 'US dollar index' },
-  { symbol: 'GC=F', label: 'Gold (GC=F)' },
-]
+/**
+ * Beta references: equities and the dollar, then the reference series of each
+ * asset the fund is exposed to (the first asset when flat).
+ */
+function betaRefs(exposed: AssetId[]): { symbol: string; label: string }[] {
+  const assets = exposed.length ? exposed : [ASSETS[0]]
+  return [
+    { symbol: MACRO_SYMBOLS.spx, label: 'S&P 500 (SPY)' },
+    { symbol: MACRO_SYMBOLS.dxy, label: 'US dollar index' },
+    ...assets.map((a) => ({ symbol: UNIVERSE[a].spot, label: spotLabel(UNIVERSE[a]) })),
+  ]
+}
 
 export async function buildRisk(c: Computed, lookbackDays = 252): Promise<RiskResponse> {
   const last = c.run.points.at(-1)
   const w = fundWindow(c)
   const holdings = buildHoldingViews(c)
-  const exposureByMetal = METALS.map((metal) => {
-    const hs = holdings.filter((h) => h.metal === metal && h.kind !== 'equity')
-    return { metal, ounces: hs.reduce((s, h) => s + (h.ounces ?? 0), 0), notional: hs.reduce((s, h) => s + h.notional * Math.sign(h.quantity), 0) }
-  }).filter((x) => Math.abs(x.notional) > 0.005)
+  const exposure = exposureByAsset(holdings).filter((x) => Math.abs(x.notional) > 0.005)
+  const refs = betaRefs(exposure.map((x) => x.asset))
   const nav = last?.nav ?? 0
   const base: RiskResponse = {
     asOf: last?.date ?? null,
@@ -458,11 +488,11 @@ export async function buildRisk(c: Computed, lookbackDays = 252): Promise<RiskRe
     observations: 0,
     volatility: null,
     var: [],
-    betas: BETA_REFS.map((b) => ({ ...b, beta: null, correlation: null, observations: 0 })),
+    betas: refs.map((b) => ({ ...b, beta: null, correlation: null, observations: 0 })),
     drawdown: { maxDrawdown: 0, peakDate: null, troughDate: null, recoveryDate: null, durationDays: null, current: 0 },
     grossExposure: last?.grossExposure ?? 0,
     grossLeverage: nav > 0 ? (last?.grossExposure ?? 0) / nav : null,
-    exposureByMetal,
+    exposureByAsset: exposure,
     provenance: provenance(c),
   }
   if (!w || w.returns.length < 2) return base
@@ -490,10 +520,10 @@ export async function buildRisk(c: Computed, lookbackDays = 252): Promise<RiskRe
   const dates = recent.map((x) => x.date)
   const prevDate = w.points[w.points.length - recent.length - 1]?.date ?? w.startDate
   const { book } = await loadPrices(
-    BETA_REFS.map((b) => b.symbol),
+    refs.map((b) => b.symbol),
     prevDate,
   )
-  const betas = BETA_REFS.map((b) => {
+  const betas = refs.map((b) => {
     const closes = alignSeries([prevDate, ...dates], book.dates(b.symbol).map((d) => ({ date: d, value: book.close(b.symbol, d)!.price })))
     const fx: number[] = []
     const bx: number[] = []
@@ -526,7 +556,7 @@ export async function buildRisk(c: Computed, lookbackDays = 252): Promise<RiskRe
 export function buildAttribution(c: Computed, from?: string | null, to?: string | null): AttributionResponse {
   const pts = c.run.points
   const endIdx = to ? pts.findLastIndex((p) => p.date <= to) : pts.length - 1
-  const empty: AttributionResponse = { from: null, to: null, totalPnl: 0, twr: null, residual: null, byHolding: [], bySleeve: [], byMetal: [], provenance: provenance(c) }
+  const empty: AttributionResponse = { from: null, to: null, totalPnl: 0, twr: null, residual: null, byHolding: [], bySleeve: [], byAsset: [], provenance: provenance(c) }
   if (endIdx < 0) return empty
   const startIdx = from ? pts.findLastIndex((p) => p.date < from) : -1
   const end = pts[endIdx]
@@ -567,7 +597,7 @@ export function buildAttribution(c: Computed, from?: string | null, to?: string 
     return [...m.values()].sort((a, b) => b.pnl - a.pnl)
   }
   const sleeveOf = (k: string): Sleeve => (k === CASH_KEY ? 'cash' : sleeveOfKind(c.instruments.get(k)?.kind ?? 'cash'))
-  const metalOf = (k: string): string => (k === CASH_KEY ? 'cash' : (c.instruments.get(k)?.metal ?? 'other'))
+  const assetOf = (k: string): string => (k === CASH_KEY ? 'cash' : (c.instruments.get(k)?.asset ?? 'other'))
 
   const startNpu = start?.navPerUnit ?? c.settings.baseNavPerUnit
   const twr = end.navPerUnit != null && startNpu ? end.navPerUnit / startNpu - 1 : null
@@ -580,7 +610,7 @@ export function buildAttribution(c: Computed, from?: string | null, to?: string 
     residual: twr != null ? twr - sumContrib : null,
     byHolding,
     bySleeve: group(sleeveOf, (g) => SLEEVE_LABEL[g as Sleeve] ?? g),
-    byMetal: group(metalOf, (g) => (g === 'gold' ? 'Gold' : g === 'silver' ? 'Silver' : g === 'cash' ? 'Cash' : 'Other')),
+    byAsset: group(assetOf, assetBucketLabel),
     provenance: provenance(c, 'Contribution = Σ daily P&L ÷ prior-day NAV, growth-linked so contributions sum to TWR'),
   }
 }
@@ -589,13 +619,56 @@ export function buildAttribution(c: Computed, from?: string | null, to?: string 
 // Vault
 // ---------------------------------------------------------------------------
 
+type VaultItem = PhysicalItem & { value: number; storageAccrued: number }
+
+/**
+ * Register totals per directly-holdable asset, reconciled against the ledger
+ * position of the asset's physical instrument. Specs are a parameter so
+ * custody assets outside the universe can be tested.
+ */
+export function vaultTotals(items: VaultItem[], ledgerQty: (instrumentId: string) => number, specs: AssetSpec[]): Pick<VaultResponse, 'totals' | 'warnings'> {
+  const warnings: string[] = []
+  const totals = specs.flatMap((spec) => {
+    if (!spec.physical) return []
+    const unit = spec.physical.unit
+    const held = items.filter((i) => i.asset === spec.id && i.status === 'held')
+    const onLedger = ledgerQty(spec.physical.instrumentId)
+    const fineQty = held.reduce((s, i) => s + i.fineQty, 0)
+    if (Math.abs(fineQty - onLedger) > 0.01) {
+      const registerUnit = spec.physical.kind === 'bullion' ? `fine ${unit}` : unit
+      warnings.push(`${spec.label}: register holds ${fineQty.toFixed(3)} ${registerUnit} but the ledger holds ${onLedger.toFixed(3)} ${unit}.`)
+    }
+    return [
+      {
+        asset: spec.id,
+        unitLabel: unit,
+        items: held.length,
+        fineQty,
+        value: held.reduce((s, i) => s + i.value, 0),
+        premiumPaid: held.reduce((s, i) => s + (i.premiumPaid ?? 0), 0),
+        storageAccrued: held.reduce((s, i) => s + i.storageAccrued, 0),
+        ledgerQty: onLedger,
+      },
+    ]
+  }).filter((t) => t.items > 0 || Math.abs(t.ledgerQty) > 1e-9)
+  return { totals, warnings }
+}
+
+/** "COMEX front month (GC=F, SI=F)": where register spot prices come from. */
+function spotSourceLabel(specs: AssetSpec[]): string {
+  const venues = new Set(specs.map((s) => s.futures.find((f) => f.yahoo === s.spot)?.exchange ?? null))
+  const [venue] = venues
+  const kind = venues.size === 1 && venue ? `${venue} front month` : 'reference series'
+  return `${kind} (${specs.map((s) => s.spot).join(', ')})`
+}
+
 export function buildVault(c: Computed): VaultResponse {
   const date = c.run.points.at(-1)?.date ?? new Date().toISOString().slice(0, 10)
   const names = new Map(c.accounts.map((a) => [a.id, a.name]))
   const haircut = c.settings.physicalHaircut
   const items = c.physical.map((it) => {
-    const spot = spotOf(c, it.metal, date)
-    const value = it.status === 'held' && spot != null ? it.fineOz * spot * (1 - haircut) : 0
+    const spot = spotOf(c, it.asset, date)
+    const value = it.status === 'held' && spot != null ? it.fineQty * spot * (1 - haircut) : 0
     const years = it.acquiredDate ? Math.max(0, daysBetween(it.acquiredDate, date)) / 365.25 : 0
     return {
       ...it,
@@ -605,30 +678,15 @@ export function buildVault(c: Computed): VaultResponse {
       storageAccrued: it.status === 'held' ? (it.storageFeeRateAnnual ?? 0) * value * years : 0,
     }
   })
-  const warnings: string[] = []
-  const totals = METALS.map((metal) => {
-    const held = items.filter((i) => i.metal === metal && i.status === 'held')
-    const ledgerOz = c.run.positions.get(metal === 'gold' ? 'XAU-PHYS' : 'XAG-PHYS')?.lots.reduce((s, l) => s + l.qty, 0) ?? 0
-    const fineOz = held.reduce((s, i) => s + i.fineOz, 0)
-    if (Math.abs(fineOz - ledgerOz) > 0.01)
-      warnings.push(`${UNIVERSE[metal].label}: register holds ${fineOz.toFixed(3)} fine oz but the ledger holds ${ledgerOz.toFixed(3)} oz.`)
-    return {
-      metal,
-      items: held.length,
-      fineOz,
-      value: held.reduce((s, i) => s + i.value, 0),
-      premiumPaid: held.reduce((s, i) => s + (i.premiumPaid ?? 0), 0),
-      storageAccrued: held.reduce((s, i) => s + i.storageAccrued, 0),
-      ledgerOz,
-    }
-  }).filter((t) => t.items > 0 || Math.abs(t.ledgerOz) > 1e-9)
+  const ledgerQty = (instrumentId: string) => c.run.positions.get(instrumentId)?.lots.reduce((s, l) => s + l.qty, 0) ?? 0
+  const { totals, warnings } = vaultTotals(items, ledgerQty, physicalAssets().map((a) => UNIVERSE[a]))
   return {
     items,
     totals,
     haircut,
     warnings,
     provenance: {
-      source: 'Vault register · spot from COMEX front month (GC=F, SI=F)',
+      source: `Vault register · spot from ${spotSourceLabel(physicalAssets().map((a) => UNIVERSE[a]))}`,
       asOf: c.run.points.at(-1)?.date ?? null,
       note: haircut ? `Valued net of a ${(haircut * 100).toFixed(2)}% haircut · storage accrual estimated at current value` : 'Storage accrual estimated at current value',
       modeled: items.some((i) => i.storageAccrued > 0),

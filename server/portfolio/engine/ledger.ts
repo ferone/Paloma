@@ -1,7 +1,7 @@
 // Pure fund-accounting engine: replays the ledger day by day, values every
 // position at that day's close, unitizes capital flows and tracks per-holding
 // P&L so performance can be attributed. No I/O: prices come in via PriceBook.
-import type { Metal } from '../../../shared/universe.js'
+import type { AssetId } from '../../../shared/universe.js'
 import type { Instrument, Sleeve, Transaction, UnitEntry } from '../../../shared/portfolio.js'
 import { sleeveOfKind } from '../../../shared/portfolio.js'
 import { applyFill, netQty, sign, transferLots, type Lot } from './lots.js'
@@ -32,7 +32,7 @@ export interface EnginePoint {
   /** NAV contribution per non-cash instrument. */
   values: Record<string, number>
   bySleeve: Partial<Record<Sleeve, number>>
-  byMetal: Partial<Record<Metal | 'cash' | 'other', number>>
+  byAsset: Partial<Record<AssetId | 'cash' | 'other', number>>
   /** Daily P&L per instrument (plus CASH_KEY). */
   pnl: Record<string, number>
   /** Cumulative P&L since inception per instrument (plus CASH_KEY). */
@@ -79,26 +79,28 @@ export function sortTransactions(txns: Transaction[]): Transaction[] {
   return [...txns].sort((a, b) => (a.tradeDate < b.tradeDate ? -1 : a.tradeDate > b.tradeDate ? 1 : a.id - b.id))
 }
 
-/** Multiplier from price units to dollars. */
+/** Multiplier from price points to dollars: the futures `pointValue`, 1 for everything else. */
 export function multiplierOf(inst: Instrument): number {
-  return inst.kind === 'future' ? (inst.ozPerContract ?? 1) : 1
+  return inst.kind === 'future' ? (inst.pointValue ?? 1) : 1
 }
 
 /**
  * Value a position at `mark`: market value (futures: open variation P&L),
- * gross notional and troy-oz exposure.
+ * gross notional, and exposure in the asset's own unit (futures: contracts ×
+ * contractSize; physical: the held quantity, bullion fine oz or a custody
+ * balance alike). ETFs/equities have no direct unit exposure here.
  */
 export function valuePosition(inst: Instrument, lots: Lot[], mark: number, haircut: number) {
   const qty = netQty(lots)
   const mult = multiplierOf(inst)
   if (inst.kind === 'future') {
     const value = lots.reduce((s, l) => s + l.qty * mult * (mark - l.unitCost), 0)
-    return { value, notional: Math.abs(qty) * mult * mark, ounces: qty * mult }
+    return { value, notional: Math.abs(qty) * mult * mark, exposureUnits: qty * (inst.contractSize ?? mult) }
   }
   if (inst.kind === 'physical') {
-    return { value: qty * mark * (1 - haircut), notional: Math.abs(qty) * mark, ounces: qty }
+    return { value: qty * mark * (1 - haircut), notional: Math.abs(qty) * mark, exposureUnits: qty }
   }
-  return { value: qty * mark, notional: Math.abs(qty) * mark, ounces: null as number | null }
+  return { value: qty * mark, notional: Math.abs(qty) * mark, exposureUnits: null as number | null }
 }
 
 export function runLedger(
@@ -274,7 +276,7 @@ export function runLedger(
     marks = new Map()
     const values: Record<string, number> = {}
     const bySleeve: Partial<Record<Sleeve, number>> = {}
-    const byMetal: Partial<Record<Metal | 'cash' | 'other', number>> = {}
+    const byAsset: Partial<Record<AssetId | 'cash' | 'other', number>> = {}
     let gross = 0
     for (const [id, p] of positions) {
       const inst = instruments.get(id)!
@@ -293,12 +295,12 @@ export function runLedger(
       gross += v.notional
       const sl = sleeveOfKind(inst.kind)
       bySleeve[sl] = (bySleeve[sl] ?? 0) + v.value
-      const mk = inst.metal ?? 'other'
-      byMetal[mk] = (byMetal[mk] ?? 0) + v.value
+      const ak: AssetId | 'other' = inst.asset ?? 'other'
+      byAsset[ak] = (byAsset[ak] ?? 0) + v.value
     }
     const cash = [...cashByAccount.values()].reduce((s, x) => s + x, 0)
     bySleeve.cash = cash
-    byMetal.cash = cash
+    byAsset.cash = cash
     const nav = Object.values(values).reduce((s, x) => s + x, 0) + cash
 
     // Unitize today's flows at the pre-flow NAV/unit.
@@ -352,7 +354,7 @@ export function runLedger(
       netFlow,
       values,
       bySleeve,
-      byMetal,
+      byAsset,
       pnl,
       cumPnl: { ...cumPnl },
       cumContrib: { ...cumContrib },

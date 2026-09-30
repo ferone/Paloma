@@ -68,10 +68,10 @@ describe('portfolio repositories + service', () => {
     expect(repo.getTransaction(t.id)!.quantity).toBe(12)
 
     const item = repo.createPhysical(
-      { metal: 'gold', form: 'bar', description: '1 kg bar', weight: 1, weightUnit: 'kg', purity: 0.9999, serial: 'AB123', accountId: vault.id, acquiredDate: '2024-01-03', status: 'held' },
+      { asset: 'gold', form: 'bar', description: '1 kg bar', weight: 1, weightUnit: 'kg', purity: 0.9999, serial: 'AB123', accountId: vault.id, acquiredDate: '2024-01-03', status: 'held' },
       { totalCost: 66_000, fees: 50, accountId: vault.id },
     )
-    expect(item.fineOz).toBeCloseTo(32.1507466 * 0.9999, 5)
+    expect(item.fineQty).toBeCloseTo(32.1507466 * 0.9999, 5)
     const buy = repo.getTransaction(item.acquisitionTxnId!)!
     expect(buy).toMatchObject({ type: 'buy', instrumentId: 'XAU-PHYS', fees: 50 })
     expect(buy.quantity * buy.price).toBeCloseTo(66_000, 6)

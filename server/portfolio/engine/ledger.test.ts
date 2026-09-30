@@ -6,10 +6,10 @@ import { chainLink, twrDailyReturns } from './perf.js'
 const INSTRUMENTS = new Map<string, Instrument>(
   (
     [
-      { id: 'USD', name: 'Cash', kind: 'cash', metal: null, priceSymbol: null, ozPerContract: null },
-      { id: 'GLD', name: 'GLD', kind: 'etf', metal: 'gold', priceSymbol: 'GLD', ozPerContract: null },
-      { id: 'GC', name: 'Gold futures', kind: 'future', metal: 'gold', priceSymbol: 'GC=F', ozPerContract: 100 },
-      { id: 'XAU-PHYS', name: 'Physical gold', kind: 'physical', metal: 'gold', priceSymbol: 'GC=F', ozPerContract: null },
+      { id: 'USD', name: 'Cash', kind: 'cash', asset: null, priceSymbol: null, pointValue: null, contractSize: null },
+      { id: 'GLD', name: 'GLD', kind: 'etf', asset: 'gold', priceSymbol: 'GLD', pointValue: null, contractSize: null },
+      { id: 'GC', name: 'Gold futures', kind: 'future', asset: 'gold', priceSymbol: 'GC=F', pointValue: 100, contractSize: 100 },
+      { id: 'XAU-PHYS', name: 'Physical gold', kind: 'physical', asset: 'gold', priceSymbol: 'GC=F', pointValue: null, contractSize: null },
     ] satisfies Instrument[]
   ).map((i) => [i.id, i]),
 )

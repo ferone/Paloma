@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import { useState } from 'react'
 import { IMPORT_FIELDS, TXN_TYPE_LABEL, type Account, type ImportCommitResponse, type ImportField, type ImportMapping, type ImportPreviewResponse } from '@shared/portfolio'
+import { ASSETS, UNIVERSE } from '@shared/universe'
 import { fmtDate, fmtNum, fmtUsd } from '../../../design/format'
 import { Button, Chip, ErrorNote, Field, Select, Textarea } from '../../../ui'
 import { apiErrorMessage, useImportCommit, useImportPreview, useRollbackBatch } from '../api'
@@ -91,7 +92,7 @@ export function ImportWizard({ accounts, onClose }: { accounts: Account[]; onClo
                 setCsv(e.target.value)
                 setFilename(null)
               }}
-              placeholder={'trade_date,type,instrument,account,quantity,price,fees,notes\n2026-01-05,buy,GLD,Prime Broker,100,245.10,1.00,'}
+              placeholder={`trade_date,type,instrument,account,quantity,price,fees,notes\n2026-01-05,buy,${UNIVERSE[ASSETS[0]].benchmarkEtf},Prime Broker,100,245.10,1.00,`}
             />
           </Field>
           <Field label="Default account" hint="Used for rows without an account column value.">

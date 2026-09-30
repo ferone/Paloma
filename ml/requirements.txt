@@ -1,0 +1,5 @@
+# Offline ML pipeline (Python >= 3.11; developed on 3.13). Classical models: daily bars are small data.
+# joblib ships with scikit-learn. pytest is optional (ml/test_pipeline.py also runs standalone).
+numpy==2.2.3
+pandas==2.2.3
+scikit-learn==1.6.1

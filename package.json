@@ -13,7 +13,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b",
-    "db:migrate": "tsx server/db/migrate-cli.ts"
+    "db:migrate": "tsx server/db/migrate-cli.ts",
+    "ml:export": "tsx server/ml/cli.ts export",
+    "ml:train": "tsx server/ml/cli.ts train",
+    "ml:infer": "tsx server/ml/cli.ts infer",
+    "ml:test": "node ml/run.mjs --script -m pytest ml -q -p no:cacheprovider"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

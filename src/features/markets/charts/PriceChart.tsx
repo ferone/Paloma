@@ -4,6 +4,7 @@ import type { OHLCV } from '@shared/markets'
 import { useChartTheme } from './chartTheme'
 import { baseChartOptions, toTimedBars } from './lwc'
 import { assetColor } from '../lib/symbols'
+import { UNIVERSE, assetOfSymbol } from '@shared/universe'
 
 export type PriceChartType = 'area' | 'candle'
 
@@ -28,9 +29,14 @@ export function PriceChart({ symbol, bars, intraday, type, showVolume = true, he
     if (data.length === 0) return
     const chart = createChart(el, baseChartOptions(t, intraday))
     const line = assetColor(symbol, t)
+    // Axis/label precision follows the asset (bitcoin 0 decimals, silver 3); ETFs and others keep 2.
+    const asset = assetOfSymbol(symbol)
+    const precision = asset && UNIVERSE[asset].spot === symbol ? UNIVERSE[asset].displayDecimals : 2
+    const priceFormat = { type: 'price' as const, precision, minMove: 1 / 10 ** precision }
 
     if (type === 'candle') {
       const s = chart.addSeries(CandlestickSeries, {
+        priceFormat,
         upColor: t.pos,
         downColor: t.neg,
         borderUpColor: t.pos,
@@ -41,6 +47,7 @@ export function PriceChart({ symbol, bars, intraday, type, showVolume = true, he
       s.setData(data.map((d) => ({ time: d.time, open: d.open || d.close, high: d.high || d.close, low: d.low || d.close, close: d.close })))
     } else {
       const s = chart.addSeries(AreaSeries, {
+        priceFormat,
         lineColor: line,
         topColor: t.alpha(line, 0.22),
         bottomColor: t.alpha(line, 0),

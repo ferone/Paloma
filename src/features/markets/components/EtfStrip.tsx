@@ -6,6 +6,16 @@ import { fmtCompact, fmtNum, fmtPctSigned } from '../../../design/format'
 import { signColor } from '../../../design/tokens'
 import { useQuotes } from '../hooks'
 
+// Literal class strings (Tailwind only generates classes it can see in source).
+const STRIP_COLS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-2 sm:grid-cols-3',
+  4: 'grid-cols-2 sm:grid-cols-4',
+  5: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+  6: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6',
+}
+
 /** Dense quote strip: the asset's physically backed / spot ETFs plus its miners ETF (when it has one). */
 export function EtfStrip({ metal }: { metal: AssetId }) {
   const spec = UNIVERSE[metal]
@@ -31,7 +41,8 @@ export function EtfStrip({ metal }: { metal: AssetId }) {
       ) : q.error ? (
         <ErrorNote error={q.error} onRetry={() => q.refetch()} />
       ) : (
-        <ul className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-3 lg:grid-cols-6">
+        // Columns follow the fund count so the 1px border background never shows as empty cells.
+        <ul className={clsx('grid gap-px overflow-hidden rounded-md border border-border bg-border', STRIP_COLS[Math.min(symbols.length, 6)])}>
           {symbols.map((s) => {
             const d = bySymbol.get(s)
             const miners = s === spec.miners

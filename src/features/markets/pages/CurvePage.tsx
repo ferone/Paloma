@@ -95,7 +95,7 @@ function CurveSummary({ curve: c }: { curve: CurveResponse }) {
         </div>
         <Stat label="Reference contract" value={ref ? `${c.root} ${ref.label}` : '—'} hint={ref ? `Highest open interest · ${fmtNum(ref.price, dpOf(c))}` : undefined} size="sm" />
         <Stat
-          label={<HelpTip term="12M carry">Annualized (ACT/360) spread from the reference contract to the live contract nearest one year later.</HelpTip>}
+          label={<HelpTip term="Term carry">Annualized (ACT/360) spread from the reference contract to the live contract nearest one year later, or the furthest live contract when the curve is shorter (bitcoin lists only a few months).</HelpTip>}
           value={fmtPct(c.termCarry)}
           size="sm"
         />
@@ -253,7 +253,7 @@ function CarryHistory() {
   }))
 
   return (
-    <Panel density="dense" title="12M carry vs T-bill, recorded" provenance={q.data?.provenance ?? { source: 'Local curve snapshots' }}>
+    <Panel density="dense" title="Term carry vs T-bill, recorded" provenance={q.data?.provenance ?? { source: 'Local curve snapshots' }}>
       {q.isLoading ? (
         <PanelSkeleton rows={3} />
       ) : q.error ? (
@@ -269,7 +269,7 @@ function CarryHistory() {
               <CartesianGrid {...s.grid} />
               <XAxis dataKey="date" tick={s.tick} axisLine={s.axisLine} tickLine={false} tickFormatter={dateTick(false)} minTickGap={30} />
               <YAxis tick={s.tick} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${fmtNum(v, 1)}%`} />
-              <Tooltip {...s.tooltip} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, n) => [`${fmtNum(Number(v), 2)}%`, n === 'carry' ? '12M carry' : 'T-bill']} />
+              <Tooltip {...s.tooltip} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, n) => [`${fmtNum(Number(v), 2)}%`, n === 'carry' ? 'Term carry' : 'T-bill']} />
               <Line dataKey="carry" stroke={t.series[1]} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
               <Line dataKey="rate" stroke={t.brand} strokeDasharray="4 3" strokeWidth={1.5} dot={false} isAnimationActive={false} connectNulls />
             </LineChart>
@@ -299,7 +299,7 @@ function CurveExplainer() {
       </p>
       <p>
         Deferred months trade rarely. A contract with no trade in four days is marked <strong>stale</strong>: its last price may be far from where it
-        would trade today, so it is excluded from the shape and 12M-carry calculations.
+        would trade today, so it is excluded from the shape and term-carry calculations.
       </p>
     </Explainer>
   )

@@ -20,7 +20,8 @@ export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
   const gh = useHistory(num.spot, '5Y')
   const sh = useHistory(den.spot, '5Y')
   const t = useChartTheme()
-  const color = t.asset[pair.denominator]
+  // The numerator names the ratio (gold/silver, bitcoin/gold), so it carries the colour.
+  const color = t.asset[pair.numerator]
   const s = rechartsStyle(t)
   const gid = useId().replace(/:/g, '')
 

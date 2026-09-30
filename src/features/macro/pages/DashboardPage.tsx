@@ -6,7 +6,7 @@ import { useSettings } from '../../../store/settings-context'
 import { Button, Chip, DataTable, EmptyState, ErrorNote, Explainer, HelpTip, Panel, PanelSkeleton, Segmented, type Column } from '../../../ui'
 import { fmtDate, fmtNum, fmtSigned } from '../../../design/format'
 import { useMacroDashboard, useMacroRefresh, useMacroSeries } from '../api'
-import { STANCE_LABEL, STANCE_TONE, fmtChange, fmtLevel, isoYearsAgo, changeCorrelation } from '../lib'
+import { STANCE_LABEL, STANCE_TONE, alignToDates, changeCorrelation, fmtChange, fmtLevel, isoYearsAgo, thin } from '../lib'
 import { DriverChart, MetalPriceChart } from '../components/PairChart'
 
 export default function DashboardPage() {
@@ -194,6 +194,18 @@ function SmallMultiples({ d }: { d: MacroDashboard }) {
   const byId = useMemo(() => new Map((q.data?.series ?? []).map((s) => [s.id, s])), [q.data])
   const metal = byId.get(metalId)
 
+  // One date axis for all seven charts: the metal's (thinned) trading days.
+  // Each driver is forward-filled onto exactly these dates, so hovering any
+  // chart puts every crosshair on the same date.
+  const aligned = useMemo(() => {
+    if (!metal?.points.length) return null
+    const dates = thin(metal.points, 400).map((p) => p.date)
+    return {
+      metal: alignToDates(dates, metal.points),
+      drivers: new Map(PAIRS.map((p) => [p.id, alignToDates(dates, byId.get(p.id)?.points ?? [])])),
+    }
+  }, [metal, byId])
+
   return (
     <section aria-label="Drivers against price">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -204,7 +216,7 @@ function SmallMultiples({ d }: { d: MacroDashboard }) {
         <ErrorNote error={q.error} onRetry={() => q.refetch()} />
       ) : !q.data ? (
         <PanelSkeleton rows={6} />
-      ) : !metal?.points.length ? (
+      ) : !metal?.points.length || !aligned ? (
         <Panel>
           <EmptyState title={`No ${UNIVERSE[d.metal].label.toLowerCase()} price history cached`}>Run a data refresh to cache Yahoo daily closes.</EmptyState>
         </Panel>
@@ -215,7 +227,7 @@ function SmallMultiples({ d }: { d: MacroDashboard }) {
             title={`${UNIVERSE[d.metal].label} price`}
             provenance={{ source: `Yahoo ${UNIVERSE[d.metal].spot} daily close`, asOf: metal.provenance.asOf, note: 'Hover any chart: all panels follow the same date' }}
           >
-            <MetalPriceChart label={UNIVERSE[d.metal].label} color={d.metal} points={metal.points} />
+            <MetalPriceChart label={UNIVERSE[d.metal].label} color={d.metal} data={aligned.metal} />
           </Panel>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {PAIRS.map((p) => {
@@ -238,7 +250,11 @@ function SmallMultiples({ d }: { d: MacroDashboard }) {
                   }
                   provenance={{ source: `FRED ${p.id}`, asOf: s?.provenance.asOf ?? null }}
                 >
-                  {s && s.points.length ? <DriverChart label={s.label} unit={s.unit} points={s.points} /> : <EmptyState compact title="No data for this series yet" />}
+                  {s && s.points.length ? (
+                    <DriverChart label={s.label} unit={s.unit} data={aligned.drivers.get(p.id) ?? []} />
+                  ) : (
+                    <EmptyState compact title="No data for this series yet" />
+                  )}
                 </Panel>
               )
             })}

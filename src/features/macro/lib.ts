@@ -78,6 +78,26 @@ export function thin<T>(xs: T[], max: number): T[] {
 }
 
 /**
+ * Put a series onto an exact date axis, carrying the latest observation on or
+ * before each date forward (monthly series, holidays). Dates before the first
+ * observation get null. Charts that share one `dates` array line up point for
+ * point, which is what makes their crosshairs sync by date.
+ */
+export function alignToDates(dates: string[], points: SeriesPoint[]): { date: string; v: number | null }[] {
+  const out: { date: string; v: number | null }[] = []
+  let j = 0
+  let last: number | null = null
+  for (const date of dates) {
+    while (j < points.length && points[j].date <= date) {
+      last = points[j].value
+      j++
+    }
+    out.push({ date, v: last })
+  }
+  return out
+}
+
+/**
  * Join a driver series onto the metal's dates, forward-filling the driver
  * (monthly/holiday gaps). Only dates where both are known are returned.
  */

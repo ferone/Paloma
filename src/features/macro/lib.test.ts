@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changeCorrelation, fmtChange, fmtLevel, joinForwardFill, thin } from './lib'
+import { alignToDates, changeCorrelation, fmtChange, fmtLevel, joinForwardFill, thin } from './lib'
 
 describe('macro client helpers', () => {
   it('formats levels and changes by unit', () => {
@@ -32,6 +32,30 @@ describe('macro client helpers', () => {
     const t = thin(xs, 100)
     expect(t.length).toBeLessThanOrEqual(101)
     expect(t.at(-1)).toBe(999)
+  })
+})
+
+describe('alignToDates', () => {
+  it('forward-fills onto the exact axis and leaves dates before the first point empty', () => {
+    const dates = ['2026-01-02', '2026-01-05', '2026-01-06', '2026-02-02']
+    const monthly = [
+      { date: '2026-01-03', value: 1 },
+      { date: '2026-02-01', value: 2 },
+    ]
+    expect(alignToDates(dates, monthly)).toEqual([
+      { date: '2026-01-02', v: null },
+      { date: '2026-01-05', v: 1 },
+      { date: '2026-01-06', v: 1 },
+      { date: '2026-02-02', v: 2 },
+    ])
+  })
+
+  it('gives every aligned series the same dates as the axis', () => {
+    const dates = ['2026-03-02', '2026-03-03', '2026-03-04']
+    const a = alignToDates(dates, [{ date: '2026-03-03', value: 5 }])
+    const b = alignToDates(dates, [{ date: '2026-01-01', value: 9 }])
+    expect(a.map((p) => p.date)).toEqual(dates)
+    expect(b.map((p) => p.date)).toEqual(dates)
   })
 })
 

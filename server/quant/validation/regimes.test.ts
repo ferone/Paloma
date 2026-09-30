@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { regimeOf, regimeRobustness, regimesFor, REGIME_WINDOWS } from "./regimes.js";
+import { CRYPTO_REGIME_WINDOWS, INDUSTRIAL_REGIME_WINDOWS, REGIMES_BY_CLASS, regimeOf, regimeRobustness, regimesFor, regimesForAsset, REGIME_WINDOWS } from "./regimes.js";
+import type { AssetClass } from "../../../shared/universe.js";
 import type { WalkForwardResult, OosTrade } from "./walkForward.js";
 import { performance } from "./metrics.js";
 
@@ -41,7 +42,39 @@ describe("regimeOf (precious-metals shock windows)", () => {
   });
 
   it("every metal root and relative-value id resolves to the metal list", () => {
-    for (const id of ["GC", "SI.cal.0-1", "MGC.out", "SIL.fly.0-1-2", "GS.ratio"]) expect(regimesFor(id)).toBe(REGIME_WINDOWS);
+    for (const id of ["GC", "SI.cal.0-1", "MGC.out", "SIL.fly.0-1-2", "GS.ratio", "SI.seas.H-K"]) expect(regimesFor(id)).toBe(REGIME_WINDOWS);
+    expect(regimesForAsset("gold")).toBe(REGIME_WINDOWS);
+    expect(regimesForAsset("silver")).toBe(REGIME_WINDOWS);
+  });
+});
+
+describe("regimes keyed by asset class", () => {
+  it("precious keeps today's windows exactly", () => {
+    expect(REGIMES_BY_CLASS.precious).toBe(REGIME_WINDOWS);
+    expect(REGIME_WINDOWS.map((w) => w.name)).toEqual(["Silver-2011", "Taper-2013", "COVID-EFP", "Silver-Squeeze-2021", "Tariff-EFP-2025", "London-Squeeze-2025"]);
+  });
+
+  it("crypto and industrial lists carry their documented shocks, well-formed and non-overlapping", () => {
+    expect(CRYPTO_REGIME_WINDOWS.map((w) => w.name)).toEqual(["COVID-Crash-2020", "China-Mining-Ban-2021", "FTX-2022", "Spot-ETF-2024"]);
+    expect(INDUSTRIAL_REGIME_WINDOWS.map((w) => w.name)).toEqual(["COVID-2020", "LME-Nickel-2022", "Copper-Tariff-EFP-2025"]);
+    for (const list of [CRYPTO_REGIME_WINDOWS, INDUSTRIAL_REGIME_WINDOWS])
+      for (let i = 0; i < list.length; i++) {
+        expect(list[i].start < list[i].end).toBe(true);
+        if (i > 0) expect(list[i - 1].end < list[i].start).toBe(true);
+      }
+    expect(regimeOf("2022-11-09", CRYPTO_REGIME_WINDOWS)).toBe("FTX-2022");
+    expect(regimeOf("2022-03-08", INDUSTRIAL_REGIME_WINDOWS)).toBe("LME-Nickel-2022");
+  });
+
+  it("resolves by the owning asset's class; a cross-class pair gets the union", () => {
+    const classes: Record<string, AssetClass[]> = { BTC: ["crypto"], HG: ["industrial"], BG: ["crypto", "precious"] };
+    const by = (p: string) => classes[p] ?? [];
+    expect(regimesFor("BTC.cal.0-1", by)).toBe(CRYPTO_REGIME_WINDOWS);
+    expect(regimesFor("HG.seas.H-K", by)).toBe(INDUSTRIAL_REGIME_WINDOWS);
+    const union = regimesFor("BG.ratio", by);
+    expect(union).toHaveLength(CRYPTO_REGIME_WINDOWS.length + REGIME_WINDOWS.length);
+    expect([...union].map((w) => w.start)).toEqual([...union].map((w) => w.start).sort());
+    expect(regimesFor("XX.out", by)).toBe(REGIME_WINDOWS); // unknown → precious (unchanged default)
   });
 });
 

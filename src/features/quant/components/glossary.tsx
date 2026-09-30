@@ -37,7 +37,7 @@ export function ContangoExplainer() {
   return (
     <Explainer title="Contango, backwardation and carry">
       <p>
-        <strong>Contango</strong>: deferred contracts trade above the front, the normal state for gold and silver because holding metal costs interest and storage. <strong>Backwardation</strong>:
+        <strong>Contango</strong>: deferred contracts trade above the front, the normal state for storable assets such as gold and silver because holding them costs interest and storage. <strong>Backwardation</strong>:
         the front trades above deferreds, a sign of immediate scarcity (tight lease market, delivery squeeze).
       </p>
       <p>
@@ -79,7 +79,7 @@ export function SeasonalExplainer() {
     <Explainer title="How to read the seasonality">
       <p>
         The shaded envelope shows, for each day of the year, where the value sat across past years (10–90% and 25–75% ranges); the solid line is the average and the coloured line is
-        this season. Outrights and the ratio are rebased to % change from each season&apos;s start; spreads are shown in $/oz.
+        this season. Outrights and the ratio are rebased to % change from each season&apos;s start; spreads are shown in the product&apos;s price unit ($/oz for the metals).
       </p>
       <p>
         Roll-clean pair spreads (e.g. gold Jun–Aug) are rebuilt from the same two contract months every year, so there is no roll splice. Their contract window starts nine months
@@ -90,15 +90,18 @@ export function SeasonalExplainer() {
   )
 }
 
-export function RatioExplainer() {
+/** Explains a relative-value ratio `num ÷ den` (labels and front roots from the universe). */
+export function RatioExplainer({ num, den, numRoot, denRoot }: { num: string; den: string; numRoot: string; denRoot: string }) {
+  const n = num.toLowerCase()
+  const d = den.toLowerCase()
   return (
-    <Explainer title="The gold/silver ratio">
+    <Explainer title={`The ${n}/${d} ratio`}>
       <p>
-        Ounces of silver one ounce of gold buys (GC front ÷ SI front). A high ratio means silver is cheap relative to gold. Trading it means a dollar-neutral pair: long $X of gold and
-        short $X of silver (or the reverse), sized with the hedge ratio shown.
+        Units of {d} one unit of {n} buys ({numRoot} front ÷ {denRoot} front). A high ratio means {d} is cheap relative to {n}. Trading it means a dollar-neutral pair: long $X of {n}{' '}
+        and short $X of {d} (or the reverse), sized with the hedge ratio shown.
       </p>
       <p>
-        Bands are the 252-day mean ± 1σ / ± 2σ. The OU half-life of the ratio is usually long — relative value between metals reverts over months, not days — which the gate flags.
+        Bands are the 252-day mean ± 1σ / ± 2σ. The OU half-life of a ratio is usually long — relative value between assets reverts over months, not days — which the gate flags.
       </p>
     </Explainer>
   )

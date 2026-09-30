@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { JobStatus } from '@shared/api'
-import type { Metal } from '@shared/universe'
+import type { AssetId } from '@shared/universe'
 import {
   isQuantEmpty,
   type BacktestView,
@@ -33,18 +33,20 @@ function useQuant<T>(key: unknown[], url: string, enabled = true) {
   })
 }
 
-export const useSnapshot = (metal: Metal) => useQuant<QuantSnapshot>(['snapshot', metal], `/quant/snapshot?metal=${metal}`)
-export const useOpportunities = (metal: Metal, mode: QuantMode) =>
-  useQuant<OpportunitiesResponse>(['opportunities', metal, mode], `/quant/opportunities?metal=${metal}&mode=${mode}`)
-export const useInstruments = (metal: Metal) => useQuant<InstrumentListItem[]>(['instruments', metal], `/quant/instruments?metal=${metal}`)
+export const useSnapshot = (asset: AssetId) => useQuant<QuantSnapshot>(['snapshot', asset], `/quant/snapshot?asset=${asset}`)
+export const useOpportunities = (asset: AssetId, mode: QuantMode) =>
+  useQuant<OpportunitiesResponse>(['opportunities', asset, mode], `/quant/opportunities?asset=${asset}&mode=${mode}`)
+export const useInstruments = (asset: AssetId) => useQuant<InstrumentListItem[]>(['instruments', asset], `/quant/instruments?asset=${asset}`)
 export const useInstrument = (id: string | undefined) =>
   useQuant<InstrumentDetail>(['instrument', id], `/quant/instrument/${encodeURIComponent(id ?? '')}`, !!id)
 export const useSeasonality = (id: string | undefined) =>
   useQuant<SeasonalityDetail>(['seasonality', id], `/quant/seasonality/${encodeURIComponent(id ?? '')}`, !!id)
-export const useRelativeValue = () => useQuant<RelativeValueDetail>(['relative-value'], '/quant/relative-value?pair=gold-silver')
+/** One relative-value pair by its `RelativeValuePair.key` (e.g. 'gold-silver'). */
+export const useRelativeValue = (pairKey: string) =>
+  useQuant<RelativeValueDetail>(['relative-value', pairKey], `/quant/relative-value?pair=${encodeURIComponent(pairKey)}`, !!pairKey)
 export const useCurve = (root: string) => useQuant<CurveView>(['curve', root], `/quant/curve/${root}`)
-export const useBacktest = (metal: Metal, mode: QuantMode) => useQuant<BacktestView>(['backtest', metal, mode], `/quant/backtest?metal=${metal}&mode=${mode}`)
-export const useGates = (metal: Metal) => useQuant<GatesResponse>(['gates', metal], `/quant/gates?metal=${metal}`)
+export const useBacktest = (asset: AssetId, mode: QuantMode) => useQuant<BacktestView>(['backtest', asset, mode], `/quant/backtest?asset=${asset}&mode=${mode}`)
+export const useGates = (asset: AssetId) => useQuant<GatesResponse>(['gates', asset], `/quant/gates?asset=${asset}`)
 
 export interface QuantStatus {
   run: { id: number; generatedAt: string; dataThrough: string | null; instruments: number; durationMs: number | null } | null

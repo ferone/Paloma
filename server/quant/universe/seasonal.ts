@@ -1,4 +1,4 @@
-import { UNIVERSE, METALS, type Metal } from "../../../shared/universe.js";
+import { ASSETS, UNIVERSE, type AssetId, type AssetSpec } from "../../../shared/universe.js";
 import { monthCode, codeToMonth } from "./contracts.js";
 
 /**
@@ -20,7 +20,7 @@ export interface SeasonalSpec {
   id: string; // e.g. "GC.seas.M-Q"
   label: string; // e.g. "Gold Jun–Aug (M−Q)"
   product: string;
-  metal: Metal;
+  metal: AssetId;
   frontMonth: number; // 1..12
   backMonth: number; // 1..12 (> frontMonth within-year; < frontMonth when year-crossing)
   pointValue: number;
@@ -32,21 +32,28 @@ const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
 /** A tradeable product for seasonal generation: active months + $/point. */
 export interface ProductDef {
   product: string;
-  metal: Metal;
+  metal: AssetId;
   name: string;
   pointValue: number;
   months: number[];
 }
 
 /**
- * The seasonal products: the FULL-SIZE contract per metal (GC, SI). The micro
+ * The seasonal products: the FULL-SIZE contract per asset (GC, SI, …). The micro
  * contracts (MGC, SIL) are sizing mirrors of the same curve, so they would only
- * duplicate every seasonal pattern.
+ * duplicate every seasonal pattern. Pair months are the product's
+ * `seasonalMonths` (e.g. BTC's quarterlies) or else its `activeMonths`; assets
+ * without futures contribute nothing. PURE.
  */
-export const PRODUCTS: ProductDef[] = METALS.map((metal) => {
-  const f = UNIVERSE[metal].futures[0];
-  return { product: f.root, metal, name: UNIVERSE[metal].label, pointValue: f.pointValue, months: [...f.activeMonths] };
-});
+export function seasonalProducts(assets: readonly AssetSpec[]): ProductDef[] {
+  return assets.flatMap((a) => {
+    const f = a.futures[0];
+    if (!f) return [];
+    return [{ product: f.root, metal: a.id, name: a.label, pointValue: f.pointValue, months: [...(f.seasonalMonths ?? f.activeMonths)] }];
+  });
+}
+
+export const PRODUCTS: ProductDef[] = seasonalProducts(ASSETS.map((a) => UNIVERSE[a]));
 
 /** Build one spec from a (front, back) pair. PURE. */
 function specOf(p: ProductDef, front: number, back: number, backYearOffset = 0): SeasonalSpec {
@@ -92,10 +99,10 @@ export function allPairsSeasonalSpecs(p: ProductDef): SeasonalSpec[] {
   return out;
 }
 
-/** The full seasonal-spread universe: all active-month pairs for gold and silver. */
+/** The full seasonal-spread universe: all seasonal-month pairs for every asset. */
 export const SEASONAL_SPECS: SeasonalSpec[] = PRODUCTS.flatMap(allPairsSeasonalSpecs);
 
-export function seasonalSpecsFor(metal: Metal): SeasonalSpec[] {
+export function seasonalSpecsFor(metal: AssetId): SeasonalSpec[] {
   return SEASONAL_SPECS.filter((s) => s.metal === metal);
 }
 

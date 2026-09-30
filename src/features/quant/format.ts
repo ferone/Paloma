@@ -19,7 +19,7 @@ export const KIND_LABEL: Record<QuantKind, string> = {
   butterfly: 'Butterfly',
   seasonal: 'Seasonal pair',
   ratio: 'Ratio',
-  inter: 'Metal spread',
+  inter: 'Pair dollar spread',
 }
 
 export const fmtWin = (w: number | null | undefined) => fmtPct(w, 0)

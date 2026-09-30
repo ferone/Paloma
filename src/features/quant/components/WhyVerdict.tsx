@@ -91,7 +91,7 @@ export function WhyVerdict({ d, mode }: { d: InstrumentDetail; mode: QuantMode }
             </div>
             <FactorMeter label="Seasonality" value={s.seasonFactor} note="+ calendar drift agrees with the fade" />
             <FactorMeter label="Volatility regime" value={s.volFactor} note="− vol blow-up damps the score" />
-            <FactorMeter label="Fundamentals" value={null} na note="none wired for metals — neutral" />
+            <FactorMeter label="Fundamentals" value={null} na note="none wired for this universe — neutral" />
           </div>
           {s.avoidOverride && <p className="mt-2 text-2xs text-neg-text">AVOID override: the stretch runs with the calendar and is justified.</p>}
         </>

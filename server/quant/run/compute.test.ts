@@ -105,7 +105,12 @@ describe("computeQuant — engine run over a synthetic multi-year fixture", () =
   });
 
   it("relative value: ratio with bands, OU and walk-forward, plus the dollar spread", () => {
-    const rv = res.relativeValue!;
+    expect(res.relativeValue.map((x) => x.pair)).toEqual(["gold-silver"]);
+    const rv = res.relativeValue[0];
+    expect(rv.ratio.hedge.note).toBe(
+      "Dollar-neutral at today's front prices: 1 GC (100 oz) against this many SI (5,000 oz). Rounded lots leave a residual; MGC/SIL allow finer sizing.",
+    );
+    expect(rv.provenance.note).toBe("GC and SI continuous front months (each rolled before first position day)");
     expect(rv.ratio.latest).toBeGreaterThan(20);
     expect(rv.ratio.bandWindow).toBe(252);
     expect(rv.ratio.oos.method).toBe("z-fade");
@@ -151,6 +156,6 @@ describe("computeQuant — engine run over a synthetic multi-year fixture", () =
     const empty = computeQuant({ roots: {}, generatedAt: "2024-06-29T06:00:00.000Z", skipBacktests: true });
     expect(empty.dataThrough).toBeNull();
     expect(empty.instruments).toEqual([]);
-    expect(empty.relativeValue).toBeNull();
+    expect(empty.relativeValue).toEqual([]);
   });
 });

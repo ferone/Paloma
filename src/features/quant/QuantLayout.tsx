@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useOutletContext } from 'react-router-dom'
 import type { QuantMode } from '@shared/quant'
-import type { Metal } from '@shared/universe'
+import { UNIVERSE, type AssetId } from '@shared/universe'
 import { useSettings } from '../../store/settings-context'
 import { fmtAge, fmtDate } from '../../design/format'
 import { Button, PageHeader, RouteTabs, Segmented } from '../../ui'
 import { useQuantStatus, useRecompute } from './api'
 
 export interface QuantOutletContext {
-  metal: Metal
+  /** Asset in focus (the global switch in the top bar). */
+  asset: AssetId
   mode: QuantMode
 }
 
@@ -28,8 +29,8 @@ export function useQuantContext(): QuantOutletContext {
 }
 
 export function QuantLayout() {
-  // Metal in focus comes from the global switch in the top bar.
-  const { metal } = useSettings()
+  // Asset in focus comes from the global switch in the top bar.
+  const { asset } = useSettings()
   const [mode, setMode] = useState<QuantMode>(readMode)
   useEffect(() => {
     try {
@@ -47,9 +48,9 @@ export function QuantLayout() {
   return (
     <>
       <PageHeader
-        eyebrow={`Research · ${metal === 'gold' ? 'Gold' : 'Silver'}`}
+        eyebrow={`Research · ${UNIVERSE[asset].label}`}
         title="Quant Lab"
-        description="Calendar spreads, butterflies, roll-clean seasonals and gold/silver relative value on COMEX futures, each with out-of-sample validation and an explicit verdict."
+        description="Calendar spreads, butterflies, roll-clean seasonals and cross-asset relative value on listed futures, each with out-of-sample validation and an explicit verdict."
         actions={
           <>
             <Segmented<QuantMode>
@@ -86,7 +87,7 @@ export function QuantLayout() {
           { to: '/quant/backtest', label: 'Backtest' },
         ]}
       />
-      <Outlet context={{ metal, mode } satisfies QuantOutletContext} />
+      <Outlet context={{ asset, mode } satisfies QuantOutletContext} />
     </>
   )
 }

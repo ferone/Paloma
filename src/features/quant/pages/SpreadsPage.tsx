@@ -4,18 +4,20 @@ import type { InstrumentListItem } from '@shared/quant'
 import { UNIVERSE } from '@shared/universe'
 import { Panel, Segmented } from '../../../ui'
 import { useInstrument, useInstruments } from '../api'
-import { QuantQuery } from '../components/QuantQuery'
+import { NoFuturesState, QuantQuery } from '../components/QuantQuery'
 import { CurvaturePanel, SignalStats, StructuralPanel, ZBandPanel } from '../components/InstrumentPanels'
 import { WhyVerdict } from '../components/WhyVerdict'
 import { useQuantContext } from '../QuantLayout'
 
-/** Calendars and butterflies for the metal in focus: z-bands, curvature and the structural gate. */
+/** Calendars and butterflies for the asset in focus: z-bands, curvature and the structural gate. */
 export default function SpreadsPage() {
-  const { metal } = useQuantContext()
-  const list = useInstruments(metal)
+  const { asset } = useQuantContext()
+  const list = useInstruments(asset)
+  const front = UNIVERSE[asset].futures[0]
+  if (!front) return <NoFuturesState label={UNIVERSE[asset].label} what="calendars and butterflies" />
   return (
     <QuantQuery q={list}>
-      {(items) => <Spreads key={metal} items={items} root={UNIVERSE[metal].futures[0].root} />}
+      {(items) => <Spreads key={asset} items={items} root={front.root} />}
     </QuantQuery>
   )
 }

@@ -12,11 +12,12 @@ import type {
   RecomputeResponse,
   RelativeValueDetail,
 } from "../../shared/quant.js";
-import { METALS, UNIVERSE, futuresProduct, yahooContractSymbol, type Metal } from "../../shared/universe.js";
+import { RELATIVE_VALUE_PAIRS, UNIVERSE, assetOfRoot, futuresProduct, parseAssetId, yahooContractSymbol, type AssetId } from "../../shared/universe.js";
+import { belongsToAsset, pairByKey, pairLegs } from "./universe/pairs.js";
 import { JobBusyError, jobStatus, registerJob, runJob } from "../jobs/registry.js";
 import { getBatchQuotes } from "../services/yahoo-finance.service.js";
 import { hasContractData, runQuantEngine } from "./service.js";
-import { latestRun, listInstruments, readInstrumentDetail, readReport, readSeasonalityDetail } from "./store.js";
+import { latestRun, listInstruments, readInstrumentDetail, readRelativeValue, readReport, readSeasonalityDetail } from "./store.js";
 import { QUANT_SOURCE, curvePoints, curveRegime, engineInfo } from "./run/compute.js";
 
 // Domain router for /api/quant. Every data endpoint answers with either its
@@ -43,7 +44,7 @@ function emptyState(): QuantEmpty {
   if (!hasContractData()) {
     return {
       status: "no_data",
-      message: "No COMEX contract history is stored yet, so the Quant Lab has nothing to analyze.",
+      message: "No futures contract history is stored yet, so the Quant Lab has nothing to analyze.",
       action: "Run the Databento backfill (GLBX.MDP3, 2010 → today) in the Data Center, then recompute.",
     };
   }
@@ -65,15 +66,16 @@ function sendEmpty(res: Response): void {
   res.json(emptyState());
 }
 
-function parseMetal(v: unknown): Metal {
-  return v === "silver" ? "silver" : "gold";
+/** The asset in focus: `?asset=` (or the legacy `?metal=`), validated against the universe. */
+function assetParam(q: Record<string, unknown>): AssetId {
+  return parseAssetId(q.asset ?? q.metal);
 }
 function parseMode(v: unknown): QuantMode {
   return v === "aggressive" ? "aggressive" : "conservative";
 }
 
-/** Relative-value rows belong to both metals' views. */
-const forMetal = (metal: Metal) => (o: QuantOpportunity) => o.metal === metal || o.product === "GS";
+/** An asset's rows plus the relative-value pairs it takes part in. */
+const forAsset = (asset: AssetId) => (o: QuantOpportunity) => belongsToAsset(asset, o);
 
 router.get("/health", (_req, res) => {
   res.json({ domain: "quant", status: "ok" });
@@ -85,12 +87,12 @@ router.get("/status", (_req, res) => {
 });
 
 router.get("/snapshot", (req, res) => {
-  const metal = parseMetal(req.query.metal);
+  const metal = assetParam(req.query);
   const run = latestRun();
   const opps = readReport<Record<QuantMode, QuantOpportunity[]>>("opportunities");
   if (!run || !opps) return sendEmpty(res);
-  const rows = opps.conservative.filter(forMetal(metal));
-  const aggressive = opps.aggressive.filter(forMetal(metal));
+  const rows = opps.conservative.filter(forAsset(metal));
+  const aggressive = opps.aggressive.filter(forAsset(metal));
   const body: QuantSnapshot = {
     metal,
     asOf: run.generatedAt,
@@ -110,7 +112,7 @@ router.get("/snapshot", (req, res) => {
 });
 
 router.get("/opportunities", (req, res) => {
-  const metal = parseMetal(req.query.metal);
+  const metal = assetParam(req.query);
   const mode = parseMode(req.query.mode);
   const run = latestRun();
   const opps = readReport<Record<QuantMode, QuantOpportunity[]>>("opportunities");
@@ -120,7 +122,7 @@ router.get("/opportunities", (req, res) => {
     mode,
     asOf: run.generatedAt,
     dataThrough: run.dataThrough,
-    rows: opps[mode].filter(forMetal(metal)),
+    rows: opps[mode].filter(forAsset(metal)),
     provenance: { source: QUANT_SOURCE, asOf: run.dataThrough, note: `${mode} verdicts; ranked by the fixed-weight QT composite` },
   };
   res.json(body);
@@ -128,7 +130,7 @@ router.get("/opportunities", (req, res) => {
 
 router.get("/instruments", (req, res) => {
   if (!latestRun()) return sendEmpty(res);
-  res.json(listInstruments(req.query.metal ? parseMetal(req.query.metal) : undefined));
+  res.json(listInstruments((req.query.asset ?? req.query.metal) ? assetParam(req.query) : undefined));
 });
 
 router.get("/instrument/:id", (req, res) => {
@@ -146,23 +148,25 @@ router.get("/seasonality/:id", (req, res) => {
 });
 
 router.get("/relative-value", (req, res) => {
-  const pair = String(req.query.pair ?? "gold-silver");
-  if (pair !== "gold-silver") return res.status(400).json({ error: "Only pair=gold-silver is supported" });
+  const key = String(req.query.pair ?? RELATIVE_VALUE_PAIRS[0]?.key ?? "");
+  const pair = pairByKey(key);
+  if (!pair) return res.status(400).json({ error: `Unknown pair ${key}; supported: ${RELATIVE_VALUE_PAIRS.map((p) => p.key).join(", ")}` });
   if (!latestRun()) return sendEmpty(res);
-  const rv = readReport<RelativeValueDetail | null>("relative-value");
+  const rv = readRelativeValue<RelativeValueDetail>(pair.key);
   if (!rv) {
-    const empty: QuantEmpty = {
-      status: "no_data",
-      message: "The gold/silver relative value needs both GC and SI contract history.",
-      action: "Backfill both GC and SI in the Data Center, then recompute.",
-    };
+    const legs = pairLegs(pair);
+    const name = `${UNIVERSE[pair.numerator].label.toLowerCase()}/${UNIVERSE[pair.denominator].label.toLowerCase()}`;
+    const roots = legs ? `${legs.numFut.root} and ${legs.denFut.root}` : "futures on both legs";
+    const empty: QuantEmpty = legs
+      ? { status: "no_data", message: `The ${name} relative value needs both ${roots} contract history.`, action: `Backfill both ${roots} in the Data Center, then recompute.` }
+      : { status: "no_data", message: `The ${name} relative value needs listed futures on both legs.`, action: "Add futures for both assets to the universe." };
     return res.json(empty);
   }
   res.json(rv);
 });
 
 router.get("/backtest", (req, res) => {
-  const metal = parseMetal(req.query.metal);
+  const metal = assetParam(req.query);
   const mode = parseMode(req.query.mode);
   if (!latestRun()) return sendEmpty(res);
   const b = readReport<BacktestView>(`backtest:${metal}:${mode}`);
@@ -171,7 +175,7 @@ router.get("/backtest", (req, res) => {
 });
 
 router.get("/gates", (req, res) => {
-  const metal = parseMetal(req.query.metal);
+  const metal = assetParam(req.query);
   if (!latestRun()) return sendEmpty(res);
   const g = readReport<GatesResponse>(`gates:${metal}`);
   if (!g) return res.json({ status: "no_data", message: "No point-in-time decisions to ablate yet.", action: "Backfill more history in the Data Center." } satisfies QuantEmpty);
@@ -218,7 +222,7 @@ async function yahooCurve(root: string): Promise<{ value: { asOf: string; points
     const rows = wanted
       .map((w) => ({ w, q: by.get(w.symbol) }))
       .filter((x) => x.q && x.q.price > 0)
-      .map(({ w, q }) => ({ symbol: w.symbol.replace(".CMX", ""), month: w.month, year: w.year, lastTrade: null, price: q!.price, volume: q!.volume || null, openInterest: null }));
+      .map(({ w, q }) => ({ symbol: w.symbol.replace(/\.[A-Z]+$/, ""), month: w.month, year: w.year, lastTrade: null, price: q!.price, volume: q!.volume || null, openInterest: null }));
     result = rows.length >= 2
       ? { value: { asOf, points: curvePoints(root, asOf, rows, "yahoo") }, note: "Yahoo Finance delayed quotes for the listed active months (live fallback)." }
       : { value: null, note: "Yahoo returned no quotes for the listed contract months." };
@@ -233,7 +237,7 @@ router.get("/curve/:root", async (req, res) => {
   const root = req.params.root.toUpperCase();
   const product = futuresProduct(root);
   if (!product) return res.status(404).json({ error: `Unknown futures root ${root}` });
-  const metal = METALS.find((m) => UNIVERSE[m].futures.some((f) => f.root === root))!;
+  const metal = assetOfRoot(root)!;
   const wantLive = req.query.live !== "0";
   const stored = readReport<CurveView>(`curve:${root}`);
   const live = wantLive ? await yahooCurve(root) : { value: null, note: null };

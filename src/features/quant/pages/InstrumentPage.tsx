@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import type { InstrumentDetail } from '@shared/quant'
+import { RELATIVE_VALUE_PAIRS, UNIVERSE } from '@shared/universe'
 import { fmtPct, fmtUsd } from '../../../design/format'
 import { Chip, Panel } from '../../../ui'
 import { useInstrument } from '../api'
@@ -35,7 +36,7 @@ function Instrument({ d }: { d: InstrumentDetail }) {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="label">
-            {KIND_LABEL[d.kind]} · {d.metal}
+            {KIND_LABEL[d.kind]} · {RELATIVE_VALUE_PAIRS.find((p) => p.id === d.product)?.label ?? UNIVERSE[d.metal]?.label ?? d.metal}
           </div>
           <h2 className="display mt-1 text-2xl text-foreground">{d.label}</h2>
           <p className="num mt-1 text-xs text-muted">

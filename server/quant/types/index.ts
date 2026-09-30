@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AssetId } from "../../../shared/universe.js";
 
 /**
  * Domain types for the Commodity Spread Signal Engine.
@@ -179,9 +180,9 @@ export interface FundamentalRef {
 export interface Instrument {
   id: string; // stable key, e.g. "LE.cal.0-1", "LE.crush", or "LE.seas.M-Q"
   label: string;
-  product: string; // root, e.g. "GC" ("GS" for gold/silver relative value)
-  /** The metal this instrument belongs to (relative-value instruments are attributed to gold). */
-  metal?: "gold" | "silver";
+  product: string; // root, e.g. "GC" (a pair id such as "GS" for relative value)
+  /** The asset this instrument belongs to (relative-value instruments are attributed to the pair's numerator). */
+  metal?: AssetId;
   kind: InstrumentKind;
   legs: InstrumentLeg[];
   pointValue: number; // $ per 1.0 price move per contract (the "dollar meter")

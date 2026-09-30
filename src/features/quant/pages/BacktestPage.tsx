@@ -9,10 +9,11 @@ import { useBacktest, useGates } from '../api'
 import { QuantEmptyState, QuantQuery } from '../components/QuantQuery'
 import { BacktestExplainer } from '../components/glossary'
 import { useQuantContext } from '../QuantLayout'
+import { pairNames } from '../pairs'
 
 export default function BacktestPage() {
-  const { metal, mode } = useQuantContext()
-  const q = useBacktest(metal, mode)
+  const { asset, mode } = useQuantContext()
+  const q = useBacktest(asset, mode)
   return <QuantQuery q={q} rows={10}>{(b) => <Backtest b={b} />}</QuantQuery>
 }
 
@@ -61,7 +62,7 @@ function Backtest({ b }: { b: BacktestView }) {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Panel density="dense" title="Equity curve" eyebrow={`${UNIVERSE[b.metal].label} + gold/silver · ${fmtDate(b.start)} → ${fmtDate(b.end)} · $${b.dollarsAtRisk} per 1σ, $${b.costPerTrade} cost`} provenance={{ ...b.provenance, modeled: true }}>
+        <Panel density="dense" title="Equity curve" eyebrow={`${[UNIVERSE[b.metal].label, ...pairNames(b.metal)].join(' + ')} · ${fmtDate(b.start)} → ${fmtDate(b.end)} · $${b.dollarsAtRisk} per 1σ, $${b.costPerTrade} cost`} provenance={{ ...b.provenance, modeled: true }}>
           {b.equity.length > 1 ? <EquityCurve points={b.equity} /> : <p className="py-8 text-center text-xs text-muted">Not enough decisions to plot.</p>}
         </Panel>
         <div className="space-y-4">

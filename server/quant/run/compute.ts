@@ -11,16 +11,18 @@ import type {
   SeasonalityDetail,
 } from "../../../shared/quant.js";
 import type { MlPredictionsLite, QuantSnapshotLite, MlPredictionLite } from "../../../shared/artifacts.js";
-import { METALS, UNIVERSE, futuresProduct, type Metal } from "../../../shared/universe.js";
+import { ASSETS, UNIVERSE, futuresProduct, type AssetId } from "../../../shared/universe.js";
 import type { SeriesPoint } from "../types/index.js";
 import { QT_CONFIG } from "../engine/profiles.js";
 import type { CurvePoint } from "../engine/carry.js";
 import { runSimulation, type SimInstrument } from "../simulation/engine.js";
 import type { SimulationResult } from "../simulation/types.js";
 import { ablateGates } from "../validation/qtGates.js";
+import { regimesForAsset } from "../validation/regimes.js";
 import { maxDrawdown } from "../validation/metrics.js";
 import { stdSample } from "../seasonality/util.js";
-import { REGISTRY } from "../universe/registry.js";
+import { MIRROR_ROOTS, REGISTRY } from "../universe/registry.js";
+import { belongsToAsset, dollarNeutralHedge, resolvedPairs, type PairLegs } from "../universe/pairs.js";
 import { seasonalSpecsFor } from "../universe/seasonal.js";
 import { contractExpiry } from "../universe/contracts.js";
 import type { StitchSegment } from "../data/stitch.js";
@@ -61,7 +63,8 @@ export interface QuantResult {
   instruments: InstrumentDetail[];
   seasonality: SeasonalityDetail[];
   opportunities: Record<QuantMode, QuantOpportunity[]>;
-  relativeValue: RelativeValueDetail | null;
+  /** One entry per `RELATIVE_VALUE_PAIRS` pair that has data for both legs. */
+  relativeValue: RelativeValueDetail[];
   curves: CurveView[];
   backtests: BacktestView[];
   gates: GatesResponse[];
@@ -71,7 +74,6 @@ export interface QuantResult {
 
 export const QUANT_SOURCE = "Databento GLBX.MDP3 · COMEX daily settlements";
 const MODES: QuantMode[] = ["conservative", "aggressive"];
-const MIRRORS = new Set(["MGC", "SIL"]);
 
 export function engineInfo(): EngineInfo {
   const cfg = QT_CONFIG;
@@ -87,7 +89,7 @@ export function engineInfo(): EngineInfo {
 
 interface RootState {
   root: string;
-  metal: Metal;
+  metal: AssetId;
   prepared: PreparedContract[];
   legs: SeriesPoint[][];
   segments: StitchSegment[][];
@@ -115,7 +117,7 @@ export function computeQuant(input: MarketInput): QuantResult {
   // 1) Stitch every root that has data.
   const roots = new Map<string, RootState>();
   let dataThrough: string | null = null;
-  for (const metal of METALS) {
+  for (const metal of ASSETS) {
     for (const f of UNIVERSE[metal].futures) {
       const raw = input.roots[f.root];
       if (!raw || raw.bars.length === 0) continue;
@@ -168,14 +170,14 @@ export function computeQuant(input: MarketInput): QuantResult {
         ? ratioSeries(legs[0]!, legs[1]!)
         : combineSeries(inst.legs.map((l, i) => ({ weight: l.weight, series: legs[i]! })));
     seriesById.set(inst.id, series);
-    const a = analyzeContinuous(inst, series, ctx, MIRRORS.has(inst.product));
+    const a = analyzeContinuous(inst, series, ctx, MIRROR_ROOTS.has(inst.product));
     if (a) analyzed.push(a);
   }
 
   // 3) Roll-clean seasonal pair spreads (full-size products only).
-  for (const metal of METALS) {
-    const root = UNIVERSE[metal].futures[0].root;
-    const r = roots.get(root);
+  for (const metal of ASSETS) {
+    const front = UNIVERSE[metal].futures[0];
+    const r = front ? roots.get(front.root) : undefined;
     if (!r) continue;
     for (const spec of seasonalSpecsFor(metal)) {
       const s = assembleMetalSeasonal(spec, r.prepared);
@@ -190,8 +192,10 @@ export function computeQuant(input: MarketInput): QuantResult {
     MODES.map((m) => [m, analyzed.filter((a) => !a.mirror).map((a) => a.rows[m]).sort((x, y) => y.qtRank - x.qtRank)]),
   ) as Record<QuantMode, QuantOpportunity[]>;
 
-  // 5) Relative value.
-  const relativeValue = buildRelativeValue(analyzed, seriesById, ctx, dataThrough, source);
+  // 5) Relative value, one view per resolvable pair.
+  const relativeValue = resolvedPairs()
+    .map((p) => buildRelativeValue(p, analyzed, seriesById, ctx, dataThrough, source))
+    .filter((rv): rv is RelativeValueDetail => rv !== null);
 
   // 6) Term structure per root (stored bars).
   const curves: CurveView[] = [...roots.values()].map((r) => curveView(r, source));
@@ -201,9 +205,9 @@ export function computeQuant(input: MarketInput): QuantResult {
   const gates: GatesResponse[] = [];
   if (!input.skipBacktests) {
     const oosCache = new Map<string, "passed" | "failed" | "untested">();
-    for (const metal of METALS) {
+    for (const metal of ASSETS) {
       const simIns: SimInstrument[] = analyzed
-        .filter((a) => a.sim && !a.mirror && (a.detail.metal === metal || a.detail.product === "GS"))
+        .filter((a) => a.sim && !a.mirror && belongsToAsset(metal, a.detail))
         .map((a) => ({
           id: a.detail.id,
           commodity: a.detail.product,
@@ -264,40 +268,53 @@ export function computeQuant(input: MarketInput): QuantResult {
 }
 
 // ── relative value ───────────────────────────────────────────────────────────
+/** "100 oz", "5,000 oz", "25,000 lb", "5 BTC" — one contract of a pair leg. */
+function contractSizeText(size: number, unit: string): string {
+  return `${size.toLocaleString("en-US")} ${unit}`;
+}
+
 function buildRelativeValue(
+  legs: PairLegs,
   analyzed: AnalyzedInstrument[],
   seriesById: Map<string, SeriesPoint[]>,
   ctx: RunContext,
   dataThrough: string | null,
   source: string,
 ): RelativeValueDetail | null {
-  const ratio = analyzed.find((a) => a.detail.id === "GS.ratio")?.detail;
-  const spread = analyzed.find((a) => a.detail.id === "GS.spread")?.detail;
-  const ratioSeries = seriesById.get("GS.ratio");
+  const { pair, num, den, numFut, denFut } = legs;
+  const ratio = analyzed.find((a) => a.detail.id === `${pair.id}.ratio`)?.detail;
+  const spread = analyzed.find((a) => a.detail.id === `${pair.id}.spread`)?.detail;
+  const ratioSeries = seriesById.get(`${pair.id}.ratio`);
   if (!ratio || !spread || !ratioSeries) return null;
   const values = ratioSeries.filter((p) => p.date <= ctx.asOf);
   const latest = values[values.length - 1].value;
   const bandsLong = rollingBands(values, 252);
   const bands60 = rollingBands(values, ctx.cfg.N);
-  const gc = ctx.curves.get("GC");
-  const si = ctx.curves.get("SI");
-  const g = gc?.[gc.length - 1]?.c0 ?? 0;
-  const s = si?.[si.length - 1]?.c0 ?? 0;
-  const silverPerGold = g && s ? (g * 100) / (s * 5000) : 0;
+  const nc = ctx.curves.get(numFut.root);
+  const dc = ctx.curves.get(denFut.root);
+  const n = nc?.[nc.length - 1]?.c0 ?? 0;
+  const d = dc?.[dc.length - 1]?.c0 ?? 0;
+  const denPerNum = dollarNeutralHedge(n, d, legs);
 
-  // Vol-parity: SI contracts per 1 GC equalising trailing 60-day dollar volatility.
+  // Vol-parity: denominator contracts per 1 numerator contract equalising trailing 60-day dollar volatility.
   let volParity: number | null = null;
-  if (gc && si && gc.length > 61 && si.length > 61) {
-    const dg = gc.slice(-61).map((c, i, a) => (i ? (c.c0 - a[i - 1].c0) * 100 : 0)).slice(1);
-    const ds = si.slice(-61).map((c, i, a) => (i ? (c.c0 - a[i - 1].c0) * 5000 : 0)).slice(1);
-    const sg = stdSample(dg);
-    const ss = stdSample(ds);
-    volParity = ss > 0 ? round(sg / ss, 3) : null;
+  if (nc && dc && nc.length > 61 && dc.length > 61) {
+    const dn = nc.slice(-61).map((c, i, a) => (i ? (c.c0 - a[i - 1].c0) * numFut.pointValue : 0)).slice(1);
+    const dd = dc.slice(-61).map((c, i, a) => (i ? (c.c0 - a[i - 1].c0) * denFut.pointValue : 0)).slice(1);
+    const sn = stdSample(dn);
+    const sd = stdSample(dd);
+    volParity = sd > 0 ? round(sn / sd, 3) : null;
   }
   const spreadLast = spread.series[spread.series.length - 1];
+  const micros = [num.futures[1]?.root, den.futures[1]?.root].filter(Boolean);
+  const hedgeNote =
+    `Dollar-neutral at today's front prices: 1 ${numFut.root} (${contractSizeText(numFut.contractSize, num.priceUnit)}) ` +
+    `against this many ${denFut.root} (${contractSizeText(denFut.contractSize, den.priceUnit)}). Rounded lots leave a residual` +
+    (micros.length ? `; ${micros.join("/")} allow finer sizing.` : ".");
+  const rollNote = numFut.cashSettled || denFut.cashSettled ? "each rolled before delivery or expiry" : "each rolled before first position day";
 
   return {
-    pair: "gold-silver",
+    pair: pair.key,
     asOf: ctx.asOf,
     dataThrough,
     ratio: {
@@ -315,8 +332,8 @@ function buildRelativeValue(
       verdicts: ratio.verdicts,
       hedge: {
         goldContracts: 1,
-        silverContracts: round(silverPerGold, 2),
-        note: "Dollar-neutral at today's front prices: 1 GC (100 oz) against this many SI (5,000 oz). Rounded lots leave a residual; MGC/SIL allow finer sizing.",
+        silverContracts: round(denPerNum, 2),
+        note: hedgeNote,
       },
     },
     spread: {
@@ -329,7 +346,7 @@ function buildRelativeValue(
       oos: spread.oos,
       verdicts: spread.verdicts,
     },
-    provenance: { source, asOf: dataThrough, note: "GC and SI continuous front months (each rolled before first position day)" },
+    provenance: { source, asOf: dataThrough, note: `${numFut.root} and ${denFut.root} continuous front months (${rollNote})` },
   };
 }
 
@@ -438,7 +455,7 @@ function curveView(r: RootState, source: string): CurveView {
 }
 
 // ── backtest + gates views ──────────────────────────────────────────────────
-function backtestView(metal: Metal, res: SimulationResult, labels: Map<string, string>, source: string): BacktestView {
+function backtestView(metal: AssetId, res: SimulationResult, labels: Map<string, string>, source: string): BacktestView {
   let peak = 0;
   const equity = res.equity.map((e) => {
     peak = Math.max(peak, e.modelCum);
@@ -506,11 +523,11 @@ export function histogram(values: number[], bins: number): BacktestView["histogr
   return out;
 }
 
-function gatesView(metal: Metal, res: SimulationResult, source: string): GatesResponse {
+function gatesView(metal: AssetId, res: SimulationResult, source: string): GatesResponse {
   const decisions = res.decisions
     .filter((d) => d.ouTradable !== undefined)
     .map((d) => ({ date: d.date, instrumentId: d.instrumentId, pnl: d.passivePnl, ouTradable: d.ouTradable!, carryConflict: d.carryConflict ?? false }));
-  const rows = ablateGates(decisions).map((g) => ({
+  const rows = ablateGates(decisions, undefined, regimesForAsset(metal)).map((g) => ({
     gate: g.gate,
     label: g.gate === "ou" ? "OU half-life tradability" : "Carry trend veto",
     keptTrades: g.kept.trades,

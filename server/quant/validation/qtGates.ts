@@ -1,5 +1,5 @@
 import { performance, type PerfMetrics } from "./metrics.js";
-import { regimeOf } from "./regimes.js";
+import { REGIME_WINDOWS, regimeOf, type RegimeWindow } from "./regimes.js";
 
 /**
  * EngineQT gate ablation — the honest OOS test for SELECTION filters.
@@ -54,7 +54,7 @@ const MIN_REMOVED = 10;
  *  - "hurts"   — upliftPerTrade < 0;
  *  - "neutral" — everything else (incl. a full-sample uplift that collapses ex-shock).
  */
-export function ablateGates(decisions: GateDecision[], minDecisions = MIN_DECISIONS): GateAblation[] {
+export function ablateGates(decisions: GateDecision[], minDecisions = MIN_DECISIONS, regimes: RegimeWindow[] = REGIME_WINDOWS): GateAblation[] {
   return (["ou", "carry"] as const).map((gate) => {
     const keeps = (d: GateDecision): boolean => (gate === "ou" ? d.ouTradable : !d.carryConflict);
 
@@ -65,7 +65,7 @@ export function ablateGates(decisions: GateDecision[], minDecisions = MIN_DECISI
     const all = performance(decisions.map((d) => d.pnl));
     const upliftPerTrade = Number((kept.avgPnl - all.avgPnl).toFixed(2));
 
-    const ex = decisions.filter((d) => regimeOf(d.date) === null);
+    const ex = decisions.filter((d) => regimeOf(d.date, regimes) === null);
     const exKept = performance(ex.filter(keeps).map((d) => d.pnl));
     const exAll = performance(ex.map((d) => d.pnl));
     const exShock = {

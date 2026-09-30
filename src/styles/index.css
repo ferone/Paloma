@@ -23,14 +23,28 @@
   --muted: oklch(0.48 0.014 75);
   --faint: oklch(0.62 0.012 75);
 
-  /* Brand: a desaturated bullion gold, used sparingly. */
+  /* Brand: a desaturated bullion gold, used sparingly (focus, NAV, primary series). */
   --brand: oklch(0.58 0.11 80);
   --brand-strong: oklch(0.5 0.11 75);
   --brand-soft: oklch(0.58 0.11 80 / 0.1);
 
-  /* Metal series colours (charts). */
-  --metal-gold: oklch(0.68 0.13 80);
-  --metal-silver: oklch(0.58 0.02 250);
+  /* Asset series colours (charts), one per universe asset: --asset-<id>
+     (AssetSpec.colorVar). Restrained, mid-chroma hues kept apart from the
+     brand gold, the pos/neg pair and each other in light, dark and print
+     (pairwise OKLab distance >= 0.09, >= 3:1 against the background except
+     the historical light-theme gold): copper = red-brown, platinum = dark
+     cool slate, palladium = light warm grey, bitcoin = muted orange (never
+     neon). Lightness separates the greys from silver. */
+  --asset-gold: oklch(0.68 0.13 80);
+  --asset-silver: oklch(0.58 0.02 250);
+  --asset-copper: oklch(0.5 0.09 35);
+  --asset-platinum: oklch(0.44 0.035 230);
+  --asset-palladium: oklch(0.66 0.035 65);
+  --asset-bitcoin: oklch(0.6 0.15 50);
+  --asset-btc: var(--asset-bitcoin);
+  /* @deprecated aliases kept for existing consumers. */
+  --metal-gold: var(--asset-gold);
+  --metal-silver: var(--asset-silver);
 
   /* Semantic gain/loss — FILL shared, TEXT per theme. */
   --pos: oklch(0.7 0.14 155);
@@ -80,8 +94,12 @@
   --brand-strong: oklch(0.86 0.1 88);
   --brand-soft: oklch(0.8 0.11 85 / 0.1);
 
-  --metal-gold: oklch(0.8 0.12 85);
-  --metal-silver: oklch(0.8 0.015 250);
+  --asset-gold: oklch(0.8 0.12 85);
+  --asset-silver: oklch(0.8 0.015 250);
+  --asset-copper: oklch(0.62 0.09 38);
+  --asset-platinum: oklch(0.62 0.035 230);
+  --asset-palladium: oklch(0.71 0.035 65);
+  --asset-bitcoin: oklch(0.72 0.14 52);
 
   --pos-text: var(--pos);
   --neg-text: oklch(0.7 0.17 25);
@@ -116,6 +134,12 @@
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
   --color-brand-soft: var(--brand-soft);
+  --color-asset-gold: var(--asset-gold);
+  --color-asset-silver: var(--asset-silver);
+  --color-asset-copper: var(--asset-copper);
+  --color-asset-platinum: var(--asset-platinum);
+  --color-asset-palladium: var(--asset-palladium);
+  --color-asset-bitcoin: var(--asset-bitcoin);
   --color-metal-gold: var(--metal-gold);
   --color-metal-silver: var(--metal-silver);
   --color-pos: var(--pos);
@@ -234,8 +258,12 @@
     --brand-strong: oklch(0.45 0.11 75);
     --pos-text: oklch(0.45 0.12 155);
     --neg-text: oklch(0.5 0.18 25);
-    --metal-gold: oklch(0.62 0.13 80);
-    --metal-silver: oklch(0.55 0.02 250);
+    --asset-gold: oklch(0.62 0.13 80);
+    --asset-silver: oklch(0.55 0.02 250);
+    --asset-copper: oklch(0.46 0.09 35);
+    --asset-platinum: oklch(0.41 0.035 230);
+    --asset-palladium: oklch(0.63 0.035 65);
+    --asset-bitcoin: oklch(0.56 0.15 50);
     --series-1: oklch(0.62 0.13 80);
     --series-2: oklch(0.55 0.11 240);
     --series-3: oklch(0.58 0.12 160);

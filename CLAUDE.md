@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Gold Investment Dashboard** (repo folder: Paloma) is a fund-grade platform for a gold- and silver-focused fund. It is a React 19 + Vite 7 SPA (`src/`), an Express 5 API (`server/`) with a local SQLite database, and types shared by both (`shared/`).
-- **Gold and silver are symmetric.** Every metal-specific module is parameterized by `Metal` from `shared/universe.ts`.
+**Real Assets Dashboard** (repo folder: Paloma; formerly Gold Investment Dashboard) is a fund-grade platform for a real-assets fund: precious metals (gold, silver, platinum, palladium), industrial metals (copper) and digital assets (bitcoin). It is a React 19 + Vite 7 SPA (`src/`), an Express 5 API (`server/`) with a local SQLite database, and types shared by both (`shared/`).
+- **Assets are symmetric; adding one is a data change.** Every asset-specific module is parameterized by `AssetId` and reads instruments, units (`priceUnit`, `unitLabel`, `displayDecimals`), futures (`exchange`, `pointValue`, `activeMonths`), ETFs, miners, trading session and chart colour (`colorVar`) from `UNIVERSE` in `shared/universe.ts`. Never hardcode a root, a symbol list or a contract multiplier (`pointValue` is the only dollar multiplier); handle assets without futures, ETFs or miners with an explicit empty state. `Metal`/`METALS` are deprecated aliases.
 - **Quant engine.** Much of the quantitative engine is ported from the sibling repo `C:\Development Projects\CommodityFutures` (pure-TS modules in `lib/engine`, `lib/seasonality`, `lib/validation`, `lib/opportunities`, `lib/simulation`, `lib/data`, `lib/ai`; the Python ML is in `scripts/ml`).
 - **Design direction:** `.impeccable.md` (Design Context). Read it before any UI work.
 
@@ -37,7 +37,7 @@ npm run db:migrate   # apply pending SQLite migrations (the server also does thi
 ```bash
 npm run data:estimate -- roots=GC,SI start=2010-06-06      # FREE Databento cost estimate
 npm run data:backfill -- roots=GC,SI schemas=ohlcv-1d start=2010-06-06 windowMonths=12 maxCost=3 confirm=yes   # PAID
-npm run data:yahoo          # Yahoo daily history (fronts, ETFs, DXY/10Y/VIX/SPY, listed COMEX months)
+npm run data:yahoo          # Yahoo daily history (universe fronts/spots/ETFs/miners, DXY/10Y/VIX/SPY, listed futures months)
 npm run macro:refresh       # FRED (keyless CSV unless FRED_API_KEY) + CFTC COT
 npm run quant:recompute     # quant engine over contract_bars (~35 s)
 npm run ml:train            # walk-forward + permutation gate (~3 min/metal); ml:infer for daily scoring
@@ -63,23 +63,24 @@ server/
   db/            client.ts (better-sqlite3, WAL), migrate.ts, migrations/NNN_*.sql, repo.ts (settings, artifacts, prices_daily, job_runs)
   <domain>/      portfolio · quant · marketdata · macro · ai · ml — each exports `router` from router.ts
   services/      yahoo-finance.service.ts (live quotes/history)
-  data/          static curated datasets (liquidity constants, market events), NOT the marketdata domain
+  data/          static curated datasets (gold-only modeled WGC splits, universe-derived liquidity instruments, market events), NOT the marketdata domain
 src/
   app/           router.tsx (composes feature routes), nav.ts (IA), AppShell, TopBar, theme.tsx, page.tsx (lazy wrapper)
   design/        tokens.ts (PALETTE of CSS vars, TIER, signColor, cssVar()), format.ts (all number/date formatting)
   ui/            primitives: Panel, Stat, Chip, DataTable, PageHeader, Segmented, RouteTabs, Explainer/HelpTip, EmptyState/NotConfiguredState, Field/Input/Select, Skeleton/ErrorNote
   features/<domain>/  routes.tsx + pages/components/hooks for: overview, portfolio, markets, quant, macro, intelligence, data, investor, settings
-  hooks/         useQuote, useAutoRefresh (shared by TopBar/Overview; COMEX-hours aware)
+  hooks/         useQuote, useAutoRefresh (shared by TopBar/Overview; session-aware per asset: Globex hours or 24x7)
 ```
 
 ### Conventions that span files
 - **Adding a server domain:** create `server/<domain>/router.ts`, then mount it in `server/routes/index.ts`. Server-internal relative imports must end in `.js` (ESM), even for `.ts` files.
 - **Adding a client section:** create `src/features/<x>/routes.tsx` exporting `routes: RouteObject[]`, then spread it in `src/app/router.tsx` and add a nav entry in `src/app/nav.ts`. Pages are `lazy()` and wrapped with `page()`.
-- **Migrations:** numbered SQL files applied once, in order, inside a transaction. Ranges are reserved per domain: 001–009 core, 010 portfolio, 020 quant, 030 marketdata, 040 macro/ai, 050 ml, 060 markets. Never edit an applied migration; add a new one.
+- **Migrations:** numbered SQL files applied once, in order, inside a transaction. Ranges are reserved per domain: 001–009 core, 010 portfolio, 020 quant, 030 marketdata, 040 macro/ai, 050 ml, 060 markets, 070 multi-asset. Never edit an applied migration; add a new one.
 - **Data flow on the client:** axios `src/api/client.ts` (baseURL `/api`, proxied by Vite to 3001) → TanStack Query hooks inside the feature. Query keys are feature-local arrays, prefixed with the domain name.
 - **Unconfigured integrations:** responses for a missing integration are `NotConfigured` (`shared/api.ts`); render them with `NotConfiguredState` / `isNotConfigured`. Any figure that is estimated carries `Provenance.modeled = true` and shows a "Modeled" chip.
 - **Styling:**
   - Colours come from OKLCH CSS variables in `src/styles/index.css`, which define light (`:root`) and dark (`.dark`, the default) themes.
+  - Each asset has a chart colour `--asset-<id>` (light, dark and print values; `ASSET_COLOR` in `src/design/tokens.ts`, `useChartTheme().asset` for canvas/recharts). `--metal-gold`/`--metal-silver`, `PALETTE.gold`/`.silver` and `METAL_COLOR` are deprecated aliases.
   - Use the semantic utilities (`bg-surface`, `text-muted`, `text-pos-text`, `border-border`, `chip-*` classes). Never use raw hex values or Tailwind's gray palette in new code.
   - Numbers use the `.num` class (tabular mono); small-caps labels use `.label`; headlines use `.display` (Fraunces serif).
   - SVG charts pass `PALETTE.*` via `style`, because attributes don't resolve `var()`. Canvas charts (lightweight-charts) resolve colours with `cssVar()` and must re-resolve when the theme changes.

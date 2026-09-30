@@ -13,8 +13,10 @@ export const PALETTE = {
   surface2: 'var(--surface-2)',
   pos: 'var(--pos)',
   neg: 'var(--neg)',
-  gold: 'var(--metal-gold)',
-  silver: 'var(--metal-silver)',
+  /** @deprecated Use `ASSET_COLOR.gold`. */
+  gold: 'var(--asset-gold)',
+  /** @deprecated Use `ASSET_COLOR.silver`. */
+  silver: 'var(--asset-silver)',
   modeled: 'var(--modeled)',
   series: ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)'],
 } as const

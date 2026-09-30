@@ -6,7 +6,7 @@ import { Chip, EmptyState, ErrorBoundary, ErrorNote, Explainer, Panel, PanelSkel
 import { fmtNum, fmtPctSigned, fmtDate } from '../../../design/format'
 import { PALETTE, signColor } from '../../../design/tokens'
 import { useHistory } from '../hooks'
-import { metalInstruments, shortSymbol, symbolLabel } from '../lib/symbols'
+import { assetInstruments, shortSymbol, symbolLabel } from '../lib/symbols'
 import {
   SIGNAL_LABEL,
   aggregateSignals,
@@ -29,7 +29,7 @@ export default function TechnicalsPage() {
   const { metal } = useSettings()
   const { symbol: param } = useParams<{ symbol: string }>()
   const navigate = useNavigate()
-  const symbols = metalInstruments(metal)
+  const symbols = assetInstruments(metal)
   const symbol = param ? decodeURIComponent(param) : symbols[0]
   const pickList = symbols.includes(symbol) ? symbols : [...symbols, symbol]
   const q = useHistory(symbol, '1Y')

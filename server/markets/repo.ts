@@ -1,6 +1,6 @@
 import { getDb } from '../db/client.js'
 import type { CurveHistoryPoint, CurveResponse } from '../../shared/markets.js'
-import type { Metal } from '../../shared/universe.js'
+import type { AssetId } from '../../shared/universe.js'
 
 /** Store today's curve (latest capture of the day wins). */
 export function saveCurveSnapshot(curve: CurveResponse, date = new Date().toISOString().slice(0, 10)): void {
@@ -28,7 +28,7 @@ export function saveCurveSnapshot(curve: CurveResponse, date = new Date().toISOS
     })
 }
 
-export function readCurveHistory(metal: Metal, limit = 750): CurveHistoryPoint[] {
+export function readCurveHistory(metal: AssetId, limit = 750): CurveHistoryPoint[] {
   const rows = getDb()
     .prepare(
       `SELECT date, term_carry AS termCarry, rate, reference_price AS referencePrice

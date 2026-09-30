@@ -1,5 +1,5 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
-import type { Metal } from '@shared/universe'
+import type { AssetId } from '@shared/universe'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import {
   fetchCurve,
@@ -55,26 +55,26 @@ export function useHistories(symbols: string[], range: string) {
   })
 }
 
-export function useCurve(metal: Metal) {
+export function useCurve(metal: AssetId) {
   const refetchInterval = useAutoRefresh()
   return useQuery({ queryKey: marketsKeys.curve(metal), queryFn: () => fetchCurve(metal), refetchInterval: refetchInterval && Math.max(refetchInterval, 60_000) })
 }
 
-export function useCurveHistory(metal: Metal) {
+export function useCurveHistory(metal: AssetId) {
   return useQuery({ queryKey: marketsKeys.curveHistory(metal), queryFn: () => fetchCurveHistory(metal), staleTime: 5 * 60_000 })
 }
 
-export function useEtfs(metal: Metal) {
+export function useEtfs(metal: AssetId) {
   const refetchInterval = useAutoRefresh()
   return useQuery({ queryKey: marketsKeys.etfs(metal), queryFn: () => fetchEtfs(metal), refetchInterval: refetchInterval && Math.max(refetchInterval, 60_000) })
 }
 
-export function useLiquidity(metal: Metal) {
+export function useLiquidity(metal: AssetId) {
   const refetchInterval = useAutoRefresh()
   return useQuery({ queryKey: marketsKeys.liquidity(metal), queryFn: () => fetchLiquidity(metal), refetchInterval: refetchInterval && Math.max(refetchInterval, 60_000) })
 }
 
-export function useLiquidityHistory(metal: Metal, range: string) {
+export function useLiquidityHistory(metal: AssetId, range: string) {
   return useQuery({
     queryKey: marketsKeys.liquidityHistory(metal, range),
     queryFn: () => fetchLiquidityHistory(metal, range),

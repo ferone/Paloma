@@ -1,13 +1,13 @@
 import { Link } from 'react-router-dom'
 import clsx from 'clsx'
-import { UNIVERSE, type Metal } from '@shared/universe'
-import { ErrorNote, Panel, Skeleton } from '../../../ui'
+import { UNIVERSE, type AssetId } from '@shared/universe'
+import { EmptyState, ErrorNote, Panel, Skeleton } from '../../../ui'
 import { fmtCompact, fmtNum, fmtPctSigned } from '../../../design/format'
 import { signColor } from '../../../design/tokens'
 import { useQuotes } from '../hooks'
 
-/** Dense quote strip: the metal's physically backed ETFs plus its miners ETF. */
-export function EtfStrip({ metal }: { metal: Metal }) {
+/** Dense quote strip: the asset's physically backed / spot ETFs plus its miners ETF (when it has one). */
+export function EtfStrip({ metal }: { metal: AssetId }) {
   const spec = UNIVERSE[metal]
   const symbols = spec.miners ? [...spec.etfs, spec.miners] : spec.etfs
   const q = useQuotes(symbols)
@@ -24,7 +24,11 @@ export function EtfStrip({ metal }: { metal: Metal }) {
       }
       provenance={{ source: 'Yahoo Finance quotes · may be delayed' }}
     >
-      {q.error ? (
+      {symbols.length === 0 ? (
+        <EmptyState compact title={`No listed funds for ${spec.label.toLowerCase()}`}>
+          The universe has no ETF or miners proxy for {spec.label.toLowerCase()}, so there is nothing to quote here.
+        </EmptyState>
+      ) : q.error ? (
         <ErrorNote error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <ul className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-3 lg:grid-cols-6">

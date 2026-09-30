@@ -3,7 +3,7 @@ import { AreaSeries, LineSeries, LineStyle, createChart, type Time } from 'light
 import type { OHLCV } from '@shared/markets'
 import { useChartTheme } from './chartTheme'
 import { baseChartOptions, toTimedBars } from './lwc'
-import { metalColor } from '../lib/symbols'
+import { assetColor } from '../lib/symbols'
 
 export interface MaLine {
   key: string
@@ -32,7 +32,7 @@ export function IndicatorChart({ symbol, bars, mas, rsi }: Props) {
     if (timed.length === 0) return
     const index = new Map(bars.map((b, i) => [b.date.slice(0, 10), i]))
     const chart = createChart(el, baseChartOptions(t, false))
-    const color = metalColor(symbol, t)
+    const color = assetColor(symbol, t)
 
     const price = chart.addSeries(AreaSeries, { lineColor: color, topColor: t.alpha(color, 0.16), bottomColor: t.alpha(color, 0), lineWidth: 2, priceLineColor: t.faint })
     price.setData(timed.map((d) => ({ time: d.time, value: d.close })))

@@ -6,6 +6,8 @@ import { readCurveHistory, saveCurveSnapshot } from './repo'
 const curve = (termCarry: number, price: number): CurveResponse => ({
   metal: 'gold',
   root: 'GC',
+  exchange: 'COMEX',
+  unitLabel: '$/oz',
   referenceSymbol: 'GCZ26.CMX',
   contracts: [
     {

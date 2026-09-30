@@ -1,4 +1,4 @@
-import { UNIVERSE, type Metal } from '../../shared/universe.js'
+import { UNIVERSE, type AssetId } from '../../shared/universe.js'
 import type { EtfRow, EtfsResponse } from '../../shared/markets.js'
 import { getBarsSince, getDetailedQuotes, getFundProfile, type DailyBarLite, type FundProfile } from '../services/yahoo-finance.service.js'
 import { memo } from './memo.js'
@@ -20,8 +20,8 @@ function profile(symbol: string): Promise<FundProfile | null> {
   return memo(`markets:profile:${symbol}`, 6 * HOUR, () => getFundProfile(symbol)).catch(() => null)
 }
 
-export async function buildEtfs(metal: Metal): Promise<EtfsResponse> {
-  const spec = UNIVERSE[metal]
+export async function buildEtfs(asset: AssetId): Promise<EtfsResponse> {
+  const spec = UNIVERSE[asset]
   const spotSymbol = spec.spot
   const etfs = spec.miners ? [...spec.etfs, spec.miners] : spec.etfs
 
@@ -66,8 +66,8 @@ export async function buildEtfs(metal: Metal): Promise<EtfsResponse> {
       aum: prof?.totalAssets ?? null,
       expenseRatio: prof?.expenseRatio ?? null,
       nav,
-      // Last price vs the latest published NAV (struck at the LBMA PM price of
-      // the prior business day), so it also carries the metal move since then.
+      // Last price vs the latest published NAV (struck at the prior business
+      // day's reference price, LBMA PM for metals), so it also carries the move since then.
       premium: premiumToNav(q.price, nav),
       premiumMethod: method,
       returns: returnsOf(bars, asOf),
@@ -79,7 +79,7 @@ export async function buildEtfs(metal: Metal): Promise<EtfsResponse> {
 
   const lastTrades = quotes.map((q) => q.lastTrade).filter((t): t is string => !!t).sort()
   return {
-    metal,
+    metal: asset,
     spotSymbol,
     spotReturns: returnsOf(spotBars, asOf),
     rows,
@@ -87,7 +87,10 @@ export async function buildEtfs(metal: Metal): Promise<EtfsResponse> {
       source: `Yahoo Finance quotes, NAV (summaryDetail) and daily closes · spot proxy ${spotSymbol}`,
       asOf: lastTrades.length ? lastTrades[lastTrades.length - 1] : asOf,
       modeled: rows.some((r) => r.premiumMethod === 'modeled'),
-      note: 'Premium = last price vs latest published NAV (LBMA PM, prior business day)',
+      note:
+        spec.assetClass === 'crypto'
+          ? 'Premium = last price vs latest published NAV (reference rate, prior business day)'
+          : 'Premium = last price vs latest published NAV (LBMA PM, prior business day)',
     },
   }
 }

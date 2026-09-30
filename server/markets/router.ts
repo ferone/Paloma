@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express'
-import { METALS, type Metal } from '../../shared/universe.js'
+import { ASSETS, isAssetId, type AssetId } from '../../shared/universe.js'
 import { TIME_RANGES } from '../../shared/markets.js'
 import { memo } from './memo.js'
 import { buildCurve } from './curve.js'
@@ -10,10 +10,11 @@ import { readCurveHistory, saveCurveSnapshot } from './repo.js'
 // Domain router for /api/markets (owned by the markets workstream).
 export const router = Router()
 
-function metalParam(req: Request, res: Response): Metal | null {
-  const m = String(req.query.metal ?? 'gold')
-  if ((METALS as readonly string[]).includes(m)) return m as Metal
-  res.status(400).json({ error: `metal must be one of ${METALS.join(', ')}` })
+/** `?asset=` (or the legacy `?metal=`), defaulting to the first asset. */
+function metalParam(req: Request, res: Response): AssetId | null {
+  const m = String(req.query.asset ?? req.query.metal ?? ASSETS[0])
+  if (isAssetId(m)) return m
+  res.status(400).json({ error: `asset must be one of ${ASSETS.join(', ')}` })
   return null
 }
 

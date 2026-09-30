@@ -34,9 +34,19 @@ const SHAPE: Record<CurveShape, { label: string; tone: ChipTone }> = {
 
 export default function CurvePage() {
   const { metal } = useSettings()
+  const spec = UNIVERSE[metal]
+  const product = spec.futures[0]
   const q = useCurve(metal)
-  const product = UNIVERSE[metal].futures[0]
 
+  if (!product) {
+    return (
+      <Panel provenance={{ source: 'Universe definition' }}>
+        <EmptyState title={`No listed futures for ${spec.label.toLowerCase()}`}>
+          {spec.label} has no futures product in the universe, so there is no term structure to show. Prices, ETFs and liquidity still apply.
+        </EmptyState>
+      </Panel>
+    )
+  }
   if (q.isLoading) return <Panel><PanelSkeleton rows={8} /></Panel>
   if (q.error || !q.data) return <Panel><ErrorNote error={q.error ?? new Error('No curve')} onRetry={() => q.refetch()} /></Panel>
   const c = q.data
@@ -83,7 +93,7 @@ function CurveSummary({ curve: c }: { curve: CurveResponse }) {
             <Chip tone={shape.tone}>{shape.label}</Chip>
           </div>
         </div>
-        <Stat label="Reference contract" value={ref ? `${c.root} ${ref.label}` : '—'} hint={ref ? `Highest open interest · ${fmtNum(ref.price)}` : undefined} size="sm" />
+        <Stat label="Reference contract" value={ref ? `${c.root} ${ref.label}` : '—'} hint={ref ? `Highest open interest · ${fmtNum(ref.price, dpOf(c))}` : undefined} size="sm" />
         <Stat
           label={<HelpTip term="12M carry">Annualized (ACT/360) spread from the reference contract to the live contract nearest one year later.</HelpTip>}
           value={fmtPct(c.termCarry)}
@@ -93,7 +103,7 @@ function CurveSummary({ curve: c }: { curve: CurveResponse }) {
         <Stat
           label={
             <HelpTip term="Carry − rate">
-              Implied financing minus the T-bill rate. Negative means the curve pays less than cash: holders of physical metal earn the difference by
+              Implied financing minus the T-bill rate. Negative means the curve pays less than cash: holders of the physical asset earn the difference by
               lending it (an implied lease rate of roughly the same size, sign flipped).
             </HelpTip>
           }
@@ -109,14 +119,14 @@ function CurveSummary({ curve: c }: { curve: CurveResponse }) {
 function CurveChart({ curve: c }: { curve: CurveResponse }) {
   const t = useChartTheme()
   const s = rechartsStyle(t)
-  const color = c.metal === 'gold' ? t.gold : t.silver
+  const color = t.asset[c.metal]
   const data = c.contracts.filter((x) => x.daysToExpiry != null)
   const live = data.filter((x) => !x.stale)
   const stale = data.filter((x) => x.stale)
   const labelOf = useMemo(() => new Map(data.map((x) => [x.daysToExpiry, x.label])), [data])
 
   return (
-    <Panel density="dense" title="Price by expiry" eyebrow={`COMEX ${c.root} · USD/oz`} provenance={{ source: 'Yahoo Finance listed contract months', asOf: c.provenance.asOf, note: 'Hollow points: stale (no recent trade)' }}>
+    <Panel density="dense" title="Price by expiry" eyebrow={`${c.exchange ?? ''} ${c.root ?? ''} · ${c.unitLabel}`.trim()} provenance={{ source: 'Yahoo Finance listed contract months', asOf: c.provenance.asOf, note: 'Hollow points: stale (no recent trade)' }}>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
           <ComposedChart margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
@@ -139,7 +149,7 @@ function CurveChart({ curve: c }: { curve: CurveResponse }) {
               labelFormatter={(d) => labelOf.get(Number(d)) ?? ''}
               formatter={(v, _n, item) => {
                 const p = item?.payload as CurveContract | undefined
-                return [`${fmtNum(Number(v))}${p?.stale ? ' (stale)' : ''}`, p ? `${c.root} ${p.label}` : 'Price']
+                return [`${fmtNum(Number(v), dpOf(c))}${p?.stale ? ' (stale)' : ''}`, p ? `${c.root} ${p.label}` : 'Price']
               }}
             />
             <Line data={live} dataKey="price" type="linear" stroke={color} strokeWidth={2} dot={{ r: 3, fill: color, stroke: color }} isAnimationActive={false} />
@@ -200,6 +210,7 @@ function CarryChart({ curve: c }: { curve: CurveResponse }) {
 }
 
 function ContractsTable({ curve: c }: { curve: CurveResponse }) {
+  const dp = dpOf(c)
   const cols: Column<CurveContract>[] = [
     {
       key: 'label',
@@ -215,9 +226,9 @@ function ContractsTable({ curve: c }: { curve: CurveResponse }) {
     },
     { key: 'expiry', header: 'Expiry', cell: (r) => <span className="num text-muted">{fmtDate(r.expiry)}</span>, sortValue: (r) => r.expiry ?? '' },
     { key: 'days', header: 'Days', numeric: true, cell: (r) => fmtNum(r.daysToExpiry, 0), sortValue: (r) => r.daysToExpiry },
-    { key: 'price', header: 'Last', numeric: true, cell: (r) => fmtNum(r.price), sortValue: (r) => r.price },
-    { key: 'chg', header: 'Chg', numeric: true, cell: (r) => <span className={signColor(r.change)}>{fmtSigned(r.change)}</span>, sortValue: (r) => r.change },
-    { key: 'spread', header: 'Spread vs ref', numeric: true, cell: (r) => (r.isReference ? '—' : fmtSigned(r.spread)), sortValue: (r) => r.spread },
+    { key: 'price', header: 'Last', numeric: true, cell: (r) => fmtNum(r.price, dp), sortValue: (r) => r.price },
+    { key: 'chg', header: 'Chg', numeric: true, cell: (r) => <span className={signColor(r.change)}>{fmtSigned(r.change, dp)}</span>, sortValue: (r) => r.change },
+    { key: 'spread', header: 'Spread vs ref', numeric: true, cell: (r) => (r.isReference ? '—' : fmtSigned(r.spread, dp)), sortValue: (r) => r.spread },
     { key: 'carry', header: 'Carry (ann.)', numeric: true, cell: (r) => <span className={clsx(r.stale && 'text-muted')}>{fmtPct(r.carry)}</span>, sortValue: (r) => r.carry },
     { key: 'oi', header: 'Open int.', numeric: true, cell: (r) => fmtCompact(r.openInterest), sortValue: (r) => r.openInterest },
     { key: 'vol', header: 'Volume', numeric: true, cell: (r) => fmtCompact(r.volume), sortValue: (r) => r.volume },
@@ -269,17 +280,22 @@ function CarryHistory() {
   )
 }
 
+/** Price decimals of the curve's asset. */
+function dpOf(c: CurveResponse): number {
+  return UNIVERSE[c.metal]?.displayDecimals ?? 2
+}
+
 function CurveExplainer() {
   return (
     <Explainer title="How to read the term structure">
       <p>
-        Each point is a listed COMEX contract month. The <strong>reference</strong> is the month with the highest open interest (the one the market
+        Each point is a listed contract month of the asset's main futures product. The <strong>reference</strong> is the month with the highest open interest (the one the market
         actually trades); spreads and carry are measured from it. The delivery month just before it is thin and often distorted by delivery flows.
       </p>
       <p>
         <strong>Carry</strong> is the simple annualized premium of a later month over the reference, (F<sub>far</sub> / F<sub>ref</sub> − 1) × 360 /
         days — the financing rate the curve implies. In normal <strong>contango</strong> it tracks short-term interest rates; when carry falls well
-        below T-bills, metal is scarce to borrow (positive lease rates), and <strong>backwardation</strong> signals an acute physical squeeze.
+        below T-bills, the underlying is scarce to borrow (positive lease rates), and <strong>backwardation</strong> signals an acute physical squeeze.
       </p>
       <p>
         Deferred months trade rarely. A contract with no trade in four days is marked <strong>stale</strong>: its last price may be far from where it

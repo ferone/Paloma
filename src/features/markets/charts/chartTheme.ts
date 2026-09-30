@@ -1,4 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react'
+import { ASSETS, UNIVERSE, type AssetId } from '@shared/universe'
 import { cssVar } from '../../../design/tokens'
 
 // Canvas (lightweight-charts) and recharts need concrete colours, and
@@ -45,8 +46,12 @@ export interface ChartTheme {
   brand: string
   pos: string
   neg: string
+  /** @deprecated Use `asset.gold`. */
   gold: string
+  /** @deprecated Use `asset.silver`. */
   silver: string
+  /** Resolved chart colour per asset (from each spec's `colorVar`). */
+  asset: Record<AssetId, string>
   modeled: string
   series: string[]
   font: string
@@ -72,8 +77,9 @@ export function useChartTheme(): ChartTheme {
       brand: c('--brand'),
       pos: c('--pos'),
       neg: c('--neg'),
-      gold: c('--metal-gold'),
-      silver: c('--metal-silver'),
+      gold: c(UNIVERSE.gold.colorVar),
+      silver: c(UNIVERSE.silver.colorVar),
+      asset: Object.fromEntries(ASSETS.map((a) => [a, c(UNIVERSE[a].colorVar)])) as Record<AssetId, string>,
       modeled: c('--modeled'),
       series: [1, 2, 3, 4, 5, 6].map((i) => c(`--series-${i}`)),
       font: CHART_FONT,

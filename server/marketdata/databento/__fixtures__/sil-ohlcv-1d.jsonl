@@ -1,0 +1,14 @@
+{"hd":{"ts_event":"1788480000000000000","rtype":35,"publisher_id":1,"instrument_id":42002352},"open":"67585000000","high":"67805000000","low":"65330000000","close":"66810000000","volume":"48147","symbol":"SILZ6"}
+{"hd":{"ts_event":"1788480000000000000","rtype":35,"publisher_id":1,"instrument_id":42019894},"open":"65850000000","high":"65850000000","low":"65645000000","close":"65800000000","volume":"4","symbol":"SILU6"}
+{"hd":{"ts_event":"1788480000000000000","rtype":35,"publisher_id":1,"instrument_id":42543828},"open":"-309000000","high":"-304000000","low":"-316000000","close":"-306000000","volume":"78","symbol":"SILZ6-SILF7"}
+{"hd":{"ts_event":"1788480000000000000","rtype":35,"publisher_id":1,"instrument_id":42033153},"open":"-541000000","high":"-524000000","low":"-546000000","close":"-528000000","volume":"964","symbol":"SILV6-SILZ6"}
+{"hd":{"ts_event":"1788652800000000000","rtype":35,"publisher_id":1,"instrument_id":42002352},"open":"66800000000","high":"66920000000","low":"66490000000","close":"66750000000","volume":"1134","symbol":"SILZ6"}
+{"hd":{"ts_event":"1788652800000000000","rtype":35,"publisher_id":1,"instrument_id":42033153},"open":"-528000000","high":"-527000000","low":"-528000000","close":"-527000000","volume":"21","symbol":"SILV6-SILZ6"}
+{"hd":{"ts_event":"1788652800000000000","rtype":35,"publisher_id":1,"instrument_id":42543828},"open":"-304000000","high":"-304000000","low":"-304000000","close":"-304000000","volume":"3","symbol":"SILZ6-SILF7"}
+{"hd":{"ts_event":"1788739200000000000","rtype":35,"publisher_id":1,"instrument_id":42002352},"open":"66760000000","high":"67375000000","low":"66015000000","close":"67195000000","volume":"31065","symbol":"SILZ6"}
+{"hd":{"ts_event":"1788739200000000000","rtype":35,"publisher_id":1,"instrument_id":42033153},"open":"-527000000","high":"-524000000","low":"-531000000","close":"-528000000","volume":"440","symbol":"SILV6-SILZ6"}
+{"hd":{"ts_event":"1788739200000000000","rtype":35,"publisher_id":1,"instrument_id":42543828},"open":"-306000000","high":"-304000000","low":"-306000000","close":"-304000000","volume":"75","symbol":"SILZ6-SILF7"}
+{"hd":{"ts_event":"1788825600000000000","rtype":35,"publisher_id":1,"instrument_id":42033153},"open":"-528000000","high":"-524000000","low":"-534000000","close":"-528000000","volume":"919","symbol":"SILV6-SILZ6"}
+{"hd":{"ts_event":"1788825600000000000","rtype":35,"publisher_id":1,"instrument_id":42002352},"open":"67200000000","high":"67830000000","low":"66130000000","close":"66200000000","volume":"49096","symbol":"SILZ6"}
+{"hd":{"ts_event":"1788825600000000000","rtype":35,"publisher_id":1,"instrument_id":42019894},"open":"65985000000","high":"66175000000","low":"65960000000","close":"66170000000","volume":"4","symbol":"SILU6"}
+{"hd":{"ts_event":"1788825600000000000","rtype":35,"publisher_id":1,"instrument_id":42543828},"open":"-306000000","high":"-304000000","low":"-311000000","close":"-306000000","volume":"74","symbol":"SILZ6-SILF7"}

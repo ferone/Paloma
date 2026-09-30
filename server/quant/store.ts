@@ -1,6 +1,8 @@
 import { getDb } from "../db/client.js";
 import type { InstrumentDetail, InstrumentListItem, SeasonalityDetail } from "../../shared/quant.js";
 import type { QuantResult } from "./run/compute.js";
+import type { AssetId } from "../../shared/universe.js";
+import { pairsForAsset } from "./universe/pairs.js";
 
 // Persistence for the quant engine (migration 020). The whole result of one run
 // replaces the previous one atomically, so readers never see a half-written run.
@@ -42,12 +44,26 @@ export function saveQuantResult(res: QuantResult, durationMs: number): number {
     db.prepare(`DELETE FROM quant_reports`).run();
     const rep = db.prepare(`INSERT INTO quant_reports (name, run_id, data) VALUES (?, ?, ?)`);
     rep.run("opportunities", runId, JSON.stringify(res.opportunities));
-    rep.run("relative-value", runId, JSON.stringify(res.relativeValue));
+    for (const rv of res.relativeValue) rep.run(relativeValueReport(rv.pair), runId, JSON.stringify(rv));
     for (const c of res.curves) rep.run(`curve:${c.root}`, runId, JSON.stringify(c));
     for (const b of res.backtests) rep.run(`backtest:${b.metal}:${b.mode}`, runId, JSON.stringify(b));
     for (const g of res.gates) rep.run(`gates:${g.metal}`, runId, JSON.stringify(g));
   })();
   return runId;
+}
+
+/** Report name for one relative-value pair (by `RelativeValuePair.key`). */
+export function relativeValueReport(pairKey: string): string {
+  return `relative-value:${pairKey}`;
+}
+
+/**
+ * The stored relative-value view for a pair. Runs made before pairs were
+ * generalised stored the single gold/silver view as `relative-value`; that row
+ * is read for the legacy 'gold-silver' key until the next recompute.
+ */
+export function readRelativeValue<T>(pairKey: string): T | null {
+  return readReport<T>(relativeValueReport(pairKey)) ?? (pairKey === "gold-silver" ? readReport<T>("relative-value") : null);
 }
 
 export function latestRun(): QuantRunRow | null {
@@ -77,10 +93,10 @@ export function readSeasonalityDetail(id: string): SeasonalityDetail | null {
   return r ? (JSON.parse(r.seasonality) as SeasonalityDetail | null) : null;
 }
 
-export function listInstruments(metal?: string): InstrumentListItem[] {
-  return getDb()
-    .prepare(
-      `SELECT id, label, kind, metal FROM quant_instruments WHERE (? IS NULL OR metal = ? OR id LIKE 'GS.%') ORDER BY id`,
-    )
-    .all(metal ?? null, metal ?? null) as InstrumentListItem[];
+/** Instruments of one asset (plus the relative-value pairs it takes part in), or all. */
+export function listInstruments(asset?: AssetId): InstrumentListItem[] {
+  const rows = getDb().prepare(`SELECT id, label, kind, metal FROM quant_instruments ORDER BY id`).all() as InstrumentListItem[];
+  if (!asset) return rows;
+  const pairs = new Set(pairsForAsset(asset).map((p) => p.id));
+  return rows.filter((r) => r.metal === asset || pairs.has(r.id.split(".")[0]));
 }

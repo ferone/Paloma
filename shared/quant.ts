@@ -1,7 +1,7 @@
 // Quant Lab API contracts (/api/quant/*). Owned by the quant domain.
 // Server: server/quant/*. Client: src/features/quant/*.
 import type { Provenance } from './api.js'
-import type { Metal } from './universe.js'
+import type { AssetId } from './universe.js'
 
 export type QuantMode = 'conservative' | 'aggressive'
 export type OosStatus = 'passed' | 'failed' | 'untested'
@@ -224,7 +224,8 @@ export interface DecisionView {
 /** One row of the ranked scanner. */
 export interface QuantOpportunity {
   id: string
-  metal: Metal
+  /** Asset id (wire name kept as `metal` for compatibility). */
+  metal: AssetId
   label: string
   kind: QuantKind
   product: string
@@ -250,7 +251,8 @@ export interface QuantOpportunity {
 }
 
 export interface QuantSnapshot {
-  metal: Metal
+  /** Asset id (wire name kept as `metal` for compatibility). */
+  metal: AssetId
   asOf: string
   dataThrough: string | null
   engine: EngineInfo
@@ -262,7 +264,8 @@ export interface QuantSnapshot {
 }
 
 export interface OpportunitiesResponse {
-  metal: Metal
+  /** Asset id (wire name kept as `metal` for compatibility). */
+  metal: AssetId
   mode: QuantMode
   asOf: string
   dataThrough: string | null
@@ -290,7 +293,8 @@ export interface InstrumentDetail {
   id: string
   label: string
   kind: QuantKind
-  metal: Metal
+  /** Asset id (wire name kept as `metal` for compatibility). */
+  metal: AssetId
   product: string
   unit: string
   pointValue: number
@@ -346,7 +350,8 @@ export interface SeasonalityDetail {
   id: string
   label: string
   kind: QuantKind
-  metal: Metal
+  /** Asset id (wire name kept as `metal` for compatibility). */
+  metal: AssetId
   unit: string
   /** 1 = calendar day-of-year axis; > 1 = season-day axis starting at this day-of-year. */
   originDoy: number
@@ -371,8 +376,14 @@ export interface RatioBandPoint {
   sd: number | null
 }
 
+/**
+ * One relative-value pair from `RELATIVE_VALUE_PAIRS` (`pair` = its `key`, e.g.
+ * 'gold-silver'). Numerator/denominator assets and their front futures come from
+ * the universe; the payload keeps its original field names for compatibility.
+ */
 export interface RelativeValueDetail {
-  pair: 'gold-silver'
+  /** `RelativeValuePair.key`. */
+  pair: string
   asOf: string
   dataThrough: string | null
   ratio: {
@@ -385,14 +396,18 @@ export interface RelativeValueDetail {
     ou: OuView | null
     oos: OosView
     verdicts: Record<QuantMode, VerdictView>
-    /** Contracts of SI per 1 GC for a dollar-neutral ratio trade at the current prices. */
+    /**
+     * Dollar-neutral ratio trade at the current front prices. Legacy field names:
+     * `goldContracts` = NUMERATOR contracts (always 1), `silverContracts` =
+     * DENOMINATOR contracts per 1 numerator contract.
+     */
     hedge: { goldContracts: number; silverContracts: number; note: string }
   }
   spread: {
     latest: number
     z: number | null
     sigma: number | null
-    /** SI contracts per 1 GC that equalise trailing dollar volatility. */
+    /** Denominator contracts per 1 numerator contract that equalise trailing dollar volatility. */
     volParityRatio: number | null
     series: SeriesBandPoint[]
     ou: OuView | null
@@ -421,7 +436,8 @@ export interface CurvePointView {
 
 export interface CurveView {
   root: string
-  metal: Metal
+  /** Asset id (wire name kept as `metal` for compatibility). */
+  metal: AssetId
   asOf: string | null
   regime: 'contango' | 'backwardation' | 'flat' | 'mixed' | 'unknown'
   /** Annualized carry between the first two active contracts. */
@@ -473,7 +489,8 @@ export interface BacktestDecisionRow {
 }
 
 export interface BacktestView {
-  metal: Metal
+  /** Asset id (wire name kept as `metal` for compatibility). */
+  metal: AssetId
   mode: QuantMode
   start: string
   end: string
@@ -513,7 +530,8 @@ export interface GateAblationRow {
 }
 
 export interface GatesResponse {
-  metal: Metal
+  /** Asset id (wire name kept as `metal` for compatibility). */
+  metal: AssetId
   decisions: number
   rows: GateAblationRow[]
   note: string
@@ -530,5 +548,6 @@ export interface InstrumentListItem {
   id: string
   label: string
   kind: QuantKind
-  metal: Metal
+  /** Asset id (wire name kept as `metal` for compatibility). */
+  metal: AssetId
 }

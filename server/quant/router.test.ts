@@ -105,6 +105,15 @@ describe("/api/quant", () => {
     const rv = await get<RelativeValueDetail>("/api/quant/relative-value?pair=gold-silver");
     expect(rv.body.pair).toBe("gold-silver");
     expect(rv.body.ratio.series.length).toBeGreaterThan(1000);
+    // The pair defaults to the first configured one.
+    expect((await get<RelativeValueDetail>("/api/quant/relative-value")).body.pair).toBe("gold-silver");
+
+    // `?asset=` is the generic spelling of `?metal=`; both list the pair's instruments.
+    const bySilver = await get<{ id: string }[]>("/api/quant/instruments?asset=silver");
+    expect(bySilver.body.some((i) => i.id === "GS.ratio")).toBe(true);
+    expect(bySilver.body.some((i) => i.id.startsWith("GC."))).toBe(false);
+    expect((await get<{ id: string }[]>("/api/quant/instruments?metal=silver")).body).toEqual(bySilver.body);
+    expect((await get<QuantSnapshot>("/api/quant/snapshot?asset=silver")).body.metal).toBe("silver");
 
     const curve = await get<CurveView>("/api/quant/curve/GC?live=0");
     expect(curve.body.root).toBe("GC");

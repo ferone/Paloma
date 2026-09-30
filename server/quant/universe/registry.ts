@@ -1,36 +1,45 @@
 import type { Instrument } from "../types/index.js";
-import { UNIVERSE, METALS, type Metal } from "../../../shared/universe.js";
+import { ASSETS, UNIVERSE, type AssetId, type FuturesProduct } from "../../../shared/universe.js";
+import { GLBX, pairInstruments, resolvedPairs } from "./pairs.js";
 
 /**
- * The instrument universe the quant engine analyzes — gold and silver,
- * symmetric. Each entry is a weighted basket of CONTINUOUS legs (`<root>.c.N`,
- * stitched from specific Databento GLBX.MDP3 contracts restricted to the
- * product's ACTIVE months — see `data/continuous.ts`) with a `pointValue` ($ per
- * 1.0 of the combined value per contract — the "dollar meter").
+ * The instrument universe the quant engine analyzes, generated from
+ * `shared/universe.ts`: every futures root of every asset, plus the
+ * relative-value pairs of `RELATIVE_VALUE_PAIRS`. Each entry is a weighted
+ * basket of CONTINUOUS legs (`<root>.c.N`, stitched from specific Databento
+ * GLBX.MDP3 contracts restricted to the product's ACTIVE months — see
+ * `data/continuous.ts`) with a `pointValue` ($ per 1.0 of the combined value per
+ * contract — the "dollar meter").
  *
- * Per futures root (GC, MGC, SI, SIL):
+ * Per futures root (e.g. GC, MGC, SI, SIL):
  *   X.out        +1·c0                 front outright
  *   X.cal.0-1    +1·c0 −1·c1           front calendar
  *   X.cal.1-2    +1·c1 −1·c2           deferred calendar
  *   X.fly.0-1-2  +1·c0 −2·c1 +1·c2     butterfly (= −2·curvature)
  *
- * Relative value (gold vs silver):
- *   GS.ratio     GC.c0 / SI.c0         the gold/silver ratio (non-linear; built directly)
- *   GS.spread    +100·GC.c0 −5000·SI.c0  one-contract dollar-notional spread ($-absorbed
- *                                        weights ⇒ pointValue 1); read through its z (vol-normalised)
+ * Relative value per pair (see `pairs.ts`), e.g. gold/silver:
+ *   GS.ratio     GC.c0 / SI.c0              the gold/silver ratio (non-linear; built directly)
+ *   GS.spread    +100·GC.c0 −5000·SI.c0     one-contract dollar-notional spread (weights are
+ *                                            each leg's pointValue ⇒ pointValue 1)
  *
- * Metals carry NO fundamentals (no USDA-style supply index), so the engine's
- * fundamental factor is neutral by design (F = 0 ⇒ fund_factor = 0).
- * The micro contracts (MGC, SIL) are sizing mirrors of the full-size curve.
+ * The universe carries NO fundamentals (no USDA-style supply index), so the
+ * engine's fundamental factor is neutral by design (F = 0 ⇒ fund_factor = 0).
+ * An asset's first futures product is its full-size contract; the rest (MGC,
+ * SIL, …) are sizing mirrors of the same curve.
  */
 
-export const GLBX = "GLBX.MDP3";
+export { GLBX };
 
 function leg(root: string, n: number) {
   return `${root}.c.${n}`;
 }
 
-function structures(root: string, metal: Metal, name: string, pointValue: number): Instrument[] {
+/** Product name without its exchange prefix ("COMEX Micro Gold" → "Micro Gold"). */
+function displayName(f: FuturesProduct): string {
+  return f.name.replace(new RegExp(`^${f.exchange} `), "");
+}
+
+function structures(root: string, metal: AssetId, name: string, pointValue: number): Instrument[] {
   const base = { product: root, metal, pointValue, dataset: GLBX, stypeIn: "continuous" } as const;
   return [
     { ...base, id: `${root}.out`, label: `${name} — front outright`, kind: "outright", legs: [{ symbol: leg(root, 0), weight: 1 }] },
@@ -68,47 +77,16 @@ function structures(root: string, metal: Metal, name: string, pointValue: number
   ];
 }
 
-const GOLD = UNIVERSE.gold.futures[0];
-const SILVER = UNIVERSE.silver.futures[0];
-
-/** Relative-value instruments across the two metals (attributed to gold for the metal switch AND shown for silver). */
-export const RELATIVE_VALUE: Instrument[] = [
-  {
-    id: "GS.ratio",
-    label: "Gold/silver ratio (GC ÷ SI)",
-    product: "GS",
-    metal: "gold",
-    kind: "ratio",
-    legs: [
-      { symbol: leg(GOLD.root, 0), weight: 1 },
-      { symbol: leg(SILVER.root, 0), weight: -1 },
-    ],
-    // The ratio is a quotient, not a weighted sum: P&L is booked on a dollar-neutral
-    // pair ($100k notional per leg) through Δln(ratio) — see engine/run.ts.
-    pointValue: 1,
-    dataset: GLBX,
-    stypeIn: "continuous",
-  },
-  {
-    id: "GS.spread",
-    label: "Gold − silver dollar spread (1 GC vs 1 SI)",
-    product: "GS",
-    metal: "gold",
-    kind: "inter",
-    legs: [
-      { symbol: leg(GOLD.root, 0), weight: GOLD.pointValue },
-      { symbol: leg(SILVER.root, 0), weight: -SILVER.pointValue },
-    ],
-    pointValue: 1, // weights absorb $/point ⇒ the combined value is already dollars
-    dataset: GLBX,
-    stypeIn: "continuous",
-  },
-];
+/** Relative-value instruments for every resolvable pair (attributed to the numerator asset; shown for both). */
+export const RELATIVE_VALUE: Instrument[] = resolvedPairs().flatMap(pairInstruments);
 
 export const REGISTRY: Instrument[] = [
-  ...METALS.flatMap((metal) => UNIVERSE[metal].futures.flatMap((f) => structures(f.root, metal, f.name.replace(/^COMEX /, ""), f.pointValue))),
+  ...ASSETS.flatMap((asset) => UNIVERSE[asset].futures.flatMap((f) => structures(f.root, asset, displayName(f), f.pointValue))),
   ...RELATIVE_VALUE,
 ];
+
+/** Micro/mini roots: sizing mirrors of an asset's full-size curve (every product after the first). */
+export const MIRROR_ROOTS: ReadonlySet<string> = new Set(ASSETS.flatMap((a) => UNIVERSE[a].futures.slice(1).map((f) => f.root)));
 
 export function getInstrument(id: string): Instrument | undefined {
   return REGISTRY.find((i) => i.id === id);
@@ -119,7 +97,7 @@ export function allSymbols(): string[] {
   return [...new Set(REGISTRY.flatMap((i) => i.legs.map((l) => l.symbol)))];
 }
 
-/** Roots whose continuous legs the registry references (GC, MGC, SI, SIL). */
+/** Roots whose continuous legs the registry references (every futures root in the universe). */
 export function allRoots(): string[] {
   return [...new Set(allSymbols().map((s) => s.split(".")[0]))];
 }

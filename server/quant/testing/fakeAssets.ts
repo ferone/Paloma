@@ -5,7 +5,7 @@ import type { AssetId, AssetSpec, FuturesProduct } from "../../../shared/univers
  * (BTC, copper, platinum, palladium). Passed as PARAMETERS to the pure builders
  * so the generic code paths are exercised without touching `shared/universe.ts`.
  */
-export function fakeAsset(over: Partial<AssetSpec> & { id?: string } = {}): AssetSpec {
+export function fakeAsset(over: Omit<Partial<AssetSpec>, "id"> & { id?: string } = {}): AssetSpec {
   const id = (over.id ?? "fake") as AssetId;
   return {
     label: "Fake",

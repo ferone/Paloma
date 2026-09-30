@@ -16,7 +16,8 @@ import type {
   SeasonalWindowView,
   StructuralPoint,
 } from "../../../shared/quant.js";
-import type { Metal } from "../../../shared/universe.js";
+import { UNIVERSE, assetOfRoot, type AssetId } from "../../../shared/universe.js";
+import { dollarNeutralHedge, pairById, pairLegs } from "../universe/pairs.js";
 import type { MlPredictionLite } from "../../../shared/artifacts.js";
 import type { Config, Instrument, MlPrediction, PricePoint, QtParams, SeriesPoint } from "../types/index.js";
 import { buildAsOf } from "../features/buildAsOf.js";
@@ -61,7 +62,7 @@ import {
 
 const MODES: QuantMode[] = ["conservative", "aggressive"];
 
-/** Notional per leg for the dollar-neutral gold/silver ratio trade (P&L unit). */
+/** Notional per leg for a dollar-neutral ratio (pair) trade (P&L unit). */
 export const RATIO_NOTIONAL = 100_000;
 
 /** Shared, as-of context for one engine run. */
@@ -107,14 +108,25 @@ export function structureCost(inst: Instrument): CostConfig {
   if (inst.kind === "ratio") return { commission: 10, bidAsk: 30, slippage: 0 }; // per $100k/leg pair
   const contracts = inst.legs.reduce((s, l) => s + (inst.kind === "inter" ? 1 : Math.abs(l.weight)), 0);
   const roots = inst.legs.map((l) => l.symbol.split(".")[0]);
-  const tick = roots.reduce((s, r, i) => s + (SPECS[r]?.tickValue ?? 10) * (inst.kind === "inter" ? 1 : Math.abs(inst.legs[i].weight)), 0);
+  // Every registry root has a generated spec; an unknown root contributes no tick cost.
+  const tick = roots.reduce((s, r, i) => s + (SPECS[r]?.tickValue ?? 0) * (inst.kind === "inter" ? 1 : Math.abs(inst.legs[i].weight)), 0);
   return { commission: 5 * contracts, bidAsk: tick, slippage: 0 };
 }
 
-function unitFor(kind: QuantKind, product: string): string {
+/** Price unit of a product ("$/oz", "$/lb", "$/BTC"), from its spec or else its asset. */
+function priceUnitOf(product: string, asset: AssetId): string {
+  return SPECS[product]?.priceUnit ?? UNIVERSE[asset].unitLabel;
+}
+
+function unitFor(kind: QuantKind, product: string, asset: AssetId): string {
   if (kind === "ratio") return "ratio";
   if (kind === "inter") return "$";
-  return SPECS[product]?.priceUnit ?? "$/oz";
+  return priceUnitOf(product, asset);
+}
+
+/** Asset an instrument belongs to: its own tag, else its root's asset, else its pair's numerator. */
+function assetOfInstrument(inst: Instrument): AssetId | undefined {
+  return inst.metal ?? assetOfRoot(inst.legs[0]?.symbol.split(".")[0] ?? inst.product) ?? pairById(inst.product)?.numerator;
 }
 
 // ── ML ───────────────────────────────────────────────────────────────────────
@@ -213,7 +225,7 @@ export function seasonalityDetail(args: {
   id: string;
   label: string;
   kind: QuantKind;
-  metal: Metal;
+  metal: AssetId;
   unit: string;
   series: SeriesPoint[];
   pointValue: number;
@@ -346,11 +358,12 @@ export function analyzeContinuous(inst: Instrument, series: SeriesPoint[], ctx: 
   const history = series.filter((p) => p.date <= ctx.asOf);
   if (history.length < cfg.N + 20) return null;
   const asOf = history[history.length - 1].date;
-  const metal = (inst.metal ?? "gold") as Metal;
+  const metal = assetOfInstrument(inst);
+  if (!metal) return null;
   const kind = inst.kind as QuantKind;
   const values = history.map((p) => p.value);
   const prices: PricePoint[] = history.map((p) => ({ date: p.date, spread: p.value, volume: p.volume }));
-  const unit = unitFor(kind, inst.product);
+  const unit = unitFor(kind, inst.product, metal);
   const pv = kind === "ratio" ? 1 : inst.pointValue;
 
   const row = scoreAsOf(inst.id, buildAsOf(asOf, prices, []), cfg, "qt");
@@ -425,7 +438,7 @@ export function analyzeContinuous(inst: Instrument, series: SeriesPoint[], ctx: 
   const ml = mlForEngine(mlLite, inst.id, direction);
 
   const legs = resolveLegs(inst, ctx, direction, asOf);
-  const ratioHedge = kind === "ratio" ? ratioSilverPerGold(history, ctx) : undefined;
+  const ratioHedge = kind === "ratio" ? ratioHedgeFor(inst, history, ctx) : undefined;
   const text = legText(inst, legs, ratioHedge);
 
   const verdicts = Object.fromEntries(
@@ -505,9 +518,14 @@ export function analyzeContinuous(inst: Instrument, series: SeriesPoint[], ctx: 
   const caveats: string[] = [];
   if (kind !== "ratio" && kind !== "inter")
     caveats.push("Continuous legs splice contracts at each roll (before first position day); rolling z carries small roll gaps.");
-  if (kind === "ratio")
-    caveats.push(`Ratio P&L is booked on a dollar-neutral pair ($${RATIO_NOTIONAL / 1000}k gold vs $${RATIO_NOTIONAL / 1000}k silver) through Δln(ratio).`);
-  if (kind === "inter") caveats.push("1 GC vs 1 SI is not dollar-neutral; size with the vol-parity ratio on the Relative Value page.");
+  const pair = kind === "ratio" || kind === "inter" ? pairById(inst.product) : undefined;
+  const pairLegsOf = pair ? pairLegs(pair) : null;
+  if (kind === "ratio" && pairLegsOf) {
+    const [n, d] = [pairLegsOf.num.label.toLowerCase(), pairLegsOf.den.label.toLowerCase()];
+    caveats.push(`Ratio P&L is booked on a dollar-neutral pair ($${RATIO_NOTIONAL / 1000}k ${n} vs $${RATIO_NOTIONAL / 1000}k ${d}) through Δln(ratio).`);
+  }
+  if (kind === "inter" && pairLegsOf)
+    caveats.push(`1 ${pairLegsOf.numFut.root} vs 1 ${pairLegsOf.denFut.root} is not dollar-neutral; size with the vol-parity ratio on the Relative Value page.`);
   if (mirror) caveats.push("Micro contract: a sizing mirror of the full-size curve, not an independent signal.");
   caveats.push("Exchange holidays are not modelled in the roll calendar.");
 
@@ -618,14 +636,17 @@ function rowsFor(
   return { conservative: { ...base, verdict: d.verdicts.conservative }, aggressive: { ...base, verdict: d.verdicts.aggressive } };
 }
 
-/** SI contracts per 1 GC for a dollar-neutral ratio trade at the latest prices. */
-function ratioSilverPerGold(history: SeriesPoint[], ctx: RunContext): number | undefined {
-  const gc = ctx.curves.get("GC");
-  const si = ctx.curves.get("SI");
-  const g = gc?.[gc.length - 1]?.c0;
-  const s = si?.[si.length - 1]?.c0;
-  if (!g || !s || history.length === 0) return undefined;
-  return (g * (SPECS.GC?.pointValue ?? 100)) / (s * (SPECS.SI?.pointValue ?? 5000));
+/** Denominator contracts per 1 numerator contract for a dollar-neutral ratio trade at the latest prices. */
+function ratioHedgeFor(inst: Instrument, history: SeriesPoint[], ctx: RunContext): number | undefined {
+  const pair = pairById(inst.product);
+  const legs = pair ? pairLegs(pair) : null;
+  if (!legs) return undefined;
+  const nc = ctx.curves.get(legs.numFut.root);
+  const dc = ctx.curves.get(legs.denFut.root);
+  const n = nc?.[nc.length - 1]?.c0;
+  const d = dc?.[dc.length - 1]?.c0;
+  if (!n || !d || history.length === 0) return undefined;
+  return dollarNeutralHedge(n, d, legs);
 }
 
 // ── seasonal pair spreads (roll-clean) ──────────────────────────────────────
@@ -637,7 +658,7 @@ export function analyzeSeasonal(s: MetalSeasonalSeries, ctx: RunContext): Analyz
   const asOf = ctx.asOf;
   const pv = spec.pointValue;
   const metal = spec.metal;
-  const unit = SPECS[spec.product]?.priceUnit ?? "$/oz";
+  const unit = priceUnitOf(spec.product, metal);
   // Same friction as a front calendar on the product (2 contracts).
   const cost = structureCost({
     id: spec.id,

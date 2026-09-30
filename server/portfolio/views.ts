@@ -1,5 +1,6 @@
 // Response builders: turn an engine run into the /api/portfolio shapes.
 import type { Provenance } from '../../shared/api.js'
+import { fallbackWarnings } from './fallback.js'
 import type { AssetId, AssetSpec } from '../../shared/universe.js'
 import { ASSETS, MACRO_SYMBOLS, UNIVERSE, physicalAssets } from '../../shared/universe.js'
 import {
@@ -152,7 +153,7 @@ export function buildHoldings(c: Computed): HoldingsResponse {
     holdings: buildHoldingViews(c),
     cash,
     totalCash: last?.cash ?? 0,
-    warnings: [...c.run.warnings, ...c.prices.errors.map((e) => `Price fetch failed: ${e}`)],
+    warnings: [...c.run.warnings, ...fallbackWarnings(c), ...c.prices.errors.map((e) => `Price fetch failed: ${e}`)],
     provenance: provenance(c),
   }
 }
@@ -208,7 +209,7 @@ export function buildSummary(c: Computed): PortfolioSummary {
     totalPnl: 0,
     netContributions: 0,
     transactionCount: c.txns.length,
-    warnings: [...c.run.warnings],
+    warnings: [...c.run.warnings, ...fallbackWarnings(c)],
     provenance: provenance(c),
   }
   if (!last) return empty

@@ -11,6 +11,7 @@ import { runLedger, type EngineRun } from './engine/ledger.js'
 import { loadPrices, type LoadedPrices } from './prices.js'
 import { getPortfolioSettings, instrumentMap, listAccounts, listPhysical, listTransactions, replaceDerived } from './repo.js'
 import { buildSummary } from './views.js'
+import { fallbackMarks } from './fallback.js'
 
 export interface Computed {
   txns: Transaction[]
@@ -27,7 +28,7 @@ export interface Computed {
 
 const MAX_AGE_MS = 15 * 60_000
 let version = 0
-let cache: { v: number; at: number; c: Computed } | null = null
+let cache: { v: number; at: number; c: Computed; maxAge: number } | null = null
 let inflight: { v: number; p: Promise<Computed> } | null = null
 let lastStamp = -1
 
@@ -116,6 +117,9 @@ export function toLite(s: PortfolioSummaryLite): PortfolioSummaryLite {
   return { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byMetal }
 }
 
+/** A result with fallback marks is re-computed after this long instead of MAX_AGE_MS. */
+const FALLBACK_MAX_AGE_MS = 60_000
+
 /** Latest computation (cached ≤ 15 min unless the ledger changed). `force` refetches prices. */
 export function getComputed(opts: { force?: boolean } = {}): Promise<Computed> {
   const force = !!opts.force
@@ -125,12 +129,12 @@ export function getComputed(opts: { force?: boolean } = {}): Promise<Computed> {
     lastStamp = stamp
     version++
   }
-  if (!force && cache && cache.v === version && Date.now() - cache.at < MAX_AGE_MS) return Promise.resolve(cache.c)
+  if (!force && cache && cache.v === version && Date.now() - cache.at < cache.maxAge) return Promise.resolve(cache.c)
   if (!force && inflight && inflight.v === version) return inflight.p
   const v = version
   const p = compute(force)
     .then((c) => {
-      if (v === version) cache = { v, at: Date.now(), c }
+      if (v === version) cache = { v, at: Date.now(), c, maxAge: fallbackMarks(c).length ? FALLBACK_MAX_AGE_MS : MAX_AGE_MS }
       return c
     })
     .finally(() => {

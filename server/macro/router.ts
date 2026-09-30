@@ -1,16 +1,14 @@
 import { Router } from 'express'
-import { METALS, type Metal } from '../../shared/universe.js'
-import type { CotMarket } from '../../shared/macro.js'
+import { parseAssetId } from '../../shared/universe.js'
 import { JobBusyError, jobStatus, runJob } from '../jobs/registry.js'
 import { registerMacroJobs } from './jobs.js'
-import { buildDashboard, correlationResponse, cotResponse, seriesResponse } from './service.js'
+import { buildDashboard, correlationResponse, cotMarkets, cotResponse, seriesResponse } from './service.js'
 
 // /api/macro — dashboard, series, COT positioning, correlations, refresh.
 registerMacroJobs()
 
 export const router = Router()
 
-const metalOf = (v: unknown): Metal => (METALS.includes(v as Metal) ? (v as Metal) : 'gold')
 const ISO = /^\d{4}-\d{2}-\d{2}$/
 
 router.get('/health', (_req, res) => {
@@ -18,7 +16,7 @@ router.get('/health', (_req, res) => {
 })
 
 router.get('/dashboard', (req, res) => {
-  res.json(buildDashboard(metalOf(req.query.metal)))
+  res.json(buildDashboard(parseAssetId(req.query.asset ?? req.query.metal)))
 })
 
 router.get('/series', (req, res) => {
@@ -36,18 +34,19 @@ router.get('/series', (req, res) => {
 })
 
 router.get('/cot', (req, res) => {
-  const m = String(req.query.market ?? 'GOLD').toUpperCase()
-  if (m !== 'GOLD' && m !== 'SILVER') {
-    res.status(400).json({ error: 'market must be GOLD or SILVER' })
+  const known = cotMarkets().map((c) => c.market)
+  const r = cotResponse(String(req.query.market ?? known[0] ?? ''))
+  if (!r) {
+    res.status(400).json({ error: `market must be one of ${known.join(', ')}` })
     return
   }
-  res.json(cotResponse(m as CotMarket))
+  res.json(r)
 })
 
 router.get('/correlations', (req, res) => {
   const w = Number(req.query.window ?? 63)
   const window = w === 252 ? 252 : w === 126 ? 126 : 63
-  res.json(correlationResponse(metalOf(req.query.metal), window))
+  res.json(correlationResponse(parseAssetId(req.query.asset ?? req.query.metal), window))
 })
 
 router.get('/refresh', (_req, res) => {

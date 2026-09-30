@@ -1,9 +1,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { UNIVERSE, type Metal } from '../../shared/universe.js'
-import { FEATURES } from '../../shared/ml.js'
+import { ASSETS, MACRO_SYMBOLS, RELATIVE_VALUE_PAIRS, UNIVERSE, type AssetId } from '../../shared/universe.js'
+import { featuresFor } from '../../shared/ml.js'
 import { readDailyBars, upsertDailyBars, type DailyBar } from '../db/repo.js'
-import { listContracts, readCot, readMacro, readRootBars } from '../db/shared-repo.js'
+import { listContracts, readMacro, readRootBars } from '../db/shared-repo.js'
+import { readSpeculator } from '../macro/cot-repo.js'
 import { getHistorical } from '../services/yahoo-finance.service.js'
 import { buildCurveSeries } from './curve.js'
 import { buildFeatureMatrix, matrixToCsv, type FeatureMatrix, type MacroId, type PricePoint } from './features.js'
@@ -11,7 +12,17 @@ import { buildFeatureMatrix, matrixToCsv, type FeatureMatrix, type MacroId, type
 // Loads the ML inputs from SQLite (fetching Yahoo history when missing or
 // stale) and writes the feature matrix for the Python pipeline.
 
-export const ML_SYMBOLS = ['GC=F', 'SI=F', 'DX-Y.NYB', '^TNX', '^VIX', 'SPY', 'GLD', 'SLV'] as const
+/** Yahoo inputs: every asset's reference series, the cross-asset factors, every benchmark ETF. */
+export const ML_SYMBOLS: readonly string[] = [
+  ...new Set([
+    ...ASSETS.map((a) => UNIVERSE[a].spot),
+    MACRO_SYMBOLS.dxy,
+    MACRO_SYMBOLS.us10y,
+    MACRO_SYMBOLS.vix,
+    MACRO_SYMBOLS.spx,
+    ...ASSETS.map((a) => UNIVERSE[a].benchmarkEtf),
+  ]),
+]
 const MACRO_IDS: MacroId[] = ['DFII10', 'T10YIE', 'DTWEXBGS', 'VIXCLS', 'GVZCLS']
 /** We want at least this much history (≥15 years) where Yahoo has it. */
 const HISTORY_FROM = '2008-01-01'
@@ -83,8 +94,13 @@ export async function refreshYahooInputs(log: (m: string) => void = () => {}): P
 
 const toPoints = (bars: DailyBar[]): PricePoint[] => bars.map((b) => ({ date: b.date, close: b.close, volume: b.volume ?? null }))
 
-/** Build the feature matrix for one metal from what is currently in the DB. */
-export function loadFeatureMatrix(metal: Metal): FeatureMatrix {
+/** The relative-value pair an asset belongs to (first match), or null. */
+function pairOf(asset: AssetId) {
+  return RELATIVE_VALUE_PAIRS.find((p) => p.numerator === asset || p.denominator === asset) ?? null
+}
+
+/** Build the feature matrix for one asset from what is currently in the DB. */
+export function loadFeatureMatrix(metal: AssetId): FeatureMatrix {
   const spec = UNIVERSE[metal]
   const front = spec.futures[0]
   const macro: Partial<Record<MacroId, { date: string; value: number }[]>> = {}
@@ -92,25 +108,30 @@ export function loadFeatureMatrix(metal: Metal): FeatureMatrix {
     const pts = readMacro(id)
     if (pts.length) macro[id] = pts.map((p) => ({ date: p.date, value: p.value }))
   }
-  const curve = buildCurveSeries(readRootBars(front.root), listContracts(front.root), front.activeMonths)
+  const curve = front ? buildCurveSeries(readRootBars(front.root), listContracts(front.root), front.activeMonths) : []
+  const pair = pairOf(metal)
   return buildFeatureMatrix({
     metal,
     spot: toPoints(yahooBars(spec.spot)),
-    gold: toPoints(yahooBars('GC=F')),
-    silver: toPoints(yahooBars('SI=F')),
-    dxy: toPoints(yahooBars('DX-Y.NYB')),
-    tnx: toPoints(yahooBars('^TNX')),
-    vix: toPoints(yahooBars('^VIX')),
-    spy: toPoints(yahooBars('SPY')),
-    etf: toPoints(yahooBars(metal === 'gold' ? 'GLD' : 'SLV')),
+    pair: pair
+      ? { numerator: toPoints(yahooBars(UNIVERSE[pair.numerator].spot)), denominator: toPoints(yahooBars(UNIVERSE[pair.denominator].spot)) }
+      : null,
+    dxy: toPoints(yahooBars(MACRO_SYMBOLS.dxy)),
+    tnx: toPoints(yahooBars(MACRO_SYMBOLS.us10y)),
+    vix: toPoints(yahooBars(MACRO_SYMBOLS.vix)),
+    spy: toPoints(yahooBars(MACRO_SYMBOLS.spx)),
+    etf: toPoints(yahooBars(spec.benchmarkEtf)),
     macro,
-    cot: readCot(spec.cotMarket).map((r) => ({
-      reportDate: r.reportDate,
-      publishedAt: r.publishedAt,
-      openInterest: r.openInterest,
-      mmLong: r.mmLong,
-      mmShort: r.mmShort,
-    })),
+    // Speculator positions: managed money (disagg) or leveraged funds (TFF).
+    cot: spec.cot
+      ? readSpeculator(spec.cot.market, spec.cot.report).map((r) => ({
+          reportDate: r.reportDate,
+          publishedAt: r.publishedAt,
+          openInterest: r.openInterest,
+          specLong: r.long,
+          specShort: r.short,
+        }))
+      : [],
     curve,
   })
 }
@@ -124,8 +145,8 @@ export interface ExportedFeatures {
   missing: Record<string, string>
 }
 
-/** Write data/ml/features_<metal>.csv (+ meta JSON with missing-feature reasons). */
-export function exportFeatures(metal: Metal, dir = mlDataDir()): ExportedFeatures {
+/** Write data/ml/features_<asset>.csv (+ meta JSON with missing-feature reasons). */
+export function exportFeatures(metal: AssetId, dir = mlDataDir()): ExportedFeatures {
   const m = loadFeatureMatrix(metal)
   if (m.rows.length < 500) {
     throw new Error(`Not enough ${UNIVERSE[metal].spot} history in prices_daily (${m.rows.length} rows)`)
@@ -142,7 +163,7 @@ export function exportFeatures(metal: Metal, dir = mlDataDir()): ExportedFeature
     dataFrom: m.rows[0]?.date ?? null,
     dataThrough: m.rows.at(-1)?.date ?? null,
     missing: m.missing,
-    features: FEATURES.map((f) => ({ id: f.id, optional: f.optional })),
+    features: featuresFor(metal).map((f) => ({ id: f.id, optional: f.optional })),
   }
   writeFileSync(metaPath, JSON.stringify(meta, null, 2))
   return { csvPath, metaPath, rows: m.rows.length, dataFrom: meta.dataFrom, dataThrough: meta.dataThrough, missing: m.missing }

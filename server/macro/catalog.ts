@@ -1,4 +1,5 @@
-import type { MacroSeriesMeta } from '../../shared/macro.js'
+import { priceSeriesId, type MacroSeriesMeta } from '../../shared/macro.js'
+import { ASSETS, RELATIVE_VALUE_PAIRS, UNIVERSE, type AssetClass, type AssetId, type PriceUnit, type RelativeValuePair } from '../../shared/universe.js'
 
 // Every macro series the app stores in macro_series, with display metadata.
 // FRED ids are fetched verbatim; derived ids are computed in service.ts.
@@ -120,7 +121,47 @@ export const FRED_SERIES: MacroSeriesMeta[] = [
     source: 'fred',
     url: fredUrl('GVZCLS'),
   },
+  {
+    id: 'INDPRO',
+    label: 'Industrial production',
+    description: 'US industrial production index (2017 = 100), seasonally adjusted: output of factories, mines and utilities.',
+    unit: 'index',
+    changeKind: 'pct',
+    frequency: 'monthly',
+    source: 'fred',
+    url: fredUrl('INDPRO'),
+  },
 ]
+
+const yahooUrl = (symbol: string) => `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`
+
+const UNIT_WORD: Record<PriceUnit, [string, string]> = { oz: ['ounce', 'Ounces'], lb: ['pound', 'Pounds'], BTC: ['bitcoin', 'Bitcoins'] }
+
+/** Series id of a relative-value pair's price ratio (GS -> GSR). */
+export const ratioSeriesId = (p: RelativeValuePair): string => `${p.id}R`
+
+/** Display label of a pair ratio, e.g. "Gold/silver ratio". */
+export const ratioLabel = (p: RelativeValuePair): string => `${UNIVERSE[p.numerator].label}/${UNIVERSE[p.denominator].label.toLowerCase()} ratio`
+
+/** Catalog entry for a pair ratio: numerator / denominator reference closes (Yahoo). */
+export function ratioSeriesMeta(p: RelativeValuePair): MacroSeriesMeta {
+  const num = UNIVERSE[p.numerator]
+  const den = UNIVERSE[p.denominator]
+  const exNum = num.futures[0]?.exchange
+  const venue = exNum && exNum === den.futures[0]?.exchange ? `${exNum} front-month closes` : 'reference closes'
+  const numL = num.label.toLowerCase()
+  const denL = den.label.toLowerCase()
+  return {
+    id: ratioSeriesId(p),
+    label: ratioLabel(p),
+    description: `${UNIT_WORD[den.priceUnit][1]} of ${denL} needed to buy one ${UNIT_WORD[num.priceUnit][0]} of ${numL} (${venue} ${num.spot} / ${den.spot}). A high ratio means ${denL} is cheap relative to ${numL}.`,
+    unit: 'ratio',
+    changeKind: 'pct',
+    frequency: 'daily',
+    source: 'yahoo',
+    url: yahooUrl(num.spot),
+  }
+}
 
 export const DERIVED_SERIES: MacroSeriesMeta[] = [
   {
@@ -153,17 +194,7 @@ export const DERIVED_SERIES: MacroSeriesMeta[] = [
     source: 'derived',
     url: null,
   },
-  {
-    id: 'GSR',
-    label: 'Gold/silver ratio',
-    description:
-      'Ounces of silver needed to buy one ounce of gold (COMEX front-month closes GC=F / SI=F). A high ratio means silver is cheap relative to gold.',
-    unit: 'ratio',
-    changeKind: 'pct',
-    frequency: 'daily',
-    source: 'yahoo',
-    url: 'https://finance.yahoo.com/quote/GC%3DF',
-  },
+  ...RELATIVE_VALUE_PAIRS.map(ratioSeriesMeta),
   {
     id: 'DXY',
     label: 'US dollar index (DXY)',
@@ -174,32 +205,52 @@ export const DERIVED_SERIES: MacroSeriesMeta[] = [
     source: 'yahoo',
     url: 'https://finance.yahoo.com/quote/DX-Y.NYB',
   },
+  {
+    id: 'INDPRO_YOY',
+    label: 'Industrial production growth (YoY)',
+    description: 'Year-over-year change in INDPRO, computed from the monthly index level.',
+    unit: 'percent',
+    changeKind: 'diff',
+    frequency: 'monthly',
+    source: 'derived',
+    url: fredUrl('INDPRO'),
+  },
+  {
+    id: 'QQQ',
+    label: 'Nasdaq-100 (QQQ)',
+    description: 'Invesco QQQ, the Nasdaq-100 ETF: a proxy for growth and tech risk appetite, which crypto tends to trade with.',
+    unit: 'usd',
+    changeKind: 'pct',
+    frequency: 'daily',
+    source: 'yahoo',
+    url: 'https://finance.yahoo.com/quote/QQQ',
+  },
 ]
 
-/** Price series read from prices_daily (Yahoo), exposed through /api/macro/series. */
+export { priceSeriesId }
+
+function assetPriceSeries(a: AssetId): MacroSeriesMeta & { symbol: string } {
+  const s = UNIVERSE[a]
+  const exchange = s.futures[0]?.exchange
+  const isFront = !!exchange && s.futures.some((f) => f.yahoo === s.spot)
+  return {
+    id: priceSeriesId(a),
+    symbol: s.spot,
+    label: isFront ? `${s.label} (${exchange} front)` : s.label,
+    description: isFront
+      ? `${exchange} ${s.label.toLowerCase()} front-month settlement proxy (Yahoo ${s.spot}), ${s.unitLabel}.`
+      : `${s.label} reference price (Yahoo ${s.spot}), ${s.unitLabel}.`,
+    unit: 'usd',
+    changeKind: 'pct',
+    frequency: 'daily',
+    source: 'yahoo',
+    url: yahooUrl(s.spot),
+  }
+}
+
+/** Price series read from prices_daily (Yahoo), exposed through /api/macro/series: every asset in the universe, then SPY. */
 export const PRICE_SERIES: (MacroSeriesMeta & { symbol: string })[] = [
-  {
-    id: 'GOLD',
-    symbol: 'GC=F',
-    label: 'Gold (COMEX front)',
-    description: 'COMEX gold front-month settlement proxy (Yahoo GC=F), $/oz.',
-    unit: 'usd',
-    changeKind: 'pct',
-    frequency: 'daily',
-    source: 'yahoo',
-    url: 'https://finance.yahoo.com/quote/GC%3DF',
-  },
-  {
-    id: 'SILVER',
-    symbol: 'SI=F',
-    label: 'Silver (COMEX front)',
-    description: 'COMEX silver front-month settlement proxy (Yahoo SI=F), $/oz.',
-    unit: 'usd',
-    changeKind: 'pct',
-    frequency: 'daily',
-    source: 'yahoo',
-    url: 'https://finance.yahoo.com/quote/SI%3DF',
-  },
+  ...ASSETS.map(assetPriceSeries),
   {
     id: 'SPY',
     symbol: 'SPY',
@@ -219,7 +270,34 @@ export function seriesMeta(id: string): MacroSeriesMeta | undefined {
   return ALL_SERIES.find((s) => s.id === id)
 }
 
-export const COT_MARKETS = {
-  GOLD: { code: '088691', name: 'GOLD - COMMODITY EXCHANGE INC.' },
-  SILVER: { code: '084691', name: 'SILVER - COMMODITY EXCHANGE INC.' },
-} as const
+/**
+ * Series only some asset classes need. Anything not listed applies to every
+ * class. A class's series are fetched and shown only once an asset of that
+ * class exists in the universe.
+ */
+export const SERIES_CLASSES: Record<string, AssetClass[]> = {
+  INDPRO: ['industrial'],
+  INDPRO_YOY: ['industrial'],
+  QQQ: ['crypto'],
+  // GLD implied vol: shown for precious metals only (ML declares its own gold+silver list).
+  GVZCLS: ['precious'],
+}
+
+/** Asset classes present in the universe. */
+export function activeClasses(): Set<AssetClass> {
+  return new Set(ASSETS.map((a) => UNIVERSE[a].assetClass))
+}
+
+/** Whether a catalog series is relevant to an asset class. */
+export function seriesForClass(id: string, cls: AssetClass): boolean {
+  const only = SERIES_CLASSES[id]
+  return !only || only.includes(cls)
+}
+
+/** Whether any asset in the universe needs the series (refresh jobs skip the rest). */
+export function seriesActive(id: string): boolean {
+  const only = SERIES_CLASSES[id]
+  if (!only) return true
+  const active = activeClasses()
+  return only.some((c) => active.has(c))
+}

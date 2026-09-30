@@ -1,4 +1,4 @@
-"""Feature matrix loading + feature selection for the gold/silver ML pipeline.
+"""Feature matrix loading + feature selection for the per-asset ML pipeline.
 
 The matrix is built in TypeScript (server/ml/features.ts) so the look-ahead rules
 live in one tested place; this module only reads it. Every feature at row t uses

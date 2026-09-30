@@ -7,8 +7,8 @@ import { UNIVERSE } from '@shared/universe'
 import { errorMessage, useMacroDashboard, useMacroRefresh } from './api'
 
 export function MacroLayout() {
-  const { metal } = useSettings()
-  const dash = useMacroDashboard(metal)
+  const { asset } = useSettings()
+  const dash = useMacroDashboard(asset)
   const refresh = useMacroRefresh()
   const jobs = dash.data?.refresh
   const running = !!jobs && [jobs.all, jobs.fred, jobs.cot].some((j) => j?.state === 'running')
@@ -18,9 +18,9 @@ export function MacroLayout() {
   return (
     <>
       <PageHeader
-        eyebrow={`Research · ${UNIVERSE[metal].label}`}
+        eyebrow={`Research · ${UNIVERSE[asset].label}`}
         title="Macro &amp; AI"
-        description="Real yields, the dollar, inflation, positioning and correlations, scored transparently for the metal in focus, plus sourced AI briefs."
+        description="Real yields, the dollar, inflation, positioning and correlations, scored transparently for the asset in focus, plus sourced AI briefs."
         actions={
           <div className="flex items-center gap-3">
             <span className="text-2xs text-muted" aria-live="polite">

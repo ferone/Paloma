@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import type { AiSettings, ReportKind } from '../../shared/ai.js'
 import { REPORT_KINDS } from '../../shared/ai.js'
-import { METALS, type Metal } from '../../shared/universe.js'
+import { isAssetId } from '../../shared/universe.js'
 import { env } from '../lib/env.js'
 import { deleteReport, failOrphans, getReport, listReports } from './repo.js'
 import { aiStatus, getAiSettings, listModels, putAiSettings } from './settings.js'
@@ -42,7 +42,8 @@ router.get('/models', async (req, res) => {
 router.get('/reports', (req, res) => {
   clearOrphansOnce()
   const kind = REPORT_KINDS.includes(req.query.kind as ReportKind) ? (req.query.kind as ReportKind) : undefined
-  const metal = METALS.includes(req.query.metal as Metal) ? (req.query.metal as Metal) : undefined
+  const q = req.query.asset ?? req.query.metal
+  const metal = isAssetId(q) ? q : undefined
   res.json(listReports({ kind, metal, limit: Math.min(200, Number(req.query.limit) || 100) }))
 })
 

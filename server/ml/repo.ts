@@ -13,7 +13,7 @@ import {
   type MlRunSummary,
   type ValidationStatus,
 } from '../../shared/ml.js'
-import { METALS, type Metal } from '../../shared/universe.js'
+import { ASSETS, type AssetId } from '../../shared/universe.js'
 import { getDb } from '../db/client.js'
 import { writeArtifact } from '../db/repo.js'
 
@@ -33,7 +33,7 @@ export interface PyPrediction {
 
 export interface PyTrainResult {
   kind: 'train'
-  metal: Metal
+  metal: AssetId
   horizon: number
   trainedAt: string
   params: MlRunParams
@@ -49,7 +49,7 @@ export interface PyTrainResult {
 /** JSON written by `ml/pipeline.py infer`. */
 export interface PyInferResult {
   kind: 'infer'
-  metal: Metal
+  metal: AssetId
   horizon: number
   trainedAt: string
   modelPath: string
@@ -59,7 +59,7 @@ export interface PyInferResult {
 
 interface RunRow {
   id: number
-  metal: Metal
+  metal: AssetId
   started_at: string
   finished_at: string | null
   status: MlRunSummary['status']
@@ -111,7 +111,7 @@ function toDetail(r: RunRow): MlRunDetail {
   }
 }
 
-export function createRun(metal: Metal): number {
+export function createRun(metal: AssetId): number {
   return Number(
     getDb().prepare(`INSERT INTO ml_runs (metal, started_at, status) VALUES (?, ?, 'running')`).run(metal, now()).lastInsertRowid,
   )
@@ -157,7 +157,7 @@ export function completeRun(id: number, res: PyTrainResult): MlPrediction {
   return insertPrediction(id, res.metal, res.prediction, m.gate, res.horizon)
 }
 
-export function insertPrediction(runId: number, metal: Metal, p: PyPrediction, gate: MlGate, horizon = ML_HORIZON): MlPrediction {
+export function insertPrediction(runId: number, metal: AssetId, p: PyPrediction, gate: MlGate, horizon = ML_HORIZON): MlPrediction {
   const createdAt = now()
   const id = Number(
     getDb()
@@ -189,7 +189,7 @@ export function insertPrediction(runId: number, metal: Metal, p: PyPrediction, g
 interface PredRow {
   id: number
   run_id: number
-  metal: Metal
+  metal: AssetId
   instrument_id: string
   date: string
   horizon_days: number
@@ -233,8 +233,8 @@ function getPrediction(id: number): MlPrediction | null {
 }
 
 /** Latest prediction per metal (optionally one metal). */
-export function latestPredictions(metal?: Metal): MlPrediction[] {
-  const metals = metal ? [metal] : [...METALS]
+export function latestPredictions(metal?: AssetId): MlPrediction[] {
+  const metals = metal ? [metal] : [...ASSETS]
   const stmt = getDb().prepare(`${PRED_SELECT} WHERE p.metal = ? ORDER BY p.id DESC LIMIT 1`)
   return metals.flatMap((m) => {
     const r = stmt.get(m) as PredRow | undefined
@@ -242,7 +242,7 @@ export function latestPredictions(metal?: Metal): MlPrediction[] {
   })
 }
 
-export function listRuns(metal?: Metal, limit = 50): MlRunSummary[] {
+export function listRuns(metal?: AssetId, limit = 50): MlRunSummary[] {
   const rows = getDb()
     .prepare(`SELECT * FROM ml_runs WHERE (? IS NULL OR metal = ?) ORDER BY id DESC LIMIT ?`)
     .all(metal ?? null, metal ?? null, limit) as RunRow[]
@@ -254,7 +254,7 @@ export function getRun(id: number): MlRunDetail | null {
   return r ? toDetail(r) : null
 }
 
-export function latestRun(metal: Metal, succeededOnly = false): MlRunDetail | null {
+export function latestRun(metal: AssetId, succeededOnly = false): MlRunDetail | null {
   const r = getDb()
     .prepare(`SELECT * FROM ml_runs WHERE metal = ? AND (? = 0 OR status = 'succeeded') ORDER BY id DESC LIMIT 1`)
     .get(metal, succeededOnly ? 1 : 0) as RunRow | undefined

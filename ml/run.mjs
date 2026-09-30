@@ -12,7 +12,7 @@
  *      sklearn/pandas/joblib (else the first that runs at all)
  *
  * The server uses the same order (server/ml/python.ts).
- *   node ml/run.mjs train --metal gold
+ *   node ml/run.mjs train --metal gold   (any asset id)
  *   node ml/run.mjs --script -m pytest ml -q
  */
 import { spawnSync } from 'node:child_process'

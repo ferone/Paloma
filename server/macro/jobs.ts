@@ -8,12 +8,12 @@ let registered = false
 export function registerMacroJobs(): void {
   if (registered) return
   registered = true
-  registerJob('macro.fred', 'FRED macro series + Yahoo-derived GSR/DXY', async (ctx) => {
+  registerJob('macro.fred', 'FRED macro series + Yahoo-derived pair ratios and DXY', async (ctx) => {
     const msg = await refreshFred(ctx)
     publishMacroArtifact()
     return msg
   })
-  registerJob('macro.cot', 'CFTC disaggregated COT for COMEX gold and silver', async (ctx) => {
+  registerJob('macro.cot', 'CFTC COT (disaggregated and TFF) for every universe market', async (ctx) => {
     const msg = await refreshCot(ctx)
     publishMacroArtifact()
     return msg

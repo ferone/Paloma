@@ -1,0 +1,50 @@
+[
+  {
+    "report_date_as_yyyy_mm_dd": "2026-09-22T00:00:00.000",
+    "market_and_exchange_names": "BITCOIN - CHICAGO MERCANTILE EXCHANGE",
+    "cftc_contract_market_code": "133741",
+    "open_interest_all": "22315",
+    "dealer_positions_long_all": "7135",
+    "dealer_positions_short_all": "3488",
+    "asset_mgr_positions_long": "4962",
+    "asset_mgr_positions_short": "1791",
+    "lev_money_positions_long": "4745",
+    "lev_money_positions_short": "12698",
+    "other_rept_positions_long": "881",
+    "other_rept_positions_short": "99",
+    "nonrept_positions_long_all": "1284",
+    "nonrept_positions_short_all": "931"
+  },
+  {
+    "report_date_as_yyyy_mm_dd": "2026-09-15T00:00:00.000",
+    "market_and_exchange_names": "BITCOIN - CHICAGO MERCANTILE EXCHANGE",
+    "cftc_contract_market_code": "133741",
+    "open_interest_all": "20773",
+    "dealer_positions_long_all": "6587",
+    "dealer_positions_short_all": "3168",
+    "asset_mgr_positions_long": "4528",
+    "asset_mgr_positions_short": "1768",
+    "lev_money_positions_long": "5545",
+    "lev_money_positions_short": "11899",
+    "other_rept_positions_long": "122",
+    "other_rept_positions_short": "136",
+    "nonrept_positions_long_all": "1021",
+    "nonrept_positions_short_all": "832"
+  },
+  {
+    "report_date_as_yyyy_mm_dd": "2026-09-08T00:00:00.000",
+    "market_and_exchange_names": "BITCOIN - CHICAGO MERCANTILE EXCHANGE",
+    "cftc_contract_market_code": "133741",
+    "open_interest_all": "21083",
+    "dealer_positions_long_all": "6799",
+    "dealer_positions_short_all": "3856",
+    "asset_mgr_positions_long": "4950",
+    "asset_mgr_positions_short": "1207",
+    "lev_money_positions_long": "5146",
+    "lev_money_positions_short": "13038",
+    "other_rept_positions_long": "769",
+    "other_rept_positions_short": "100",
+    "nonrept_positions_long_all": "1273",
+    "nonrept_positions_short_all": "736"
+  }
+]

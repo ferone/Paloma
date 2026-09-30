@@ -1,16 +1,16 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { NotConfigured } from '@shared/api'
-import type { Metal } from '@shared/universe'
+import type { AssetId } from '@shared/universe'
 import type { CorrelationResponse, CotMarket, CotResponse, MacroDashboard, RefreshResponse, SeriesResponse } from '@shared/macro'
 import type { AiModelsResponse, AiReport, AiReportSummary, AiSettings, AiStatus, ReportRequest } from '@shared/ai'
 import { api } from '../../api/client'
 
 // TanStack Query hooks for /api/macro and /api/ai. Keys are prefixed 'macro'.
 
-export function useMacroDashboard(metal: Metal) {
+export function useMacroDashboard(asset: AssetId) {
   return useQuery({
-    queryKey: ['macro', 'dashboard', metal],
-    queryFn: async () => (await api.get<MacroDashboard>('/macro/dashboard', { params: { metal } })).data,
+    queryKey: ['macro', 'dashboard', asset],
+    queryFn: async () => (await api.get<MacroDashboard>('/macro/dashboard', { params: { asset } })).data,
     placeholderData: keepPreviousData,
     // Poll while a refresh job is running so the page updates when it lands.
     refetchInterval: (q) => {
@@ -37,10 +37,10 @@ export function useCot(market: CotMarket) {
   })
 }
 
-export function useCorrelations(metal: Metal, window: number) {
+export function useCorrelations(asset: AssetId, window: number) {
   return useQuery({
-    queryKey: ['macro', 'correlations', metal, window],
-    queryFn: async () => (await api.get<CorrelationResponse>('/macro/correlations', { params: { metal, window } })).data,
+    queryKey: ['macro', 'correlations', asset, window],
+    queryFn: async () => (await api.get<CorrelationResponse>('/macro/correlations', { params: { asset, window } })).data,
     placeholderData: keepPreviousData,
     staleTime: 5 * 60_000,
   })

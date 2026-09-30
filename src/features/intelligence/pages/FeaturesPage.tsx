@@ -1,4 +1,4 @@
-import { FEATURES, type FeatureAvailability, type FeatureSpec } from '@shared/ml'
+import { featuresFor, type FeatureAvailability, type FeatureSpec } from '@shared/ml'
 import { fmtDate, fmtPct } from '../../../design/format'
 import { Chip, DataTable, Explainer, Panel, type Column } from '../../../ui'
 import { ImportanceBars } from '../components/charts'
@@ -12,7 +12,8 @@ export default function FeaturesPage() {
     <RunScope>
       {(run) => {
         const imp = new Map(run.importance.map((i) => [i.feature, i.mean]))
-        const rows: Row[] = FEATURES.map((f) => ({
+        // The catalogue for the run's asset (per-class and per-asset features filtered out).
+        const rows: Row[] = featuresFor(run.metal).map((f) => ({
           ...f,
           avail: run.availability.find((a) => a.id === f.id),
           importance: imp.get(f.id) ?? null,
@@ -80,7 +81,7 @@ export default function FeaturesPage() {
             </Panel>
 
             <Explainer title="Look-ahead rules">
-              <p>Every feature on day t uses only data dated t or earlier. Market closes are aligned to the metal&rsquo;s trading days.</p>
+              <p>Every feature on day t uses only data dated t or earlier. Market closes are aligned to the asset&rsquo;s trading days.</p>
               <p>FRED macro series are lagged by one day. A COT report is used only from the day after its Friday release, not from its Tuesday position date.</p>
               <p>
                 An optional feed (FRED, COT, futures curve) is used only when it covers at least 60% of the training history and is present

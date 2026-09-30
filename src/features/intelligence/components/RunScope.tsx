@@ -6,17 +6,17 @@ import { EmptyState, ErrorNote, Panel, PanelSkeleton } from '../../../ui'
 import { useLatestRun } from '../api'
 import { JobControls } from './JobControls'
 
-/** Loads the latest successful run for the selected metal, or explains why there is none. */
+/** Loads the latest successful run for the selected asset, or explains why there is none. */
 export function RunScope({ children }: { children: (run: MlRunDetail) => ReactNode }) {
-  const { metal } = useSettings()
-  const { run, isLoading, error, refetch } = useLatestRun(metal)
+  const { asset } = useSettings()
+  const { run, isLoading, error, refetch } = useLatestRun(asset)
   if (isLoading) return <Panel><PanelSkeleton rows={6} /></Panel>
   if (error) return <Panel><ErrorNote error={error} onRetry={refetch} /></Panel>
   if (!run || !run.metrics) {
     return (
       <Panel>
-        <EmptyState title={`No trained ${UNIVERSE[metal].label.toLowerCase()} model yet`}
-          action={<JobControls metal={metal} />}>
+        <EmptyState title={`No trained ${UNIVERSE[asset].label.toLowerCase()} model yet`}
+          action={<JobControls metal={asset} />}>
           Training exports the feature matrix, runs the walk-forward validation and the permutation test, and stores the results here.
         </EmptyState>
       </Panel>

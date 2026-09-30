@@ -14,8 +14,8 @@ function duration(r: MlRunSummary): string {
 }
 
 export default function RunsPage() {
-  const { metal } = useSettings()
-  const runs = useMlRuns(metal)
+  const { asset } = useSettings()
+  const runs = useMlRuns(asset)
   const status = useMlStatus()
   const py = status.data?.python
 
@@ -42,10 +42,10 @@ export default function RunsPage() {
   return (
     <div className="space-y-6">
       <Panel title="Run a job" density="dense">
-        <JobControls metal={metal} />
+        <JobControls metal={asset} />
       </Panel>
       <Panel
-        title={`${UNIVERSE[metal].label} training runs`}
+        title={`${UNIVERSE[asset].label} training runs`}
         provenance={{
           source: py
             ? py.available

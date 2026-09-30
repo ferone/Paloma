@@ -1,6 +1,6 @@
 // AI analyst API contracts (owned by the macro/AI workstream).
 // Server: server/ai/*. Client: src/features/macro/ai/*.
-import type { Metal } from './universe.js'
+import type { AssetId } from './universe.js'
 import type { QuantOpportunityLite } from './artifacts.js'
 
 export type ReportKind = 'macro_brief' | 'trade_brief' | 'portfolio_commentary' | 'ask'
@@ -80,7 +80,8 @@ export type ReportBody = MacroBriefBody | TradeBriefBody | PortfolioCommentaryBo
 
 export interface ReportRequest {
   kind: ReportKind
-  metal: Metal
+  /** Asset id (the field keeps its historical name). */
+  metal: AssetId
   /** trade_brief: an opportunity (or its id in the quant snapshot). ask: { question }. */
   input?: { opportunity?: QuantOpportunityLite; opportunityId?: string; question?: string }
 }
@@ -88,7 +89,8 @@ export interface ReportRequest {
 export interface AiReport {
   id: number
   kind: ReportKind
-  metal: Metal
+  /** Asset id (the field keeps its historical name). */
+  metal: AssetId
   model: string
   status: ReportStatus
   error: string | null

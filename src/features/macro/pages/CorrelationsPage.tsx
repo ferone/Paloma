@@ -2,7 +2,7 @@ import { CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { useMemo, useState, type CSSProperties } from 'react'
 import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { BetaRow, CorrelationFactor, CorrelationResponse } from '@shared/macro'
-import { UNIVERSE } from '@shared/universe'
+import { UNIVERSE, isAssetId } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
 import { DataTable, EmptyState, ErrorNote, Explainer, Panel, PanelSkeleton, Segmented, type Column } from '../../../ui'
 import { fmtDate, fmtNum, fmtSigned } from '../../../design/format'
@@ -14,21 +14,22 @@ const WINDOWS = [
   { value: '252', label: '252d (1y)' },
 ] as const
 
-/** Fixed colour per factor (colour follows the entity, never its rank). */
+/** Fixed colour per factor (colour follows the entity, never its rank): assets use their own colour. */
 function factorColor(c: ReturnType<typeof useChartColors>, f: CorrelationFactor): string {
-  return { gold: c.gold, silver: c.silver, realYield: c.series[1], dxy: c.series[3], vix: c.series[4], spy: c.series[2] }[f]
+  if (isAssetId(f)) return c.asset[f]
+  return { realYield: c.series[1], dxy: c.series[3], vix: c.series[4], spy: c.series[2] }[f]
 }
 
 export default function CorrelationsPage() {
-  const { metal } = useSettings()
+  const { asset } = useSettings()
   const [win, setWin] = useState<'63' | '252'>('63')
-  const q = useCorrelations(metal, Number(win))
+  const q = useCorrelations(asset, Number(win))
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-xs leading-relaxed text-muted">
-          Correlation of {UNIVERSE[metal].label.toLowerCase()}’s daily returns with each driver’s daily change, over a rolling window. Negative
+          Correlation of {UNIVERSE[asset].label.toLowerCase()}’s daily returns with each driver’s daily change, over a rolling window. Negative
           values mean they tend to move in opposite directions (the textbook sign for real yields and the dollar).
         </p>
         <Segmented ariaLabel="Correlation window" value={win} options={WINDOWS} onChange={setWin} size="md" />
@@ -39,7 +40,9 @@ export default function CorrelationsPage() {
         <ErrorNote error={q.error} onRetry={() => q.refetch()} />
       ) : !q.data || q.data.rolling.length === 0 ? (
         <Panel>
-          <EmptyState title="Not enough overlapping history">Correlations need Yahoo prices (GC=F, SI=F, DX-Y.NYB, SPY) and FRED DFII10/VIXCLS. Run a data refresh.</EmptyState>
+          <EmptyState title="Not enough overlapping history">
+            Correlations need Yahoo prices ({UNIVERSE[asset].spot}, its peers, DX-Y.NYB, SPY) and FRED DFII10/VIXCLS. Run a data refresh.
+          </EmptyState>
         </Panel>
       ) : (
         <>
@@ -50,12 +53,12 @@ export default function CorrelationsPage() {
           </div>
           <Explainer title="Method">
             <p>
-              Series are aligned on dates common to all six before differencing, so every observation spans the same interval. Metals, the dollar
-              and SPY use daily log returns; the real yield uses the daily change in percentage points and VIX the daily change in index points.
+              Series are aligned on dates common to all of them before differencing, so every observation spans the same interval. Asset prices,
+              the dollar and SPY use daily log returns; the real yield uses the daily change in percentage points and VIX the daily change in index points.
             </p>
             <p>
-              Beta is the least-squares slope of the metal’s daily return on the driver’s daily change: e.g. a real-yield beta of −0.10 means a
-              +0.10pp day in real yields has come with about a −1% day in the metal over the window. Correlations are unstable; treat a single
+              Beta is the least-squares slope of the asset’s daily return on the driver’s daily change: e.g. a real-yield beta of −0.10 means a
+              +0.10pp day in real yields has come with about a −1% day in the asset over the window. Correlations are unstable; treat a single
               window as a description of the recent past, not a forecast.
             </p>
           </Explainer>
@@ -67,11 +70,11 @@ export default function CorrelationsPage() {
 
 function RollingPanel({ data }: { data: CorrelationResponse }) {
   const c = useChartColors()
-  const others = data.factors.filter((f) => f.id !== data.metal)
+  const others = data.factors.filter((f) => f.id !== data.asset)
   const rows = useMemo(() => thin(data.rolling.map((r) => ({ date: r.date, ...r.values })), 400), [data.rolling])
   const axis = { stroke: c.axis, tick: { fill: c.text, fontSize: 10 }, tickLine: false, axisLine: false } as const
   return (
-    <Panel title={`Rolling ${data.window}-day correlation with ${UNIVERSE[data.metal].label.toLowerCase()}`} density="dense" provenance={data.provenance}>
+    <Panel title={`Rolling ${data.window}-day correlation with ${UNIVERSE[data.asset].label.toLowerCase()}`} density="dense" provenance={data.provenance}>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
           <LineChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
@@ -187,7 +190,7 @@ function BetaPanel({ data }: { data: CorrelationResponse }) {
     { key: 'n', header: 'Obs', numeric: true, cell: (r) => fmtNum(r.n, 0) },
   ]
   return (
-    <Panel title={`Betas of ${UNIVERSE[data.metal].label.toLowerCase()} · last ${data.window} days`} density="dense" provenance={{ source: 'OLS on daily changes', asOf: data.asOf }}>
+    <Panel title={`Betas of ${UNIVERSE[data.asset].label.toLowerCase()} · last ${data.window} days`} density="dense" provenance={{ source: 'OLS on daily changes', asOf: data.asOf }}>
       <DataTable columns={cols} rows={data.betas} rowKey={(r) => r.factor} dense caption="Betas and correlations" />
     </Panel>
   )

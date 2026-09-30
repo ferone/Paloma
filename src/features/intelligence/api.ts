@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { JobStatus } from '@shared/api'
 import type { MlPredictionsResponse, MlRunDetail, MlRunSummary, MlStatus } from '@shared/ml'
-import type { Metal } from '@shared/universe'
+import type { AssetId } from '@shared/universe'
 import { api } from '../../api/client'
 
 // TanStack Query hooks for /api/ml. Keys are prefixed with 'ml'.
@@ -10,7 +10,7 @@ export const mlKeys = {
   all: ['ml'] as const,
   status: ['ml', 'status'] as const,
   predictions: ['ml', 'predictions'] as const,
-  runs: (metal: Metal) => ['ml', 'runs', metal] as const,
+  runs: (metal: AssetId) => ['ml', 'runs', metal] as const,
   run: (id: number) => ['ml', 'run', id] as const,
   jobs: ['ml', 'jobs'] as const,
 }
@@ -26,7 +26,7 @@ export function useMlPredictions() {
   })
 }
 
-export function useMlRuns(metal: Metal) {
+export function useMlRuns(metal: AssetId) {
   return useQuery({
     queryKey: mlKeys.runs(metal),
     queryFn: async () => (await api.get<MlRunSummary[]>('/ml/runs', { params: { metal } })).data,
@@ -42,8 +42,8 @@ export function useMlRun(id: number | null | undefined) {
   })
 }
 
-/** The latest successful run for a metal, with full metrics. */
-export function useLatestRun(metal: Metal) {
+/** The latest successful run for an asset, with full metrics. */
+export function useLatestRun(metal: AssetId) {
   const runs = useMlRuns(metal)
   const latest = runs.data?.find((r) => r.status === 'succeeded') ?? null
   const detail = useMlRun(latest?.id)
@@ -80,7 +80,7 @@ export function useMlJobs() {
 export function useStartMlJob() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (vars: { kind: 'train' | 'infer'; metal?: Metal }) =>
+    mutationFn: async (vars: { kind: 'train' | 'infer'; metal?: AssetId }) =>
       (await api.post<JobStatus>(`/ml/${vars.kind}`, vars.metal ? { metal: vars.metal } : {})).data,
     onSettled: () => qc.invalidateQueries({ queryKey: mlKeys.jobs }),
   })

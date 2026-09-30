@@ -2,6 +2,11 @@ import { getDb } from './client.js'
 
 // Small shared repositories used by several domains.
 
+/** SQLite datetime('now') ("YYYY-MM-DD HH:MM:SS", UTC) → ISO-8601. */
+export function sqliteToIso(ts: string): string {
+  return ts.includes('T') ? ts : `${ts.replace(' ', 'T')}Z`
+}
+
 export function getSetting<T>(key: string, fallback: T): T {
   const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
   return row ? (JSON.parse(row.value) as T) : fallback
@@ -17,7 +22,7 @@ export function readArtifact<T>(name: string): { data: T; generatedAt: string } 
   const row = getDb().prepare('SELECT data, generated_at FROM artifacts WHERE name = ?').get(name) as
     | { data: string; generated_at: string }
     | undefined
-  return row ? { data: JSON.parse(row.data) as T, generatedAt: row.generated_at } : null
+  return row ? { data: JSON.parse(row.data) as T, generatedAt: sqliteToIso(row.generated_at) } : null
 }
 
 export function writeArtifact(name: string, data: unknown): void {

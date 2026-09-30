@@ -22,7 +22,7 @@ export const symbolLabel = (s: string) => LABELS[s] ?? s
 /** Spot proxy, physically backed ETFs and miners for a metal. */
 export function metalInstruments(metal: Metal): string[] {
   const u = UNIVERSE[metal]
-  return [u.spot, ...u.etfs, u.miners]
+  return u.miners ? [u.spot, ...u.etfs, u.miners] : [u.spot, ...u.etfs]
 }
 
 export const MACRO_COMPARISON = ['SPY', 'QQQ', 'TLT', MACRO_SYMBOLS.dxy] as const

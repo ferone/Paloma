@@ -1,44 +1,52 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { Metal } from '@shared/universe'
+import { parseAssetId, type AssetId, type Metal } from '@shared/universe'
 
 interface SettingsContextType {
   autoRefresh: boolean
   toggleAutoRefresh: () => void
-  /** Metal in focus for metal-parameterized views (Quant Lab, Markets, ML). */
+  /** Asset in focus for asset-parameterized views (Markets, Quant Lab, Macro, Intelligence). */
+  asset: AssetId
+  setAsset: (a: AssetId) => void
+  /** @deprecated Use `asset`. Same value, kept while pages migrate. */
   metal: Metal
+  /** @deprecated Use `setAsset`. */
   setMetal: (m: Metal) => void
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null)
-const METAL_KEY = 'gid.metal'
+const ASSET_KEY = 'gid.asset'
+const LEGACY_METAL_KEY = 'gid.metal'
 
-function readMetal(): Metal {
+function readAsset(): AssetId {
   try {
-    return localStorage.getItem(METAL_KEY) === 'silver' ? 'silver' : 'gold'
+    return parseAssetId(localStorage.getItem(ASSET_KEY) ?? localStorage.getItem(LEGACY_METAL_KEY))
   } catch {
-    return 'gold'
+    return parseAssetId(null)
   }
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [autoRefresh, setAutoRefresh] = useState(true)
-  const [metal, setMetal] = useState<Metal>(readMetal)
+  const [asset, setAsset] = useState<AssetId>(readAsset)
 
   useEffect(() => {
     try {
-      localStorage.setItem(METAL_KEY, metal)
+      localStorage.setItem(ASSET_KEY, asset)
+      localStorage.removeItem(LEGACY_METAL_KEY)
     } catch {
       // non-persistent is fine
     }
-  }, [metal])
+  }, [asset])
 
   return (
     <SettingsContext.Provider
       value={{
         autoRefresh,
         toggleAutoRefresh: () => setAutoRefresh((p) => !p),
-        metal,
-        setMetal,
+        asset,
+        setAsset,
+        metal: asset,
+        setMetal: setAsset,
       }}
     >
       {children}

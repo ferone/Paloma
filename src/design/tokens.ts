@@ -1,4 +1,4 @@
-import type { Metal } from '@shared/universe'
+import { ASSETS, UNIVERSE, type AssetId } from '@shared/universe'
 
 // Presentation tokens for charts and semantic colouring. Values are CSS
 // variables so they flip with the theme. SVG presentation *attributes* don't
@@ -19,10 +19,11 @@ export const PALETTE = {
   series: ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)'],
 } as const
 
-export const METAL_COLOR: Record<Metal, string> = {
-  gold: PALETTE.gold,
-  silver: PALETTE.silver,
-}
+/** Chart colour per asset, from each spec's `colorVar` (a CSS custom property that flips with the theme). */
+export const ASSET_COLOR = Object.fromEntries(ASSETS.map((a) => [a, `var(${UNIVERSE[a].colorVar})`])) as Record<AssetId, string>
+
+/** @deprecated Use `ASSET_COLOR`. */
+export const METAL_COLOR = ASSET_COLOR
 
 /**
  * Resolve a CSS variable to a concrete colour string. Needed for canvas-based

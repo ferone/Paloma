@@ -9,14 +9,14 @@ import { useQuotes } from '../hooks'
 /** Dense quote strip: the metal's physically backed ETFs plus its miners ETF. */
 export function EtfStrip({ metal }: { metal: Metal }) {
   const spec = UNIVERSE[metal]
-  const symbols = [...spec.etfs, spec.miners]
+  const symbols = spec.miners ? [...spec.etfs, spec.miners] : spec.etfs
   const q = useQuotes(symbols)
   const bySymbol = new Map((q.data ?? []).map((x) => [x.symbol, x]))
 
   return (
     <Panel
       density="dense"
-      title={`${spec.label} ETFs & miners`}
+      title={spec.miners ? `${spec.label} ETFs & miners` : `${spec.label} ETFs`}
       actions={
         <Link to="/markets/etfs" className="text-xs text-muted underline-offset-2 hover:text-foreground hover:underline">
           Premiums & tracking →

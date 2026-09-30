@@ -35,7 +35,7 @@ export function universeInstruments(): Instrument[] {
   for (const m of METALS) {
     const spec = UNIVERSE[m]
     for (const etf of spec.etfs) out.push({ id: etf, name: `${etf} (${spec.label} ETF)`, kind: 'etf', metal: m, priceSymbol: etf, ozPerContract: null })
-    out.push({ id: spec.miners, name: `${spec.miners} (${spec.label} miners)`, kind: 'equity', metal: m, priceSymbol: spec.miners, ozPerContract: null })
+    if (spec.miners) out.push({ id: spec.miners, name: `${spec.miners} (${spec.label} miners)`, kind: 'equity', metal: m, priceSymbol: spec.miners, ozPerContract: null })
     for (const f of spec.futures) out.push({ id: f.root, name: f.name, kind: 'future', metal: m, priceSymbol: f.yahoo, ozPerContract: f.ozPerContract })
     out.push({
       id: m === 'gold' ? 'XAU-PHYS' : 'XAG-PHYS',

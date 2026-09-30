@@ -4,14 +4,14 @@ import { RiMoonLine, RiSunLine, RiRefreshLine } from 'react-icons/ri'
 import { useQuote } from '../hooks/useQuote'
 import { useSettings } from '../store/settings-context'
 import { useTheme } from './theme'
-import { UNIVERSE, type Metal } from '@shared/universe'
+import { UNIVERSE } from '@shared/universe'
 import { fmtNum, fmtPctSigned } from '../design/format'
 import { signColor } from '../design/tokens'
-import { Segmented } from '../ui'
+import { AssetPicker } from './AssetPicker'
 
 export function TopBar({ menuButton }: { menuButton: ReactNode }) {
   const { theme, toggleTheme } = useTheme()
-  const { autoRefresh, toggleAutoRefresh, metal, setMetal } = useSettings()
+  const { autoRefresh, toggleAutoRefresh } = useSettings()
   const gold = useQuote(UNIVERSE.gold.spot)
   const silver = useQuote(UNIVERSE.silver.spot)
   const ratio = gold.data && silver.data && silver.data.price > 0 ? gold.data.price / silver.data.price : null
@@ -30,15 +30,7 @@ export function TopBar({ menuButton }: { menuButton: ReactNode }) {
       </dl>
 
       <div className="flex items-center gap-1.5">
-        <Segmented<Metal>
-          ariaLabel="Metal in focus"
-          value={metal}
-          onChange={setMetal}
-          options={[
-            { value: 'gold', label: 'Gold' },
-            { value: 'silver', label: 'Silver' },
-          ]}
-        />
+        <AssetPicker />
         <button
           type="button"
           onClick={toggleAutoRefresh}

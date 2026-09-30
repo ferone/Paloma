@@ -25,7 +25,7 @@ export function yahooHistorySymbols(): string[] {
     const u = UNIVERSE[m]
     for (const f of u.futures) s.add(f.yahoo)
     u.etfs.forEach((e) => s.add(e))
-    s.add(u.miners)
+    if (u.miners) s.add(u.miners)
   }
   Object.values(MACRO_SYMBOLS).forEach((x) => s.add(x))
   s.add('^IRX')

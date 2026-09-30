@@ -1,95 +1,243 @@
-// Single source of truth for the tradable universe. Gold and silver are
-// first-class and symmetric: every domain (portfolio, quant, macro, ML) is
-// parameterized by `Metal` and reads its instruments from here.
+// Single source of truth for the tradable universe. Every domain (portfolio,
+// quant, macro, ML, markets) is parameterized by `AssetId` and reads its
+// instruments, units, sessions and data sources from here. Adding an asset is
+// a data change: extend `AssetId`, add a `UNIVERSE` entry, done.
 
-export type Metal = 'gold' | 'silver'
-export const METALS: readonly Metal[] = ['gold', 'silver'] as const
+export type AssetId = 'gold' | 'silver'
+export const ASSETS: readonly AssetId[] = ['gold', 'silver'] as const
+
+/** @deprecated Use `AssetId`. Kept while domains migrate. */
+export type Metal = AssetId
+/** @deprecated Use `ASSETS`. Kept while domains migrate. */
+export const METALS: readonly Metal[] = ASSETS
+
+export type AssetClass = 'precious' | 'industrial' | 'crypto'
+export const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
+  precious: 'Precious metals',
+  industrial: 'Industrial metals',
+  crypto: 'Digital assets',
+}
+
+/** Unit the price is quoted per (and the unit exposure is measured in). */
+export type PriceUnit = 'oz' | 'lb' | 'BTC'
+
+/** When the reference market trades. `globex`: CME Sun 18:00 – Fri 17:00 ET. `24x7`: continuous. */
+export type TradingSession = 'globex' | '24x7'
 
 export type InstrumentKind = 'etf' | 'future' | 'physical' | 'cash' | 'equity'
+
+export type Exchange = 'COMEX' | 'NYMEX' | 'CME'
+const YAHOO_SUFFIX: Record<Exchange, string> = { COMEX: '.CMX', NYMEX: '.NYM', CME: '.CME' }
 
 export interface FuturesProduct {
   /** Root used across the app and by Databento (`<root>.FUT` parent symbology). */
   root: string
   name: string
+  exchange: Exchange
   /** Yahoo continuous front-month symbol for live quotes. */
   yahoo: string
-  /** Troy ounces per contract. */
-  ozPerContract: number
-  /** Dollars per 1.00 price-point move (= ozPerContract for $/oz quotes). */
+  /** Units of the underlying per contract (oz, lb or BTC — see the asset's `priceUnit`). */
+  contractSize: number
+  /** Dollars per 1.00 price-point move. The ONLY dollar multiplier; never hardcode 100/5000. */
   pointValue: number
-  /** Liquid/active contract months (1-12). Serial months are ignored. */
+  /** Minimum price increment. */
+  tickSize: number
+  /** Liquid/active contract months (1-12). Serial months are ignored by curves and calendars. */
   activeMonths: number[]
+  /** Months used for roll-clean seasonal pairs (defaults to `activeMonths`). */
+  seasonalMonths?: number[]
+  /** Cash-settled (no delivery / first notice): rolls key off last trade instead. */
+  cashSettled: boolean
+  /** @deprecated Troy ounces per contract; use `contractSize` + the asset's `priceUnit`. */
+  ozPerContract: number
 }
 
-export interface MetalSpec {
-  metal: Metal
+export interface PhysicalSpec {
+  /** Unit holdings are counted in. */
+  unit: 'oz' | 'BTC'
+  /** `bullion`: bars/coins in a vault (fine oz, purity, serials). `custody`: a balance in a wallet/exchange account. */
+  kind: 'bullion' | 'custody'
+  /** Stable instrument id for the physical holding (e.g. XAU-PHYS). */
+  instrumentId: string
+}
+
+export interface CotSpec {
+  /** CFTC report family: disaggregated (commodities) or Traders in Financial Futures (financials, incl. bitcoin). */
+  report: 'disagg' | 'tff'
+  /** CFTC contract market code. */
+  code: string
+  /** Stable market key used in the cot tables and APIs. */
+  market: string
+}
+
+export interface AssetSpec {
+  id: AssetId
   label: string
-  /** Yahoo symbol used as the reference spot/front price. */
+  /** Compact label for tickers and chips ("Au", "BTC"). */
+  short: string
+  assetClass: AssetClass
+  /** Yahoo symbol of the reference price series (weekday bars; used for NAV, ML, correlations). */
   spot: string
+  /** Optional 24/7 display quote (e.g. BTC-USD) shown in tickers; never used for calculations. */
+  displaySpot?: string
+  priceUnit: PriceUnit
+  /** Human price unit, e.g. "$/oz". */
+  unitLabel: string
+  /** Decimals for prices of this asset. */
+  displayDecimals: number
+  session: TradingSession
   futures: FuturesProduct[]
-  /** Physically backed ETFs (tracked for holdings, premium/discount, flows). */
+  /** Physically backed / spot ETFs (holdings, premium/discount, flows). */
   etfs: string[]
-  /** Miners equity ETF (beta proxy, not metal). */
-  miners: string
-  /** CFTC disaggregated COT market name. */
-  cotMarket: string
-  /** Chart accent token name for this metal. */
+  /** Miners/equity proxy ETF (beta proxy, not the asset). */
+  miners?: string
+  /** ETF used as the default benchmark for this asset. */
+  benchmarkEtf: string
+  /** How the fund can hold the asset directly; null when it cannot. */
+  physical: PhysicalSpec | null
+  cot: CotSpec | null
+  /** CSS custom property holding this asset's chart colour. */
   colorVar: string
+
+  /** @deprecated Use `id`. */
+  metal: AssetId
+  /** @deprecated Use `cot.market`. */
+  cotMarket: string
 }
 
-export const UNIVERSE: Record<Metal, MetalSpec> = {
+export const UNIVERSE: Record<AssetId, AssetSpec> = {
   gold: {
+    id: 'gold',
     metal: 'gold',
     label: 'Gold',
+    short: 'Au',
+    assetClass: 'precious',
     spot: 'GC=F',
+    priceUnit: 'oz',
+    unitLabel: '$/oz',
+    displayDecimals: 2,
+    session: 'globex',
     futures: [
-      { root: 'GC', name: 'COMEX Gold', yahoo: 'GC=F', ozPerContract: 100, pointValue: 100, activeMonths: [2, 4, 6, 8, 10, 12] },
-      { root: 'MGC', name: 'COMEX Micro Gold', yahoo: 'MGC=F', ozPerContract: 10, pointValue: 10, activeMonths: [2, 4, 6, 8, 10, 12] },
+      { root: 'GC', name: 'COMEX Gold', exchange: 'COMEX', yahoo: 'GC=F', contractSize: 100, pointValue: 100, tickSize: 0.1, activeMonths: [2, 4, 6, 8, 10, 12], cashSettled: false, ozPerContract: 100 },
+      { root: 'MGC', name: 'COMEX Micro Gold', exchange: 'COMEX', yahoo: 'MGC=F', contractSize: 10, pointValue: 10, tickSize: 0.1, activeMonths: [2, 4, 6, 8, 10, 12], cashSettled: false, ozPerContract: 10 },
     ],
     etfs: ['GLD', 'IAU', 'GLDM', 'SGOL', 'PHYS'],
     miners: 'GDX',
+    benchmarkEtf: 'GLD',
+    physical: { unit: 'oz', kind: 'bullion', instrumentId: 'XAU-PHYS' },
+    cot: { report: 'disagg', code: '088691', market: 'GOLD' },
     cotMarket: 'GOLD',
     colorVar: '--metal-gold',
   },
   silver: {
+    id: 'silver',
     metal: 'silver',
     label: 'Silver',
+    short: 'Ag',
+    assetClass: 'precious',
     spot: 'SI=F',
+    priceUnit: 'oz',
+    unitLabel: '$/oz',
+    displayDecimals: 3,
+    session: 'globex',
     futures: [
-      { root: 'SI', name: 'COMEX Silver', yahoo: 'SI=F', ozPerContract: 5000, pointValue: 5000, activeMonths: [3, 5, 7, 9, 12] },
-      { root: 'SIL', name: 'COMEX Micro Silver', yahoo: 'SIL=F', ozPerContract: 1000, pointValue: 1000, activeMonths: [3, 5, 7, 9, 12] },
+      { root: 'SI', name: 'COMEX Silver', exchange: 'COMEX', yahoo: 'SI=F', contractSize: 5000, pointValue: 5000, tickSize: 0.005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false, ozPerContract: 5000 },
+      { root: 'SIL', name: 'COMEX Micro Silver', exchange: 'COMEX', yahoo: 'SIL=F', contractSize: 1000, pointValue: 1000, tickSize: 0.005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false, ozPerContract: 1000 },
     ],
     etfs: ['SLV', 'SIVR', 'PSLV'],
     miners: 'SILJ',
+    benchmarkEtf: 'SLV',
+    physical: { unit: 'oz', kind: 'bullion', instrumentId: 'XAG-PHYS' },
+    cot: { report: 'disagg', code: '084691', market: 'SILVER' },
     cotMarket: 'SILVER',
     colorVar: '--metal-silver',
   },
 }
 
+export function assetSpec(id: AssetId): AssetSpec {
+  return UNIVERSE[id]
+}
+
+export function isAssetId(x: unknown): x is AssetId {
+  return typeof x === 'string' && (ASSETS as readonly string[]).includes(x)
+}
+
+/** Parse an untrusted id (query param, localStorage), falling back to the first asset. */
+export function parseAssetId(x: unknown, fallback: AssetId = ASSETS[0]): AssetId {
+  return isAssetId(x) ? x : fallback
+}
+
+export function assetsInClass(cls: AssetClass): AssetId[] {
+  return ASSETS.filter((a) => UNIVERSE[a].assetClass === cls)
+}
+
+/** Assets the fund can hold directly (vault bullion or custody balances). */
+export function physicalAssets(): AssetId[] {
+  return ASSETS.filter((a) => UNIVERSE[a].physical != null)
+}
+
+/** Every futures root across the universe (Databento parent symbology, contract tables). */
+export function futuresRoots(): string[] {
+  return ASSETS.flatMap((a) => UNIVERSE[a].futures.map((f) => f.root))
+}
+
+/** Relative-value pairs the quant engine analyses. `ratio` = num/den; `spread` = num − hedge·den (vol-parity). */
+export interface RelativeValuePair {
+  /** Stable id used in instrument ids (`<id>.ratio`, `<id>.spread`) and the `pair` query param. */
+  id: string
+  /** URL/query key (kept for backward compatibility: 'gold-silver'). */
+  key: string
+  label: string
+  numerator: AssetId
+  denominator: AssetId
+}
+
+export const RELATIVE_VALUE_PAIRS: RelativeValuePair[] = [
+  { id: 'GS', key: 'gold-silver', label: 'Gold / silver', numerator: 'gold', denominator: 'silver' },
+]
+
 /** Futures month codes (CME convention). */
 export const MONTH_CODES = ['F', 'G', 'H', 'J', 'K', 'M', 'N', 'Q', 'U', 'V', 'X', 'Z'] as const
 
-/** Yahoo symbol for a specific COMEX contract month, e.g. ('GC', 12, 2026) -> 'GCZ26.CMX'. */
+/** Yahoo symbol for a specific contract month, e.g. ('GC', 12, 2026) -> 'GCZ26.CMX'; ('BTC', 12, 2026) -> 'BTCZ26.CME'. */
 export function yahooContractSymbol(root: string, month: number, year: number): string {
-  return `${root}${MONTH_CODES[month - 1]}${String(year).slice(-2)}.CMX`
+  const exchange = futuresProduct(root)?.exchange ?? 'COMEX'
+  return `${root}${MONTH_CODES[month - 1]}${String(year).slice(-2)}${YAHOO_SUFFIX[exchange]}`
 }
 
 export function futuresProduct(root: string): FuturesProduct | undefined {
-  for (const m of METALS) {
-    const p = UNIVERSE[m].futures.find((f) => f.root === root)
+  for (const a of ASSETS) {
+    const p = UNIVERSE[a].futures.find((f) => f.root === root)
     if (p) return p
   }
   return undefined
 }
 
-export function metalOfSymbol(symbol: string): Metal | undefined {
-  for (const m of METALS) {
-    const s = UNIVERSE[m]
-    if (s.spot === symbol || s.etfs.includes(symbol) || s.miners === symbol) return m
-    if (s.futures.some((f) => f.yahoo === symbol || symbol.startsWith(f.root))) return m
-  }
-  return undefined
+/** Asset owning a futures root. */
+export function assetOfRoot(root: string): AssetId | undefined {
+  return ASSETS.find((a) => UNIVERSE[a].futures.some((f) => f.root === root))
 }
+
+// A contract-month symbol: ROOT + month code + 2-digit year, optional exchange suffix (GCZ26, GCZ26.CMX).
+const CONTRACT_RE = /^([A-Z]+)([FGHJKMNQUVXZ])(\d{2})(\.[A-Z]+)?$/
+
+/**
+ * Asset for any Yahoo/Databento symbol, matched EXACTLY: spot/display quotes,
+ * ETFs, miners, continuous futures (GC=F) and contract months (GCZ26.CMX).
+ * Prefix matching is deliberately avoided (PL would match PLTR, PA → PAAS).
+ */
+export function assetOfSymbol(symbol: string): AssetId | undefined {
+  for (const a of ASSETS) {
+    const s = UNIVERSE[a]
+    if (s.spot === symbol || s.displaySpot === symbol || s.etfs.includes(symbol) || s.miners === symbol) return a
+    if (s.futures.some((f) => f.yahoo === symbol || f.root === symbol)) return a
+  }
+  const m = CONTRACT_RE.exec(symbol)
+  return m ? assetOfRoot(m[1]) : undefined
+}
+
+/** @deprecated Use `assetOfSymbol`. */
+export const metalOfSymbol = assetOfSymbol
 
 /** Market/macro reference symbols (Yahoo). */
 export const MACRO_SYMBOLS = {

@@ -23,7 +23,7 @@ function profile(symbol: string): Promise<FundProfile | null> {
 export async function buildEtfs(metal: Metal): Promise<EtfsResponse> {
   const spec = UNIVERSE[metal]
   const spotSymbol = spec.spot
-  const etfs = [...spec.etfs, spec.miners]
+  const etfs = spec.miners ? [...spec.etfs, spec.miners] : spec.etfs
 
   const [quotes, spotBars, ...rest] = await Promise.all([
     getDetailedQuotes([spotSymbol, ...etfs]),

@@ -1,7 +1,7 @@
 import { useQueries } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { useMemo, useState, type FormEvent } from 'react'
-import { MACRO_SYMBOLS, UNIVERSE } from '@shared/universe'
+import { ASSETS as ASSET_IDS, MACRO_SYMBOLS, UNIVERSE } from '@shared/universe'
 import { api } from '../../../api/client'
 import { fmtDate, fmtNum, fmtPct, fmtPctSigned, fmtUsd, fmtUsdCompact } from '../../../design/format'
 import { signColor } from '../../../design/tokens'
@@ -12,8 +12,7 @@ import { simulate, type Allocation, type Bar, type Rebalance } from './math'
 const ASSETS: { symbol: string; group: string }[] = [
   ...UNIVERSE.gold.etfs.map((s) => ({ symbol: s, group: 'Gold' })),
   ...UNIVERSE.silver.etfs.map((s) => ({ symbol: s, group: 'Silver' })),
-  { symbol: UNIVERSE.gold.miners, group: 'Miners' },
-  { symbol: UNIVERSE.silver.miners, group: 'Miners' },
+  ...ASSET_IDS.flatMap((a) => (UNIVERSE[a].miners ? [{ symbol: UNIVERSE[a].miners!, group: 'Miners' }] : [])),
   { symbol: MACRO_SYMBOLS.spx, group: 'Other' },
   { symbol: MACRO_SYMBOLS.tips, group: 'Other' },
 ]

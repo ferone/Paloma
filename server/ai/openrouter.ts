@@ -106,7 +106,7 @@ export async function chat(messages: ChatMessage[], opts: ChatOpts): Promise<Cha
           'Content-Type': 'application/json',
           Authorization: `Bearer ${opts.apiKey}`,
           'HTTP-Referer': 'http://localhost/gold-investment-dashboard',
-          'X-Title': 'Gold Investment Dashboard',
+          'X-Title': 'Real Assets Dashboard',
         },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),

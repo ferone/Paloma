@@ -11,6 +11,7 @@ export const DATASET_LABEL: Record<string, { label: string; detail: string }> = 
   pf_nav_snapshots: { label: 'NAV snapshots', detail: 'Daily fund NAV' },
   pf_physical_items: { label: 'Physical holdings', detail: 'Allocated bullion items' },
   pf_fund_units: { label: 'Fund units', detail: 'Unit issues and cancellations at NAV/unit' },
+  cot_positions: { label: 'COT positions', detail: 'CFTC positioning by trader category, disaggregated and TFF reports' },
   ai_reports: { label: 'AI reports', detail: 'Generated briefs and commentary' },
   ml_predictions: { label: 'ML predictions', detail: 'Model outputs per instrument' },
   ml_runs: { label: 'ML runs', detail: 'Training and validation runs' },

@@ -129,7 +129,7 @@ describe('class driver sets', () => {
 
   it('declares the industrial and crypto sets as data', () => {
     expect(ids(DRIVER_SETS.industrial.drivers)).toEqual(['DTWEXBGS', 'DFII10', 'INDPRO_YOY', 'BAMLH0A0HYM2'])
-    expect(DRIVER_SETS.industrial.positioning).toBe(false)
+    expect(DRIVER_SETS.industrial.positioning).toBe(true)
     expect(ids(DRIVER_SETS.crypto.drivers)).toEqual(['DFII10', 'DTWEXBGS', 'QQQ', 'M2_YOY', 'VIXCLS'])
     expect(DRIVER_SETS.crypto.positioning).toBe(true)
   })

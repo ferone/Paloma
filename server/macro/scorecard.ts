@@ -277,7 +277,8 @@ const INDUSTRIAL: DriverSet = {
     hySpread,
   ],
   pairDrivers: denominatorPairDrivers,
-  positioning: false,
+  // Copper trades on COMEX with a disaggregated COT market, so managed-money positioning applies.
+  positioning: true,
 }
 
 const CRYPTO: DriverSet = {

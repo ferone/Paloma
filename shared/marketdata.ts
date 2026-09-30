@@ -160,7 +160,7 @@ export interface SymbolListRow {
 /** Market tables with typed filters. */
 export const MARKET_EXPORT_DATASETS = ['prices_daily', 'contracts', 'contract_bars', 'macro_series', 'cot_reports'] as const
 /** Tables owned by other domains, exported verbatim if they exist. */
-export const GENERIC_EXPORT_TABLES = ['pf_transactions', 'pf_nav_snapshots', 'pf_physical_items', 'pf_fund_units', 'ai_reports', 'ml_predictions', 'ml_runs'] as const
+export const GENERIC_EXPORT_TABLES = ['pf_transactions', 'pf_nav_snapshots', 'pf_physical_items', 'pf_fund_units', 'cot_positions', 'ai_reports', 'ml_predictions', 'ml_runs'] as const
 export const EXPORT_DATASETS = [...MARKET_EXPORT_DATASETS, ...GENERIC_EXPORT_TABLES] as const
 export type ExportDataset = (typeof EXPORT_DATASETS)[number]
 export type ExportFormat = 'csv' | 'json'

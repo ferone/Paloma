@@ -7,8 +7,8 @@
  *   1. env `ML_PYTHON` if set (absolute path or a command on PATH, used as-is)
  *   2. ml/.venv/Scripts/python.exe   (Windows venv)
  *   3. ml/.venv/bin/python           (POSIX venv)
- *   4. `python3`, then `python` on PATH (probed with --version: the Windows
- *      Store `python3` alias stub exits non-zero and is skipped)
+ *   4. `python3`, then `python` on PATH, preferring one that can import
+ *      sklearn/pandas/joblib (else the first that runs at all)
  *
  * The server uses the same order (server/ml/python.ts).
  *   node ml/run.mjs train --metal gold
@@ -26,14 +26,17 @@ function resolvePython() {
   for (const p of [join(here, '.venv', 'Scripts', 'python.exe'), join(here, '.venv', 'bin', 'python')]) {
     if (existsSync(p)) return p
   }
+  // Prefer an interpreter that can import the pipeline deps; else the first that runs.
+  let runnable = null
   for (const cmd of ['python3', 'python']) {
     try {
-      if (spawnSync(cmd, ['--version'], { stdio: 'ignore' }).status === 0) return cmd
+      if (spawnSync(cmd, ['-c', 'import sklearn, pandas, joblib'], { stdio: 'pipe', windowsHide: true }).status === 0) return cmd
+      if (!runnable && spawnSync(cmd, ['--version'], { stdio: 'pipe', windowsHide: true }).status === 0) runnable = cmd
     } catch {
       // try the next candidate
     }
   }
-  return null
+  return runnable
 }
 
 const python = resolvePython()

@@ -16,10 +16,15 @@ function note(text: string): string {
 
 export function clearDemo(): { transactions: number; items: number; accounts: number } {
   const db = getDb()
-  const items = db.prepare(`SELECT id FROM pf_physical_items WHERE notes LIKE 'DEMO%'`).all() as { id: number }[]
+  const items = db.prepare(`SELECT id, acquisition_txn_id AS txnId FROM pf_physical_items WHERE notes LIKE 'DEMO%'`).all() as { id: number; txnId: number | null }[]
   items.forEach((i) => repo.deletePhysical(i.id))
-  const txns = db.prepare(`SELECT id FROM pf_transactions WHERE notes LIKE 'DEMO%'`).all() as { id: number }[]
-  txns.forEach((t) => repo.deleteTransaction(t.id))
+  // Demo rows start with 'DEMO'; vault purchases created through the register end with '· DEMO'.
+  const ids = new Set([
+    ...(db.prepare(`SELECT id FROM pf_transactions WHERE notes LIKE 'DEMO%' OR notes LIKE '%· DEMO'`).all() as { id: number }[]).map((t) => t.id),
+    ...items.map((i) => i.txnId).filter((x): x is number => x != null),
+  ])
+  const txns = [...ids]
+  txns.forEach((id) => repo.deleteTransaction(id))
   let accounts = 0
   for (const a of repo.listAccounts().filter((x) => x.notes === TAG)) {
     try {
@@ -48,9 +53,11 @@ export async function seedDemo(): Promise<number> {
     return { date: d, price: Math.round(book.close(symbol, d)!.price * 100) / 100 }
   }
 
-  const broker = repo.createAccount({ name: 'Prime Broker (demo)', custody: 'broker', institution: 'Interactive Brokers', notes: TAG })
-  const vault = repo.createAccount({ name: 'Bullion Vault (demo)', custody: 'vault', institution: "Brink's Zurich", notes: TAG })
-  const bank = repo.createAccount({ name: 'Custody Cash (demo)', custody: 'bank', institution: 'State Street', notes: TAG })
+  const account = (name: string, custody: 'broker' | 'vault' | 'bank', institution: string) =>
+    repo.listAccounts().find((a) => a.name === name) ?? repo.createAccount({ name, custody, institution, notes: TAG })
+  const broker = account('Prime Broker (demo)', 'broker', 'Interactive Brokers')
+  const vault = account('Bullion Vault (demo)', 'vault', "Brink's Zurich")
+  const bank = account('Custody Cash (demo)', 'bank', 'State Street')
 
   let n = 0
   const add = (tradeDate: string, type: TxnType, instrumentId: string, quantity: number, price = 1, fees = 0, accountId = broker.id, text = '', counterAccountId: number | null = null) => {

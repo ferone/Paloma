@@ -188,7 +188,7 @@ function firstBusinessDay(y: number, m: number): string {
 }
 
 /** Step back `n` business days from an ISO date (weekends skipped). */
-function businessDaysBefore(iso: string, n: number): string {
+export function businessDaysBefore(iso: string, n: number): string {
   let [y, m, d] = iso.split("-").map(Number);
   let left = n;
   while (left > 0) {
@@ -205,7 +205,7 @@ function businessDaysBefore(iso: string, n: number): string {
 }
 
 /** Step forward `n` business days from an ISO date (weekends skipped). */
-function businessDaysAfter(iso: string, n: number): string {
+export function businessDaysAfter(iso: string, n: number): string {
   let [y, m, d] = iso.split("-").map(Number);
   let left = n;
   while (left > 0) {

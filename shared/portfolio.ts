@@ -52,6 +52,23 @@ export const TXN_TYPES = [
 ] as const
 export type TxnType = (typeof TXN_TYPES)[number]
 
+/** Instrument kinds each transaction type may reference. */
+export const TXN_ALLOWED_KINDS: Record<TxnType, readonly InstrumentKind[]> = {
+  buy: ['etf', 'equity', 'physical'],
+  sell: ['etf', 'equity', 'physical'],
+  futures_open: ['future'],
+  futures_close: ['future'],
+  subscription: ['cash'],
+  redemption: ['cash'],
+  interest: ['cash'],
+  dividend: ['etf', 'equity', 'cash'],
+  fee: ['cash', 'etf', 'equity', 'physical', 'future'],
+  storage_fee: ['cash', 'physical'],
+  deposit: ['cash', 'etf', 'equity', 'physical'],
+  withdrawal: ['cash', 'etf', 'equity', 'physical'],
+  transfer: ['cash', 'etf', 'equity', 'physical'],
+}
+
 /** Types whose quantity is a USD amount (price is fixed to 1). */
 export const CASH_AMOUNT_TYPES: readonly TxnType[] = ['subscription', 'redemption', 'fee', 'storage_fee', 'dividend', 'interest']
 /** External capital flows (unitized; excluded from performance). */

@@ -72,7 +72,7 @@ function MarketBody({ data, asset }: { data: CotResponse; asset: AssetId }) {
   const l = data.latest!
   const spec = l.categories.find((c) => c.speculator)
   const who = data.speculator
-  const stance = cotStanceLabel(l.specPercentile3y)
+  const stance = cotStanceLabel(l.specPercentile3y, data.report, l.specNetPctOi)
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <Panel
@@ -134,7 +134,16 @@ function CotChart({ data, asset }: { data: CotResponse; asset: AssetId }) {
     <div>
       <div className="mb-1 flex items-center justify-between gap-2 text-2xs text-muted">
         <span>
-          Crowded ≥ <span className="num">{fmtNum(band.p85, 1)}%</span> · washed out ≤ <span className="num">{fmtNum(band.p15, 1)}%</span> (last 3y)
+          {data.report === 'tff' ? (
+            // TFF (bitcoin): the bands are plain percentiles, not a contrarian crowded/washed-out reading.
+            <>
+              85th pct <span className="num">{fmtNum(band.p85, 1)}%</span> · 15th pct <span className="num">{fmtNum(band.p15, 1)}%</span> (last 3y)
+            </>
+          ) : (
+            <>
+              Crowded ≥ <span className="num">{fmtNum(band.p85, 1)}%</span> · washed out ≤ <span className="num">{fmtNum(band.p15, 1)}%</span> (last 3y)
+            </>
+          )}
         </span>
         <Segmented ariaLabel="COT chart range" value={range} options={RANGES} onChange={setRange} />
       </div>

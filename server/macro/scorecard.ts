@@ -35,6 +35,8 @@ export function ordinal(n: number): string {
   const s = r100 >= 11 && r100 <= 13 ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'
   return `${n}${s}`
 }
+/** One decimal with a typographic minus. */
+const n1 = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}`
 const pc = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v * 100).toFixed(1)}%`
 
 interface RuleResult {
@@ -153,7 +155,7 @@ const DRIVERS: DriverRule[] = [
       const v = s.latest
       if (v == null) return noData
       const stress = v >= T.vixStress || (s.z != null && s.z >= T.vixZStress)
-      const zTxt = s.z != null ? `, z ${s.z.toFixed(1)}` : ''
+      const zTxt = s.z != null ? `, z ${n1(s.z)}` : ''
       if (stress)
         return m === 'gold'
           ? { stance: 'tailwind', reason: `VIX ${v.toFixed(1)}${zTxt}: equity stress supports haven demand` }
@@ -191,9 +193,9 @@ const DRIVERS: DriverRule[] = [
     evaluate: (s) => {
       const z = s.z
       if (z == null || s.latest == null) return noData
-      if (z >= T.gsrZ) return { stance: 'tailwind', reason: `Ratio ${s.latest.toFixed(1)}, z ${z.toFixed(1)}: silver cheap vs gold` }
-      if (z <= -T.gsrZ) return { stance: 'headwind', reason: `Ratio ${s.latest.toFixed(1)}, z ${z.toFixed(1)}: silver rich vs gold` }
-      return { stance: 'neutral', reason: `Ratio ${s.latest.toFixed(1)}, z ${z.toFixed(1)}: within ±${T.gsrZ}σ` }
+      if (z >= T.gsrZ) return { stance: 'tailwind', reason: `Ratio ${s.latest.toFixed(1)}, z ${n1(z)}: silver cheap vs gold` }
+      if (z <= -T.gsrZ) return { stance: 'headwind', reason: `Ratio ${s.latest.toFixed(1)}, z ${n1(z)}: silver rich vs gold` }
+      return { stance: 'neutral', reason: `Ratio ${s.latest.toFixed(1)}, z ${n1(z)}: within ±${T.gsrZ}σ` }
     },
   },
 ]
@@ -203,7 +205,7 @@ export const COT_RULE = `Managed-money net % of open interest, 3y percentile ≥
 export function cotStance(p: CotPoint | null): RuleResult {
   if (!p || p.mmPercentile3y == null || p.mmNetPctOi == null) return noData
   const pct = ordinal(Math.round(p.mmPercentile3y * 100))
-  const txt = `MM net ${(p.mmNetPctOi * 100).toFixed(1)}% of OI, ${pct} pct (3y)`
+  const txt = `MM net ${n1(p.mmNetPctOi * 100)}% of OI, ${pct} pct (3y)`
   if (p.mmPercentile3y >= T.cotCrowded) return { stance: 'headwind', reason: `${txt}: crowded long` }
   if (p.mmPercentile3y <= T.cotWashed) return { stance: 'tailwind', reason: `${txt}: washed out` }
   return { stance: 'neutral', reason: `${txt}` }

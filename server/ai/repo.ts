@@ -54,6 +54,7 @@ function toReport(r: Row): AiReport {
     createdAt: r.created_at,
     asOf: r.as_of,
     title: titleOf(r, body, req),
+    request: req,
     body,
     sources: JSON.parse(r.sources) as SourceRef[],
     webResults: JSON.parse(r.citations) as SourceRef[],

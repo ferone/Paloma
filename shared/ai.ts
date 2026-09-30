@@ -96,6 +96,8 @@ export interface AiReport {
   /** Date of the newest live data injected into the prompt. */
   asOf: string | null
   title: string
+  /** The original request (used to regenerate). */
+  request: ReportRequest
   body: ReportBody | null
   /** De-duplicated flat list of every validated source in the report. */
   sources: SourceRef[]

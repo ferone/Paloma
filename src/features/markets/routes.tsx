@@ -4,20 +4,23 @@ import { page } from '../../app/page'
 import { MarketsLayout } from './MarketsLayout'
 
 // Routes for the markets section. Owned by the markets workstream.
-// Legacy pages are mounted here until they are migrated into this folder.
-const DashboardPage = lazy(() => import('../../pages/DashboardPage'))
-const SignalsPage = lazy(() => import('../../pages/SignalsPage'))
-const ComparisonPage = lazy(() => import('../../pages/ComparisonPage'))
-const LiquidityPage = lazy(() => import('../../pages/LiquidityPage'))
+const PricesPage = lazy(() => import('./pages/PricesPage'))
+const CurvePage = lazy(() => import('./pages/CurvePage'))
+const EtfsPage = lazy(() => import('./pages/EtfsPage'))
+const TechnicalsPage = lazy(() => import('./pages/TechnicalsPage'))
+const ComparisonPage = lazy(() => import('./pages/ComparisonPage'))
+const LiquidityPage = lazy(() => import('./pages/LiquidityPage'))
 
 export const routes: RouteObject[] = [
   {
     path: 'markets',
     element: <MarketsLayout />,
     children: [
-      { index: true, element: page(<DashboardPage />) },
-      { path: 'signals', element: page(<SignalsPage />) },
-      { path: 'signals/:symbol', element: page(<SignalsPage />) },
+      { index: true, element: page(<PricesPage />) },
+      { path: 'curve', element: page(<CurvePage />) },
+      { path: 'etfs', element: page(<EtfsPage />) },
+      { path: 'signals', element: page(<TechnicalsPage />) },
+      { path: 'signals/:symbol', element: page(<TechnicalsPage />) },
       { path: 'comparison', element: page(<ComparisonPage />) },
       { path: 'liquidity', element: page(<LiquidityPage />) },
     ],

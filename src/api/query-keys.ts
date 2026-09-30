@@ -1,3 +1,4 @@
+// @deprecated Kept only for the pre-redesign simulator. Delete with it.
 export const queryKeys = {
   quotes: {
     all: ['quotes'] as const,

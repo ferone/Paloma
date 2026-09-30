@@ -1,3 +1,4 @@
+// @deprecated Kept only for the pre-redesign simulator. Delete with it.
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
 

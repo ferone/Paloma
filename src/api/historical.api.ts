@@ -1,3 +1,4 @@
+// @deprecated Kept only for the pre-redesign simulator. Delete with it.
 import { api } from './client'
 import type { OHLCV } from '../types'
 

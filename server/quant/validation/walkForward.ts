@@ -14,6 +14,22 @@ export interface WalkForwardOpts {
   minWinRate?: number; // in-sample bar for picking a window (default 0.7)
   minYearsInSample?: number; // in-sample sample-size bar (default 5)
   originDoy?: number; // season-day origin for year-crossing spreads (default 1)
+  /**
+   * Optional memo of per-test-year folds. A fold for test year T depends only on
+   * seasons < T (training) and season T (test), so calls on PREFIXES of the SAME
+   * series with the SAME options (e.g. the point-in-time simulation asking "OOS as
+   * of year Y" for every Y) can share it. Cost is applied after the lookup, so it
+   * may differ between callers. Never share across different series or options.
+   */
+  foldCache?: Map<number, WalkForwardFold | null>;
+}
+
+/** A cost-independent fold result (the window chosen on training seasons, applied to the test season). */
+export interface WalkForwardFold {
+  entryDoy: number;
+  exitDoy: number;
+  side: "long" | "short";
+  grossPnl: number;
 }
 
 export interface OosTrade {
@@ -65,35 +81,41 @@ export function walkForwardSeasonal(
     const trainYears = years.filter((y) => y < testYear);
     if (trainYears.length < minTrainYears) continue;
 
-    // Split by SEASON year (= calendar year when originDoy = 1) so a wrap season
-    // is never cut in half by the calendar boundary.
-    const train = series.filter((p) => seasonYearOf(p.date, originDoy) < testYear);
-    const candidates = findSeasonalWindows(train, {
-      minWinRate,
-      minYears: Math.min(minYearsInSample, trainYears.length),
-      pointValue: pv,
-      topN: 1,
-      originDoy,
-    });
-    if (candidates.length === 0) continue;
-    const w = candidates[0];
-
-    // Apply the chosen window to the (unseen) test season only.
-    const testSlice = series.filter((p) => seasonYearOf(p.date, originDoy) === testYear);
-    const applied = seasonalWindowStats(testSlice, w.entryDoy, w.exitDoy, {
-      side: w.side,
-      pointValue: pv,
-      originDoy,
-    });
-    const yr = applied.perYear[0];
-    if (!yr) continue;
+    let fold = opts.foldCache?.get(testYear);
+    if (fold === undefined) {
+      fold = null;
+      // Split by SEASON year (= calendar year when originDoy = 1) so a wrap season
+      // is never cut in half by the calendar boundary.
+      const train = series.filter((p) => seasonYearOf(p.date, originDoy) < testYear);
+      const candidates = findSeasonalWindows(train, {
+        minWinRate,
+        minYears: Math.min(minYearsInSample, trainYears.length),
+        pointValue: pv,
+        topN: 1,
+        originDoy,
+      });
+      if (candidates.length > 0) {
+        const w = candidates[0];
+        // Apply the chosen window to the (unseen) test season only.
+        const testSlice = series.filter((p) => seasonYearOf(p.date, originDoy) === testYear);
+        const applied = seasonalWindowStats(testSlice, w.entryDoy, w.exitDoy, {
+          side: w.side,
+          pointValue: pv,
+          originDoy,
+        });
+        const yr = applied.perYear[0];
+        if (yr) fold = { entryDoy: w.entryDoy, exitDoy: w.exitDoy, side: w.side, grossPnl: yr.pnl };
+      }
+      opts.foldCache?.set(testYear, fold);
+    }
+    if (!fold) continue;
     trades.push({
       year: testYear,
-      entryDoy: w.entryDoy,
-      exitDoy: w.exitDoy,
-      side: w.side,
-      grossPnl: yr.pnl,
-      netPnl: Number(netPnl(yr.pnl, cost).toFixed(2)),
+      entryDoy: fold.entryDoy,
+      exitDoy: fold.exitDoy,
+      side: fold.side,
+      grossPnl: fold.grossPnl,
+      netPnl: Number(netPnl(fold.grossPnl, cost).toFixed(2)),
     });
   }
 

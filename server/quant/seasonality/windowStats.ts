@@ -11,6 +11,29 @@ export interface WindowOpts {
 }
 
 /**
+ * Per-series memo of the year-grouped, annotated points. A window scan
+ * (`findSeasonalWindows`, `winPnlHeatmap`) calls `seasonalWindowStats` hundreds
+ * of times on the SAME series array; re-annotating it each call dominated the
+ * walk-forward and simulation run time. Keyed by array identity (a WeakMap, so
+ * nothing leaks) and origin; callers never mutate a series after passing it in.
+ * Pure memoization — results are identical.
+ */
+const groupCache = new WeakMap<SeriesPoint[], Map<number, [number, DatedPoint[]][]>>();
+function groupedYears(series: SeriesPoint[], originDoy: number): [number, DatedPoint[]][] {
+  let byOrigin = groupCache.get(series);
+  if (!byOrigin) {
+    byOrigin = new Map();
+    groupCache.set(series, byOrigin);
+  }
+  let groups = byOrigin.get(originDoy);
+  if (!groups) {
+    groups = [...byYear(annotate(series, originDoy)).entries()].sort((a, b) => a[0] - b[0]);
+    byOrigin.set(originDoy, groups);
+  }
+  return groups;
+}
+
+/**
  * Backtest a FIXED seasonal calendar window (enter near `entryDoy`, exit near
  * `exitDoy`) across every available year and aggregate the seasonalgo-style
  * statistics. For each year: entry = first bar with doy ≥ entryDoy, exit =
@@ -29,10 +52,10 @@ export function seasonalWindowStats(
   const pv = opts.pointValue ?? 1;
   const sign = side === "long" ? 1 : -1;
 
-  const groups = byYear(annotate(series, opts.originDoy ?? 1));
+  const groups = groupedYears(series, opts.originDoy ?? 1);
   const perYear: SeasonalYearResult[] = [];
 
-  for (const [year, pts] of [...groups.entries()].sort((a, b) => a[0] - b[0])) {
+  for (const [year, pts] of groups) {
     if (exitDoy <= entryDoy) continue; // v1: same-year windows only
     const entry = pts.find((p) => p.doy >= entryDoy);
     if (!entry) continue;

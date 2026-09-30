@@ -4,7 +4,7 @@ import { scoreAsOf } from "../engine/score.js";
 import { decideVerdict, type VerdictMode, type ValStatus } from "../engine/verdict.js";
 import { ouFit, ouTradability } from "../engine/ou.js";
 import { carryLensFor, carryRead, type CurvePoint } from "../engine/carry.js";
-import { walkForwardSeasonal } from "../validation/walkForward.js";
+import { walkForwardSeasonal, type WalkForwardFold } from "../validation/walkForward.js";
 import { flyWalkForward } from "../validation/flyWalkForward.js";
 import { yearOf, stdSample } from "../seasonality/util.js";
 import type {
@@ -45,23 +45,36 @@ export interface SimOptions {
    * the carry read only curve points ≤ t.
    */
   qt?: { ouAdaptive: boolean; carryCurve: boolean; params: QtParams };
+  /**
+   * Optional memo of point-in-time OOS statuses keyed `${instrumentId}|${year}`
+   * (identical across verdict modes, so one replay per mode can share it).
+   */
+  oosCache?: Map<string, ValStatus>;
+  /** Optional per-instrument walk-forward fold memo (see WalkForwardOpts.foldCache). */
+  foldCaches?: Map<string, Map<number, WalkForwardFold | null>>;
 }
 
 const moneyVerdict = (pnl: number): "made money" | "lost money" | "flat" =>
   pnl > 1e-6 ? "made money" : pnl < -1e-6 ? "lost money" : "flat";
 
 /** Point-in-time OOS status of a price series restricted to completed years < `beforeYear`. */
-function oosBeforeYear(prices: PricePoint[], beforeYear: number, pointValue: number, kind?: string): ValStatus {
+function oosBeforeYear(
+  prices: PricePoint[],
+  beforeYear: number,
+  pointValue: number,
+  kind?: string,
+  foldCache?: Map<number, WalkForwardFold | null>,
+): ValStatus {
   const prior = prices.filter((p) => yearOf(p.date) < beforeYear);
   if (prior.length === 0) return "untested";
-  if (kind === "butterfly") {
+  if (kind === "butterfly" || kind === "ratio" || kind === "inter") {
     // A butterfly is curvature reversion, not a seasonal window — gate it with the
     // fly walk-forward (ungated regime here: the benchmark measures the raw reversion
     // edge; the structural-move overlay is a live-only risk filter).
     return flyWalkForward(prior.map((p) => p.spread), prior.map((p) => p.date), prior.map(() => null), { pointValue }).validationStatus;
   }
   const series: SeriesPoint[] = prior.map((p) => ({ date: p.date, value: p.spread }));
-  return walkForwardSeasonal(series, { pointValue }).validationStatus;
+  return walkForwardSeasonal(series, { pointValue, foldCache }).validationStatus;
 }
 
 /**
@@ -99,6 +112,11 @@ export function runSimulation(
     const prices = ins.prices;
     if (prices.length < cfg.N + H + 2) continue; // not enough to score AND realize
     const oosCache = new Map<number, ValStatus>();
+    let foldCache = opts.foldCaches?.get(ins.id);
+    if (opts.foldCaches && !foldCache) {
+      foldCache = new Map();
+      opts.foldCaches.set(ins.id, foldCache);
+    }
 
     for (let i = cfg.N; i + H <= prices.length - 1; i += stride) {
       const t = prices[i].date;
@@ -113,11 +131,12 @@ export function runSimulation(
       if (!(sigma > 0)) continue; // no risk unit → cannot normalize
 
       const decYear = yearOf(t);
-      let valStatus = oosCache.get(decYear);
+      let valStatus = oosCache.get(decYear) ?? opts.oosCache?.get(`${ins.id}|${decYear}`);
       if (valStatus === undefined) {
-        valStatus = oosBeforeYear(prices, decYear, ins.pointValue, ins.kind);
-        oosCache.set(decYear, valStatus);
+        valStatus = oosBeforeYear(prices, decYear, ins.pointValue, ins.kind, foldCache);
+        opts.oosCache?.set(`${ins.id}|${decYear}`, valStatus);
       }
+      oosCache.set(decYear, valStatus);
 
       // EngineQT lenses (opts.qt only) — both PURE and as-of-gated: the OU fit is
       // on view.prices (≤ t) and the carry read on curve points ≤ t only.

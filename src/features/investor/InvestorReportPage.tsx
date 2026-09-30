@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import clsx from 'clsx'
-import type { HoldingsResponse, PerformanceResponse, PortfolioSummary, RiskResponse } from '@shared/portfolio'
+import { DEFAULT_BENCHMARK, assetBucketLabel as assetLabel, dominantAssetBeta, type HoldingsResponse, type PerformanceResponse, type PortfolioSummary, type RiskResponse } from '@shared/portfolio'
+import { ASSETS, ASSET_CLASS_LABEL, UNIVERSE } from '@shared/universe'
 import type { AiReport, AiReportSummary, PortfolioCommentaryBody } from '@shared/ai'
 import { api } from '../../api/client'
 import { Button, EmptyState, ErrorNote, PanelSkeleton } from '../../ui'
@@ -10,7 +11,9 @@ import { signColor } from '../../design/tokens'
 import { NavChart } from './NavChart'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const SLEEVE_LABEL: Record<string, string> = { physical: 'Physical metal', etf: 'ETFs', futures: 'Futures', equity: 'Equities', cash: 'Cash' }
+const SLEEVE_LABEL: Record<string, string> = { physical: 'Direct holdings', etf: 'ETFs', futures: 'Futures', equity: 'Equities', cash: 'Cash' }
+/** Asset classes the fund's universe spans, e.g. "Precious metals". */
+const CLASSES = [...new Set(ASSETS.map((a) => ASSET_CLASS_LABEL[UNIVERSE[a].assetClass]))].join(' · ')
 
 /**
  * Read-only investor factsheet. Composes the portfolio and AI APIs; prints to a
@@ -18,7 +21,7 @@ const SLEEVE_LABEL: Record<string, string> = { physical: 'Physical metal', etf: 
  */
 export default function InvestorReportPage() {
   const summary = useQuery({ queryKey: ['portfolio', 'summary'], queryFn: async () => (await api.get<PortfolioSummary>('/portfolio/summary')).data })
-  const perf = useQuery({ queryKey: ['portfolio', 'performance', 'GLD'], queryFn: async () => (await api.get<PerformanceResponse>('/portfolio/performance', { params: { benchmark: 'GLD' } })).data })
+  const perf = useQuery({ queryKey: ['portfolio', 'performance', DEFAULT_BENCHMARK], queryFn: async () => (await api.get<PerformanceResponse>('/portfolio/performance', { params: { benchmark: DEFAULT_BENCHMARK } })).data })
   const risk = useQuery({ queryKey: ['portfolio', 'risk'], queryFn: async () => (await api.get<RiskResponse>('/portfolio/risk')).data })
   const holdings = useQuery({ queryKey: ['portfolio', 'holdings'], queryFn: async () => (await api.get<HoldingsResponse>('/portfolio/holdings')).data })
   const commentary = useQuery({
@@ -52,7 +55,7 @@ export default function InvestorReportPage() {
   const p = perf.data
   const r = risk.data
   const var95 = r?.var.find((v) => v.confidence === 0.95 && v.horizonDays === 1) ?? r?.var[0]
-  const goldBeta = r?.betas.find((b) => b.symbol === 'GC=F')
+  const assetBeta = r ? dominantAssetBeta(r) : undefined
   const topHoldings = (holdings.data?.holdings ?? []).filter((h) => h.value !== 0).sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 8)
   const body = commentary.data?.body?.kind === 'portfolio_commentary' ? (commentary.data.body as PortfolioCommentaryBody) : null
 
@@ -69,8 +72,8 @@ export default function InvestorReportPage() {
       <header className="border-b-2 border-foreground pb-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="label">Monthly factsheet · Precious metals</div>
-            <h1 className="display mt-2 text-[2.5rem] font-light leading-none text-foreground">Gold &amp; Silver Fund</h1>
+            <div className="label">Monthly factsheet · {CLASSES}</div>
+            <h1 className="display mt-2 text-[2.5rem] font-light leading-none text-foreground">Real Assets Fund</h1>
           </div>
           <div className="text-right text-xs text-muted">
             <div>Data as of <span className="text-foreground">{fmtDate(s.asOf)}</span></div>
@@ -180,7 +183,7 @@ export default function InvestorReportPage() {
               ['Sortino ratio', fmtNum(p?.stats.sortino, 2)],
               ['Maximum drawdown', fmtPct(p ? -Math.abs(p.drawdown.maxDrawdown) : null, 1)],
               ['1-day VaR (95%)', var95 ? fmtPct(var95.historicalPct, 2) : '—'],
-              ['Beta to gold', fmtNum(goldBeta?.beta, 2)],
+              [`Beta to ${assetBeta ? UNIVERSE[assetBeta.asset].label.toLowerCase() : 'the asset'}`, fmtNum(assetBeta?.beta?.beta, 2)],
             ]}
           />
           <section>
@@ -203,10 +206,10 @@ export default function InvestorReportPage() {
             </ul>
             {s.byMetal.length > 0 && (
               <p className="mt-3 text-2xs text-muted">
-                Metal exposure:{' '}
+                Exposure by asset:{' '}
                 {s.byMetal
                   .filter((m) => m.weight > 0)
-                  .map((m) => `${m.metal} ${fmtPct(m.weight, 0)}`)
+                  .map((m) => `${assetLabel(m.metal)} ${fmtPct(m.weight, 0)}`)
                   .join(' · ')}
               </p>
             )}
@@ -230,7 +233,7 @@ export default function InvestorReportPage() {
       </div>
 
       <footer className="border-t border-border pt-4 text-[10px] leading-relaxed text-muted">
-        Figures are unaudited and computed from the fund ledger with Yahoo Finance closing prices; futures are marked to the front-month contract and physical metal to spot{s.warnings.length > 0 ? ` (${s.warnings.length} data warning${s.warnings.length > 1 ? 's' : ''})` : ''}. Past performance is not a reliable indicator of future results. The value of investments can fall as well as rise. This document is for information only and does not constitute an offer or solicitation. Fund NAV {fmtUsd(s.nav, 0)} as of {fmtDate(s.asOf)}.
+        Figures are unaudited and computed from the fund ledger with Yahoo Finance closing prices; futures are marked to the front-month contract and direct holdings (vault bullion, custody balances) to each asset's reference price. NAV is struck on business days; assets that trade around the clock are marked at the business-day close, so weekend moves appear in the following business day{s.warnings.length > 0 ? ` (${s.warnings.length} data warning${s.warnings.length > 1 ? 's' : ''})` : ''}. Past performance is not a reliable indicator of future results. The value of investments can fall as well as rise. This document is for information only and does not constitute an offer or solicitation. Fund NAV {fmtUsd(s.nav, 0)} as of {fmtDate(s.asOf)}.
       </footer>
     </article>
   )

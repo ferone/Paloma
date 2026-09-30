@@ -1,5 +1,6 @@
 import type { WalkForwardResult, ValidationStatus } from "./walkForward.js";
 import { performance, type PerfMetrics } from "./metrics.js";
+import { RELATIVE_VALUE_PAIRS, UNIVERSE, assetOfRoot, type AssetClass, type AssetId } from "../../../shared/universe.js";
 
 /**
  * Regime-exclusion robustness (P4 honest-validation gate).
@@ -67,14 +68,100 @@ export const REGIME_WINDOWS: RegimeWindow[] = [
 ];
 
 /**
- * The shock windows for a product root or instrument id (e.g. "GC",
- * "SI.cal.0-1", "GS.ratio"). Every product this app trades is a precious metal,
- * so all resolve to REGIME_WINDOWS; the seam exists so a future complex can carry
- * its own documented list without touching callers. PURE.
+ * Documented shocks to digital assets (CME bitcoin). Same rules as the precious
+ * list: exogenous, dated events only; frozen. Unused until a crypto asset exists.
  */
-export function regimesFor(productOrId: string): RegimeWindow[] {
-  void productOrId;
-  return REGIME_WINDOWS;
+export const CRYPTO_REGIME_WINDOWS: RegimeWindow[] = [
+  {
+    name: "COVID-Crash-2020",
+    start: "2020-03-01",
+    end: "2020-04-30",
+    note: "The 12 March 2020 'Black Thursday' liquidation halved bitcoin in two sessions as every risk asset was sold for dollars.",
+  },
+  {
+    name: "China-Mining-Ban-2021",
+    start: "2021-05-10",
+    end: "2021-07-31",
+    note: "China's May 2021 crackdown on bitcoin mining (and Tesla dropping BTC payments) forced the hash-rate exodus and a ~50% drawdown.",
+  },
+  {
+    name: "FTX-2022",
+    start: "2022-11-01",
+    end: "2022-12-31",
+    note: "The FTX/Alameda collapse (8–11 November 2022) froze exchange balances and dislocated crypto basis and funding.",
+  },
+  {
+    name: "Spot-ETF-2024",
+    start: "2024-01-02",
+    end: "2024-02-29",
+    note: "SEC approval (10 January 2024) and launch of US spot bitcoin ETFs re-priced the CME basis and pulled flows between wrappers.",
+  },
+];
+
+/**
+ * Documented shocks to industrial metals (COMEX copper). Frozen; unused until
+ * an industrial asset exists.
+ */
+export const INDUSTRIAL_REGIME_WINDOWS: RegimeWindow[] = [
+  {
+    name: "COVID-2020",
+    start: "2020-03-01",
+    end: "2020-05-31",
+    note: "Pandemic demand collapse (copper to ~$2.10/lb in March 2020) followed by the China-led restocking rebound.",
+  },
+  {
+    name: "LME-Nickel-2022",
+    start: "2022-03-01",
+    end: "2022-04-30",
+    note: "The LME nickel short squeeze (8 March 2022) suspended trading and cancelled trades, spilling volatility across base metals.",
+  },
+  {
+    name: "Copper-Tariff-EFP-2025",
+    start: "2025-02-15",
+    end: "2025-08-15",
+    note: "The US Section 232 copper investigation and July 2025 tariff decision blew out the COMEX–LME premium, then collapsed it when refined cathode was exempted.",
+  },
+];
+
+/** Shock windows per asset class. Precious = the original REGIME_WINDOWS (unchanged). */
+export const REGIMES_BY_CLASS: Record<AssetClass, RegimeWindow[]> = {
+  precious: REGIME_WINDOWS,
+  industrial: INDUSTRIAL_REGIME_WINDOWS,
+  crypto: CRYPTO_REGIME_WINDOWS,
+};
+
+/** Shock windows for an asset, keyed by its `assetClass`. PURE. */
+export function regimesForAsset(asset: AssetId): RegimeWindow[] {
+  return REGIMES_BY_CLASS[UNIVERSE[asset].assetClass];
+}
+
+/** Asset classes behind an id prefix: a futures root → its asset; a pair id → both legs. */
+function classesOf(prefix: string): AssetClass[] {
+  const asset = assetOfRoot(prefix);
+  if (asset) return [UNIVERSE[asset].assetClass];
+  const pair = RELATIVE_VALUE_PAIRS.find((p) => p.id === prefix);
+  if (pair) return [UNIVERSE[pair.numerator].assetClass, UNIVERSE[pair.denominator].assetClass];
+  return [];
+}
+
+/** Union of several classes' windows (de-duplicated by name, ordered by start). */
+function unionOf(classes: AssetClass[]): RegimeWindow[] {
+  const distinct = [...new Set(classes)];
+  if (distinct.length === 1) return REGIMES_BY_CLASS[distinct[0]];
+  const byName = new Map<string, RegimeWindow>();
+  for (const c of distinct) for (const w of REGIMES_BY_CLASS[c]) if (!byName.has(w.name)) byName.set(w.name, w);
+  return [...byName.values()].sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
+}
+
+/**
+ * The shock windows for a product root or instrument id (e.g. "GC",
+ * "SI.cal.0-1", "GS.ratio"), keyed by the owning asset's `assetClass`. A
+ * relative-value pair across classes gets the union of both lists. Unknown ids
+ * fall back to the precious-metals list. `classesFor` is injectable for tests. PURE.
+ */
+export function regimesFor(productOrId: string, classesFor: (prefix: string) => AssetClass[] = classesOf): RegimeWindow[] {
+  const classes = classesFor(productOrId.split(".")[0]);
+  return classes.length ? unionOf(classes) : REGIME_WINDOWS;
 }
 
 /** ISO date (UTC) for an OOS trade's (year, entry day-of-year). */

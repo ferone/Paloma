@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { SEASONAL_SPECS, PRODUCTS, consecutiveSeasonalSpecs, isYearCrossingSeasonal, seasonalSpecsFor } from "./seasonal.js";
+import { SEASONAL_SPECS, PRODUCTS, allPairsSeasonalSpecs, consecutiveSeasonalSpecs, isYearCrossingSeasonal, seasonalProducts, seasonalSpecsFor } from "./seasonal.js";
+import { FAKE_CASH, fakeAsset } from "../testing/fakeAssets.js";
 import { SPECS } from "./specs.js";
 
 describe("seasonal specs — metals, active months only", () => {
@@ -34,6 +35,17 @@ describe("seasonal specs — metals, active months only", () => {
     expect(mq.backYearOffset).toBeUndefined();
     expect(isYearCrossingSeasonal("GC.seas.M-Q")).toBe(false);
     expect(mq.label).toBe("Gold Jun–Aug (M−Q)");
+  });
+
+  it("seasonal pairs use seasonalMonths when set, else activeMonths; no-futures assets are skipped", () => {
+    const btc = fakeAsset({ id: "btc", label: "Bitcoin", futures: [FAKE_CASH] });
+    const noFut = fakeAsset({ id: "none", futures: [] });
+    const [p] = seasonalProducts([btc, noFut]);
+    expect(seasonalProducts([noFut])).toEqual([]);
+    expect(p).toMatchObject({ product: "BTC", metal: "btc", name: "Bitcoin", pointValue: 5, months: [3, 6, 9, 12] });
+    expect(allPairsSeasonalSpecs(p)).toHaveLength(4 * 3); // quarterlies only, not 12 listed months
+    const plain = seasonalProducts([fakeAsset({ futures: [{ ...FAKE_CASH, seasonalMonths: undefined }] })])[0];
+    expect(plain.months).toHaveLength(12);
   });
 
   it("consecutive specs close the ring with one wrap pair", () => {

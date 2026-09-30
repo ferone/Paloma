@@ -16,7 +16,7 @@ import type {
   SeasonalWindowView,
   StructuralPoint,
 } from "../../../shared/quant.js";
-import { UNIVERSE, assetOfRoot, type AssetId } from "../../../shared/universe.js";
+import { UNIVERSE, assetOfRoot, futuresProduct, type AssetId } from "../../../shared/universe.js";
 import { dollarNeutralHedge, pairById, pairLegs } from "../universe/pairs.js";
 import type { MlPredictionLite } from "../../../shared/artifacts.js";
 import type { Config, Instrument, MlPrediction, PricePoint, QtParams, SeriesPoint } from "../types/index.js";
@@ -517,7 +517,9 @@ export function analyzeContinuous(inst: Instrument, series: SeriesPoint[], ctx: 
   const bandWindow = kind === "ratio" ? 252 : cfg.N;
   const caveats: string[] = [];
   if (kind !== "ratio" && kind !== "inter")
-    caveats.push("Continuous legs splice contracts at each roll (before first position day); rolling z carries small roll gaps.");
+    caveats.push(
+      `Continuous legs splice contracts at each roll (${futuresProduct(root)?.cashSettled ? "before last trade" : "before first position day"}); rolling z carries small roll gaps.`,
+    );
   const pair = kind === "ratio" || kind === "inter" ? pairById(inst.product) : undefined;
   const pairLegsOf = pair ? pairLegs(pair) : null;
   if (kind === "ratio" && pairLegsOf) {

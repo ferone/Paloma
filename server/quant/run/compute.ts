@@ -18,6 +18,7 @@ import type { CurvePoint } from "../engine/carry.js";
 import { runSimulation, type SimInstrument } from "../simulation/engine.js";
 import type { SimulationResult } from "../simulation/types.js";
 import { ablateGates } from "../validation/qtGates.js";
+import { regimesForAsset } from "../validation/regimes.js";
 import { maxDrawdown } from "../validation/metrics.js";
 import { stdSample } from "../seasonality/util.js";
 import { MIRROR_ROOTS, REGISTRY } from "../universe/registry.js";
@@ -526,7 +527,7 @@ function gatesView(metal: AssetId, res: SimulationResult, source: string): Gates
   const decisions = res.decisions
     .filter((d) => d.ouTradable !== undefined)
     .map((d) => ({ date: d.date, instrumentId: d.instrumentId, pnl: d.passivePnl, ouTradable: d.ouTradable!, carryConflict: d.carryConflict ?? false }));
-  const rows = ablateGates(decisions).map((g) => ({
+  const rows = ablateGates(decisions, undefined, regimesForAsset(metal)).map((g) => ({
     gate: g.gate,
     label: g.gate === "ou" ? "OU half-life tradability" : "Carry trend veto",
     keptTrades: g.kept.trades,

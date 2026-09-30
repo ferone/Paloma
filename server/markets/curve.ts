@@ -1,4 +1,4 @@
-import { UNIVERSE, MONTH_CODES, yahooContractSymbol, type Metal } from '../../shared/universe.js'
+import { UNIVERSE, MONTH_CODES, yahooContractSymbol, type AssetId } from '../../shared/universe.js'
 import type { CurveContract, CurveResponse } from '../../shared/markets.js'
 import { getDetailedQuotes, type DetailedQuote } from '../services/yahoo-finance.service.js'
 import { annualizedCarry, classifyCurve, daysBetween, pickReference, upcomingContractMonths } from './curve-math.js'
@@ -9,11 +9,28 @@ const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 const STALE_MS = 4 * 86_400_000
 
 /**
- * Live futures curve from Yahoo's listed COMEX contract months (the metal's
- * main product, active months only, ~24 months out) plus the T-bill rate.
+ * Live futures curve from Yahoo's listed contract months (the asset's main
+ * product, active months only, ~24 months out, exchange-specific Yahoo
+ * suffix) plus the T-bill rate. An asset without futures gets an empty curve.
  */
-export async function buildCurve(metal: Metal, now = new Date()): Promise<CurveResponse> {
-  const product = UNIVERSE[metal].futures[0]
+export async function buildCurve(asset: AssetId, now = new Date()): Promise<CurveResponse> {
+  const spec = UNIVERSE[asset]
+  const product = spec.futures[0]
+  if (!product) {
+    return {
+      metal: asset,
+      root: null,
+      exchange: null,
+      unitLabel: spec.unitLabel,
+      contracts: [],
+      referenceSymbol: null,
+      rate: { symbol: RATE_SYMBOL, value: null },
+      shape: 'insufficient',
+      termCarry: null,
+      carryMinusRate: null,
+      provenance: { source: `No listed futures for ${spec.label} in the universe`, asOf: null },
+    }
+  }
   const months = upcomingContractMonths(product.activeMonths, now, 24)
   const symbols = months.map((m) => yahooContractSymbol(product.root, m.month, m.year))
   const quotes = await getDetailedQuotes([...symbols, RATE_SYMBOL])
@@ -71,8 +88,10 @@ export async function buildCurve(metal: Metal, now = new Date()): Promise<CurveR
   const lastTrades = contracts.map((c) => c.lastTrade).filter((t): t is string => !!t).sort()
 
   return {
-    metal,
+    metal: asset,
     root: product.root,
+    exchange: product.exchange,
+    unitLabel: spec.unitLabel,
     contracts,
     referenceSymbol: ref?.symbol ?? null,
     rate: { symbol: RATE_SYMBOL, value: rate },
@@ -80,7 +99,7 @@ export async function buildCurve(metal: Metal, now = new Date()): Promise<CurveR
     termCarry: cls.termCarry,
     carryMinusRate: cls.termCarry != null && rate != null ? cls.termCarry - rate : null,
     provenance: {
-      source: `Yahoo Finance · COMEX ${product.root} listed months (${product.activeMonths.map((m) => MONTH_CODES[m - 1]).join('')}) · ${RATE_SYMBOL}`,
+      source: `Yahoo Finance · ${product.exchange} ${product.root} listed months (${product.activeMonths.map((m) => MONTH_CODES[m - 1]).join('')}) · ${RATE_SYMBOL}`,
       asOf: lastTrades.length ? lastTrades[lastTrades.length - 1] : null,
       note: 'Quotes may be delayed',
     },

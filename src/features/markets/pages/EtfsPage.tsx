@@ -1,7 +1,7 @@
 import type { EtfRow } from '@shared/markets'
 import { UNIVERSE } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
-import { Chip, DataTable, ErrorNote, Explainer, Panel, PanelSkeleton, type Column } from '../../../ui'
+import { Chip, DataTable, EmptyState, ErrorNote, Explainer, Panel, PanelSkeleton, type Column } from '../../../ui'
 import { fmtCompact, fmtNum, fmtPct, fmtPctSigned, fmtUsdCompact } from '../../../design/format'
 import { signColor } from '../../../design/tokens'
 import { useEtfs } from '../hooks'
@@ -16,6 +16,15 @@ export default function EtfsPage() {
   if (q.isLoading) return <Panel><PanelSkeleton rows={7} /></Panel>
   if (q.error || !q.data) return <Panel><ErrorNote error={q.error ?? new Error('No data')} onRetry={() => q.refetch()} /></Panel>
   const d = q.data
+  if (spec.etfs.length === 0 && !spec.miners) {
+    return (
+      <Panel provenance={d.provenance}>
+        <EmptyState title={`No listed funds for ${spec.label.toLowerCase()}`}>
+          The universe has no ETF or miners proxy for {spec.label.toLowerCase()}, so there are no premiums or tracking figures to compute.
+        </EmptyState>
+      </Panel>
+    )
+  }
 
   const columns: Column<EtfRow>[] = [
     {
@@ -98,7 +107,7 @@ export default function EtfsPage() {
   return (
     <div className="space-y-4">
       <div className="grid items-start gap-4 2xl:grid-cols-2">
-        <Panel density="dense" title={`${spec.label} ETFs · price, liquidity, premium`} eyebrow="Physically backed funds + miners" provenance={d.provenance}>
+        <Panel density="dense" title={`${spec.label} ETFs · price, liquidity, premium`} eyebrow={spec.miners ? 'Physically backed funds + miners' : 'Physically backed funds'} provenance={d.provenance}>
           <DataTable columns={marketCols} rows={d.rows} rowKey={(r) => r.symbol} dense initialSort={{ key: 'dvol', dir: 'desc' }} caption="ETF price, liquidity and premium" />
           <p className="mt-3 text-xs text-muted">
             {deepest && (
@@ -129,8 +138,8 @@ export default function EtfsPage() {
 
       <Explainer title="How premiums and tracking are calculated">
         <p>
-          <strong>Premium/discount</strong> compares the last traded price with the latest NAV the fund published (Yahoo, struck at the LBMA PM price of
-          the prior business day). Intraday, part of the gap is simply the metal's move since that fix, so small readings (±0.3%) are noise.
+          <strong>Premium/discount</strong> compares the last traded price with the latest NAV the fund published (Yahoo, struck at the prior business
+          day's reference price, the LBMA PM for metals). Intraday, part of the gap is simply the underlying's move since that fix, so small readings (±0.3%) are noise.
         </p>
         <p>
           <strong>Modeled</strong> (closed-end trusts such as PHYS/PSLV, for which no NAV is available here): we take the median ratio of the trust's
@@ -139,7 +148,7 @@ export default function EtfsPage() {
           before acting on it.
         </p>
         <p>
-          <strong>Tracking</strong> uses the front COMEX future as the spot proxy, sampled weekly so the 4 pm ETF close and the 1:30 pm futures settle
+          <strong>Tracking</strong> uses {d.spotSymbol} as the spot proxy, sampled weekly so the 4 pm ETF close and the 1:30 pm futures settle
           don't read as tracking error. Tracking difference includes fees and the futures roll.
         </p>
       </Explainer>

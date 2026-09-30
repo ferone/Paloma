@@ -1,33 +1,20 @@
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import { RiMoonLine, RiSunLine, RiRefreshLine } from 'react-icons/ri'
-import { useQuote } from '../hooks/useQuote'
 import { useSettings } from '../store/settings-context'
 import { useTheme } from './theme'
-import { UNIVERSE } from '@shared/universe'
-import { fmtNum, fmtPctSigned } from '../design/format'
-import { signColor } from '../design/tokens'
 import { AssetPicker } from './AssetPicker'
+import { TickerStrip } from './TickerStrip'
 
 export function TopBar({ menuButton }: { menuButton: ReactNode }) {
   const { theme, toggleTheme } = useTheme()
   const { autoRefresh, toggleAutoRefresh } = useSettings()
-  const gold = useQuote(UNIVERSE.gold.spot)
-  const silver = useQuote(UNIVERSE.silver.spot)
-  const ratio = gold.data && silver.data && silver.data.price > 0 ? gold.data.price / silver.data.price : null
 
   return (
     <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-border bg-background/85 px-4 backdrop-blur md:px-8">
       {menuButton}
 
-      <dl className="flex min-w-0 flex-1 items-center gap-5 overflow-x-auto text-xs">
-        <Ticker label="Gold" price={gold.data?.price} change={gold.data?.changePercent} />
-        <Ticker label="Silver" price={silver.data?.price} change={silver.data?.changePercent} />
-        <div className="hidden items-baseline gap-1.5 sm:flex">
-          <dt className="text-muted">Au/Ag</dt>
-          <dd className="num text-foreground">{fmtNum(ratio, 1)}</dd>
-        </div>
-      </dl>
+      <TickerStrip />
 
       <div className="flex items-center gap-1.5">
         <AssetPicker />
@@ -54,15 +41,5 @@ export function TopBar({ menuButton }: { menuButton: ReactNode }) {
         </button>
       </div>
     </header>
-  )
-}
-
-function Ticker({ label, price, change }: { label: string; price?: number; change?: number }) {
-  return (
-    <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-      <dt className="text-muted">{label}</dt>
-      <dd className="num text-foreground">{price ? `$${fmtNum(price, 2)}` : '—'}</dd>
-      <dd className={clsx('num', signColor(change))}>{change != null ? fmtPctSigned(change / 100) : ''}</dd>
-    </div>
   )
 }

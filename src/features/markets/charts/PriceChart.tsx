@@ -3,7 +3,7 @@ import { AreaSeries, CandlestickSeries, HistogramSeries, createChart } from 'lig
 import type { OHLCV } from '@shared/markets'
 import { useChartTheme } from './chartTheme'
 import { baseChartOptions, toTimedBars } from './lwc'
-import { metalColor } from '../lib/symbols'
+import { assetColor } from '../lib/symbols'
 
 export type PriceChartType = 'area' | 'candle'
 
@@ -27,7 +27,7 @@ export function PriceChart({ symbol, bars, intraday, type, showVolume = true, he
     const data = toTimedBars(bars, intraday)
     if (data.length === 0) return
     const chart = createChart(el, baseChartOptions(t, intraday))
-    const line = metalColor(symbol, t)
+    const line = assetColor(symbol, t)
 
     if (type === 'candle') {
       const s = chart.addSeries(CandlestickSeries, {

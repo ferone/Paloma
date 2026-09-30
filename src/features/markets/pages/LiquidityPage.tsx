@@ -2,7 +2,7 @@ import { CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { useId, useMemo, useState } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { LiquidityHistoryResponse, LiquiditySnapshot, ModeledSplit } from '@shared/markets'
-import { UNIVERSE } from '@shared/universe'
+import { ASSETS, UNIVERSE } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
 import { Chip, EmptyState, ErrorBoundary, ErrorNote, Explainer, Panel, PanelSkeleton, Segmented, Skeleton, Stat } from '../../../ui'
 import { fmtCompact, fmtDate, fmtNum, fmtPct, fmtUsdCompact } from '../../../design/format'
@@ -10,6 +10,10 @@ import { useLiquidity, useLiquidityHistory } from '../hooks'
 import { useChartTheme, type ChartTheme } from '../charts/chartTheme'
 import { dateTick, rechartsStyle } from '../charts/recharts'
 
+const POINT_VALUES = ASSETS.flatMap((a) => {
+  const f = UNIVERSE[a].futures[0]
+  return f ? [`${f.root} $${f.pointValue.toLocaleString('en-US')} = ${f.contractSize.toLocaleString('en-US')} ${UNIVERSE[a].priceUnit}`] : []
+}).join(', ')
 const PROVENANCE_LINE = 'Yahoo Finance volumes · source split modeled from World Gold Council shares'
 const RANGES = ['1M', '3M', '6M', '1Y', '5Y', 'ALL'] as const
 type Range = (typeof RANGES)[number]
@@ -20,7 +24,9 @@ export default function LiquidityPage() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted">
-        {metal === 'gold' ? PROVENANCE_LINE : 'Yahoo Finance volumes · silver shows observed instrument volumes only (no modeled source split)'}
+        {snap.data?.split
+          ? PROVENANCE_LINE
+          : `Yahoo Finance volumes · ${UNIVERSE[metal].label.toLowerCase()} shows observed instrument volumes only (no modeled source split)`}
       </p>
       {snap.isLoading ? (
         <Panel><PanelSkeleton rows={6} /></Panel>
@@ -43,7 +49,9 @@ function Snapshot({ data: d }: { data: LiquiditySnapshot }) {
   const t = useChartTheme()
   const s = rechartsStyle(t)
   const max = Math.max(...d.instruments.map((i) => i.dollarVolume), 1)
-  const color = d.metal === 'gold' ? t.gold : t.silver
+  const color = t.asset[d.metal]
+  const spec = UNIVERSE[d.metal]
+  const exchange = spec.futures[0]?.exchange ?? ''
   const futureShare = d.totalDollarVolume > 0 ? d.instruments.filter((i) => i.kind === 'future').reduce((a, i) => a + i.dollarVolume, 0) / d.totalDollarVolume : null
 
   return (
@@ -51,7 +59,12 @@ function Snapshot({ data: d }: { data: LiquiditySnapshot }) {
       <Panel density="dense" title="Today's dollar volume by instrument" provenance={d.provenance}>
         <div className="mb-4 flex flex-wrap gap-x-10 gap-y-3">
           <Stat label="Total, session to date" value={fmtUsdCompact(d.totalDollarVolume)} size="lg" />
-          <Stat label="Futures share" value={fmtPct(futureShare, 1)} size="sm" hint={`COMEX ${d.futuresSymbol} front month vs ETFs`} />
+          <Stat
+            label="Futures share"
+            value={fmtPct(d.futuresSymbol ? futureShare : null, 1)}
+            size="sm"
+            hint={d.futuresSymbol ? `${exchange} ${d.futuresSymbol} front month vs ETFs` : 'No listed futures'}
+          />
         </div>
         <table className="w-full text-xs">
           <caption className="sr-only">Dollar volume by instrument</caption>
@@ -90,10 +103,16 @@ function Snapshot({ data: d }: { data: LiquiditySnapshot }) {
 
       <Panel
         density="dense"
-        title={`COMEX ${d.futuresSymbol} contracts traded, last 30 sessions`}
-        provenance={{ source: `Yahoo Finance daily volume summed over listed ${d.futuresSymbol} active months`, asOf: d.futuresVolume.at(-1)?.date ?? null, note: 'Months that expired in the window are not included' }}
+        title={d.futuresSymbol ? `${exchange} ${d.futuresSymbol} contracts traded, last 30 sessions` : 'Futures contracts traded'}
+        provenance={
+          d.futuresSymbol
+            ? { source: `Yahoo Finance daily volume summed over listed ${d.futuresSymbol} active months`, asOf: d.futuresVolume.at(-1)?.date ?? null, note: 'Months that expired in the window are not included' }
+            : { source: 'Universe definition' }
+        }
       >
-        {d.futuresVolume.length === 0 ? (
+        {!d.futuresSymbol ? (
+          <EmptyState compact title={`No listed futures for ${spec.label.toLowerCase()}`}>Only fund volumes are observed for this asset.</EmptyState>
+        ) : d.futuresVolume.length === 0 ? (
           <EmptyState compact title="No futures volume history returned" />
         ) : (
           <div className="h-56">
@@ -115,10 +134,10 @@ function Snapshot({ data: d }: { data: LiquiditySnapshot }) {
           <SourceSplit split={d.split} total={d.totalDollarVolume} t={t} />
         </div>
       ) : (
-        <Panel density="dense" className="xl:col-span-2" provenance={{ source: 'No modeled split for silver' }}>
-          <EmptyState compact title="No source or country breakdown for silver">
-            There is no silver dataset comparable to the World Gold Council demand shares used for gold, so no split is estimated. Only the observed
-            instrument volumes above are shown.
+        <Panel density="dense" className="xl:col-span-2" provenance={{ source: `No modeled split for ${spec.label.toLowerCase()}` }}>
+          <EmptyState compact title={`No source or country breakdown for ${spec.label.toLowerCase()}`}>
+            There is no {spec.label.toLowerCase()} dataset comparable to the World Gold Council demand shares used for gold, so no split is estimated.
+            Only the observed instrument volumes above are shown.
           </EmptyState>
         </Panel>
       )}
@@ -216,7 +235,9 @@ function History() {
   const [range, setRange] = useState<Range>('1Y')
   const [view, setView] = useState<View>('instrument')
   const q = useLiquidityHistory(metal, range)
-  const activeView: View = metal === 'gold' ? view : 'instrument'
+  // The modeled split is gold data (World Gold Council shares); other assets show instruments only.
+  const hasSplit = !!q.data?.split
+  const activeView: View = hasSplit ? view : 'instrument'
 
   return (
     <Panel
@@ -228,7 +249,7 @@ function History() {
       }
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {metal === 'gold' && (
+          {hasSplit && (
             <Segmented
               ariaLabel="Breakdown"
               value={view}
@@ -265,7 +286,7 @@ function HistoryBody({ data: d, view }: { data: LiquidityHistoryResponse; view: 
 
   const layers = useMemo(() => {
     if (view === 'source' && d.split) return d.split.sources.map((src, i) => ({ key: src.key, label: src.label, color: t.series[i % t.series.length] }))
-    return d.symbols.map((sym, i) => ({ key: sym.symbol, label: sym.symbol, color: i === 0 ? (d.metal === 'gold' ? t.gold : t.silver) : t.series[(i % 5) + 1] }))
+    return d.symbols.map((sym, i) => ({ key: sym.symbol, label: sym.symbol, color: i === 0 ? (t.asset[d.metal]) : t.series[(i % 5) + 1] }))
   }, [view, d, t])
 
   const rows = useMemo(
@@ -357,7 +378,8 @@ function HistoryBody({ data: d, view }: { data: LiquidityHistoryResponse; view: 
                   {sp.description && (
                     <p className="ml-7 mt-1 max-w-3xl text-xs leading-relaxed text-muted">
                       {sp.description}
-                      {d.metal === 'silver' && ' (Event from the gold-market catalogue; silver usually reacts to the same macro news.)'}
+                      {d.metal !== 'gold' &&
+                        ` (Event from the gold-market catalogue; ${UNIVERSE[d.metal].label.toLowerCase()} often reacts to the same macro news.)`}
                     </p>
                   )}
                 </details>
@@ -380,9 +402,9 @@ function LiquidityExplainer() {
   return (
     <Explainer title="What is measured and what is modeled">
       <p>
-        <strong>Observed:</strong> share and contract volumes from Yahoo Finance for the front COMEX future and the physically backed ETFs. Dollar
-        volume is shares × price, or contracts × ounces per contract (100 oz gold, 5,000 oz silver) × price. OTC London trading, which is most of the
-        physical market, is not visible here.
+        <strong>Observed:</strong> share and contract volumes from Yahoo Finance for the front future and the physically backed ETFs. Dollar
+        volume is shares × price, or contracts × point value (dollars per 1.00 move: {POINT_VALUES}) × price. OTC trading (London for metals),
+        which is most of the physical market, is not visible here.
       </p>
       <p>
         <strong>Modeled (gold only):</strong> the participant and country splits apply fixed percentages derived from World Gold Council demand

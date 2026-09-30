@@ -2,23 +2,28 @@ import { useMemo, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import clsx from 'clsx'
 import type { OHLCV, TimeRange } from '@shared/markets'
-import { UNIVERSE } from '@shared/universe'
+import { ASSETS, MACRO_SYMBOLS, RELATIVE_VALUE_PAIRS, UNIVERSE } from '@shared/universe'
 import { DataTable, EmptyState, ErrorBoundary, Explainer, Panel, Segmented, Skeleton, type Column } from '../../../ui'
 import { fmtDate, fmtNum, fmtPctSigned } from '../../../design/format'
 import { signColor, CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { useHistories } from '../hooks'
 import { PERIODS, periodReturns, rebase, returnCorrelation, type Period } from '../lib/series'
-import { MACRO_COMPARISON, metalInstruments, seriesColor, shortSymbol, symbolLabel } from '../lib/symbols'
+import { MACRO_COMPARISON, assetInstruments, seriesColor, shortSymbol, symbolLabel } from '../lib/symbols'
 import { useChartTheme } from '../charts/chartTheme'
 import { dateTick, rechartsStyle } from '../charts/recharts'
 
-const DEFAULT = ['GC=F', 'SI=F', 'GLD', 'SLV', 'SPY', 'DX-Y.NYB']
+// Default: the first relative-value pair's reference quotes and benchmark ETFs, plus SPY and the dollar
+// (gold/silver: GC=F, SI=F, GLD, SLV, SPY, DXY).
+const DEFAULT_PAIR = RELATIVE_VALUE_PAIRS[0]
+const DEFAULT_ASSETS = DEFAULT_PAIR ? [UNIVERSE[DEFAULT_PAIR.numerator], UNIVERSE[DEFAULT_PAIR.denominator]] : [UNIVERSE[ASSETS[0]]]
+const DEFAULT = [...DEFAULT_ASSETS.map((u) => u.spot), ...DEFAULT_ASSETS.map((u) => u.benchmarkEtf), 'SPY', MACRO_SYMBOLS.dxy]
 const RANGES = ['1M', '3M', '6M', '1Y', '5Y'] as const satisfies readonly TimeRange[]
 const GROUPS = [
-  { label: 'Gold', symbols: metalInstruments('gold') },
-  { label: 'Silver', symbols: metalInstruments('silver') },
+  ...ASSETS.map((a) => ({ label: UNIVERSE[a].label, symbols: assetInstruments(a) })),
   { label: 'Macro', symbols: [...MACRO_COMPARISON] },
 ]
+// Assets whose reference series is a front future (their returns include the roll).
+const FUTURE_SPOTS = ASSETS.filter((a) => UNIVERSE[a].futures.some((f) => f.yahoo === UNIVERSE[a].spot))
 
 export default function ComparisonPage() {
   const [selected, setSelected] = useState<string[]>(DEFAULT)
@@ -26,8 +31,8 @@ export default function ComparisonPage() {
 
   return (
     <div className="space-y-4">
-      <Panel density="dense" title="Instruments" provenance={{ source: 'Yahoo Finance · spot proxies are COMEX front futures' }}>
-        <div className="grid gap-3 md:grid-cols-3">
+      <Panel density="dense" title="Instruments" provenance={{ source: 'Yahoo Finance · spot proxies are front futures where the asset has them' }}>
+        <div className="grid gap-3 md:grid-cols-3 2xl:grid-cols-4">
           {GROUPS.map((g) => (
             <div key={g.label}>
               <div className="label mb-1.5">{g.label}</div>
@@ -210,8 +215,13 @@ function ReturnsAndCorrelation({ symbols }: { symbols: string[] }) {
       <div className="xl:col-span-2">
         <Explainer title="Notes on the comparison">
           <p>
-            Gold and silver use the COMEX front future as the spot proxy ({UNIVERSE.gold.spot}, {UNIVERSE.silver.spot}); their returns include the monthly roll. DXY is the
-            ICE US Dollar Index. Correlations use only dates on which both instruments traded, so futures and US-listed funds line up on US sessions.
+            {FUTURE_SPOTS.length > 0 && (
+              <>
+                {FUTURE_SPOTS.map((a) => `${UNIVERSE[a].label} (${UNIVERSE[a].spot})`).join(', ')} use the front future as the spot proxy; their returns
+                include the monthly roll.{' '}
+              </>
+            )}
+            DXY is the ICE US Dollar Index. Correlations use only dates on which both instruments traded, so futures and US-listed funds line up on US sessions.
           </p>
         </Explainer>
       </div>

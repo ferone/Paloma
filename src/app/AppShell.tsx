@@ -93,8 +93,8 @@ export function AppShell() {
 function Wordmark() {
   return (
     <div className="flex items-baseline gap-2 leading-none">
-      <span className="display text-[17px] font-medium text-foreground">Gold</span>
-      <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.14em] text-muted">Investment Dashboard</span>
+      <span className="display text-[17px] font-medium text-foreground">Real</span>
+      <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.14em] text-muted">Assets Dashboard</span>
     </div>
   )
 }

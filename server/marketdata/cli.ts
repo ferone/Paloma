@@ -1,4 +1,4 @@
-import { DATABENTO_HISTORY_START, DATABENTO_ROOTS, DATABENTO_SCHEMAS, type DatabentoRoot, type DatabentoSchema } from '../../shared/marketdata.js'
+import { DATABENTO_HISTORY_START, DATABENTO_ROOTS, DATABENTO_SCHEMAS, isDatabentoRoot, type DatabentoRoot, type DatabentoSchema } from '../../shared/marketdata.js'
 import { env } from '../lib/env.js'
 import type { JobContext } from '../jobs/registry.js'
 import { estimate } from './databento/cost.js'
@@ -26,7 +26,9 @@ const ctx: JobContext = {
 }
 
 function request() {
-  const roots = (args.roots ? args.roots.split(',') : [...DATABENTO_ROOTS]) as DatabentoRoot[]
+  const roots: DatabentoRoot[] = args.roots ? args.roots.split(',') : [...DATABENTO_ROOTS]
+  const unknown = roots.filter((r) => !isDatabentoRoot(r))
+  if (unknown.length) throw new Error(`Unknown root(s) ${unknown.join(', ')}; expected one of ${DATABENTO_ROOTS.join(', ')}`)
   const schemas = (args.schemas ? args.schemas.split(',') : [...DATABENTO_SCHEMAS]) as DatabentoSchema[]
   return { roots, schemas, start: args.start ?? DATABENTO_HISTORY_START, end: args.end, maxCost: args.maxCost ? Number(args.maxCost) : undefined, windowMonths: args.windowMonths ? Number(args.windowMonths) : undefined }
 }

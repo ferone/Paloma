@@ -1,4 +1,4 @@
-import { UNIVERSE, yahooContractSymbol, type Metal } from '../../shared/universe.js'
+import { UNIVERSE, yahooContractSymbol, type AssetId } from '../../shared/universe.js'
 import { upcomingContractMonths } from './curve-math.js'
 import { memo } from './memo.js'
 import type {
@@ -10,14 +10,15 @@ import type {
   ModeledSplit,
 } from '../../shared/markets.js'
 import { getBarsSince, getDetailedQuotes } from '../services/yahoo-finance.service.js'
-import { LIQUIDITY_INSTRUMENTS, REGION_DATA, SOURCE_BREAKDOWN, SOURCE_KEYS } from '../data/gold-constants.js'
+import { REGION_DATA, SOURCE_BREAKDOWN, SOURCE_KEYS } from '../data/gold-constants.js'
+import { LIQUIDITY_INSTRUMENTS, type LiquidityInstrumentDef } from '../data/liquidity-instruments.js'
 import { MARKET_EVENTS } from '../data/market-events.js'
 
 const SPLIT_SOURCE = 'Source split modeled from World Gold Council demand shares (fixed percentages)'
 
-/** Modeled World Gold Council-style splits. Gold only: silver has no equivalent dataset here. */
-export function modeledSplit(metal: Metal): ModeledSplit | null {
-  if (metal !== 'gold') return null
+/** Modeled World Gold Council-style splits. Gold only: it is gold demand data; no other asset has an equivalent dataset here. */
+export function modeledSplit(asset: AssetId): ModeledSplit | null {
+  if (asset !== 'gold') return null
   return {
     sources: SOURCE_BREAKDOWN.map((s, i) => ({ key: SOURCE_KEYS[i], label: s.name, share: s.percent / 100 })),
     regions: REGION_DATA.map((r) => ({
@@ -33,8 +34,9 @@ export function modeledSplit(metal: Metal): ModeledSplit | null {
   }
 }
 
-function dollarVolume(def: (typeof LIQUIDITY_INSTRUMENTS)['gold'][number], volume: number, price: number): number {
-  return def.kind === 'future' ? volume * (def.ozPerContract ?? 1) * price : volume * price
+/** Shares × price, or contracts × point value (dollars per 1.00 move) × price. */
+export function dollarVolume(def: LiquidityInstrumentDef, volume: number, price: number): number {
+  return def.kind === 'future' ? volume * (def.pointValue ?? 1) * price : volume * price
 }
 
 /**
@@ -42,8 +44,9 @@ function dollarVolume(def: (typeof LIQUIDITY_INSTRUMENTS)['gold'][number], volum
  * continuous `=F` series only carries one month and, for silver, the wrong one).
  * Months that expired inside the window are not included.
  */
-async function listedFuturesVolume(metal: Metal, sessions = 30): Promise<{ date: string; volume: number }[]> {
-  const product = UNIVERSE[metal].futures[0]
+async function listedFuturesVolume(asset: AssetId, sessions = 30): Promise<{ date: string; volume: number }[]> {
+  const product = UNIVERSE[asset].futures[0]
+  if (!product) return []
   const since = new Date(Date.now() - (sessions + 20) * 86_400_000)
   const symbols = upcomingContractMonths(product.activeMonths, new Date(), 24).map((m) =>
     yahooContractSymbol(product.root, m.month, m.year),
@@ -62,11 +65,12 @@ async function listedFuturesVolume(metal: Metal, sessions = 30): Promise<{ date:
     .map(([date, volume]) => ({ date, volume }))
 }
 
-export async function liquiditySnapshot(metal: Metal): Promise<LiquiditySnapshot> {
-  const defs = LIQUIDITY_INSTRUMENTS[metal]
+export async function liquiditySnapshot(asset: AssetId): Promise<LiquiditySnapshot> {
+  const defs = LIQUIDITY_INSTRUMENTS[asset]
+  const product = UNIVERSE[asset].futures[0]
   const [quotes, futVolume] = await Promise.all([
-    getDetailedQuotes(defs.map((d) => d.symbol)),
-    listedFuturesVolume(metal).catch(() => []),
+    defs.length ? getDetailedQuotes(defs.map((d) => d.symbol)) : Promise.resolve([]),
+    listedFuturesVolume(asset).catch(() => []),
   ])
   const bySymbol = new Map(quotes.map((q) => [q.symbol, q]))
 
@@ -77,7 +81,7 @@ export async function liquiditySnapshot(metal: Metal): Promise<LiquiditySnapshot
     const volume = q.volume ?? 0
     instruments.push({
       symbol: def.symbol,
-      name: def.name,
+      name: def.name === def.symbol ? q.shortName || def.name : def.name,
       kind: def.kind,
       price: q.price,
       volume,
@@ -87,16 +91,16 @@ export async function liquiditySnapshot(metal: Metal): Promise<LiquiditySnapshot
   const lastTrades = quotes.map((q) => q.lastTrade).filter((t): t is string => !!t).sort()
 
   return {
-    metal,
+    metal: asset,
     totalDollarVolume: instruments.reduce((s, i) => s + i.dollarVolume, 0),
     instruments: instruments.sort((a, b) => b.dollarVolume - a.dollarVolume),
     futuresVolume: futVolume,
-    futuresSymbol: UNIVERSE[metal].futures[0].root,
-    split: modeledSplit(metal),
+    futuresSymbol: product?.root ?? null,
+    split: modeledSplit(asset),
     provenance: {
-      source: 'Yahoo Finance session volumes (front future + physically backed ETFs)',
+      source: product ? 'Yahoo Finance session volumes (front future + physically backed ETFs)' : 'Yahoo Finance session volumes (ETFs)',
       asOf: lastTrades.length ? lastTrades[lastTrades.length - 1] : null,
-      note: 'Futures dollar volume = contracts × oz/contract × price',
+      note: 'Futures dollar volume = contracts × point value × price',
     },
   }
 }
@@ -146,9 +150,9 @@ export function detectSpikes(history: { date: string; total: number }[], count =
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
-export async function liquidityHistory(metal: Metal, range: string): Promise<LiquidityHistoryResponse> {
-  const excluded = LIQUIDITY_INSTRUMENTS[metal].filter((d) => d.historyReliable === false)
-  const defs = LIQUIDITY_INSTRUMENTS[metal].filter((d) => d.historyReliable !== false)
+export async function liquidityHistory(asset: AssetId, range: string): Promise<LiquidityHistoryResponse> {
+  const excluded = LIQUIDITY_INSTRUMENTS[asset].filter((d) => d.historyReliable === false)
+  const defs = LIQUIDITY_INSTRUMENTS[asset].filter((d) => d.historyReliable !== false)
   const { from, interval } = rangeSpec(range)
   const results = await Promise.allSettled(defs.map((d) => getBarsSince(d.symbol, from, interval)))
 
@@ -170,14 +174,14 @@ export async function liquidityHistory(metal: Metal, range: string): Promise<Liq
   const total = history.reduce((s, d) => s + d.total, 0)
 
   return {
-    metal,
+    metal: asset,
     range,
     interval,
     symbols: included,
     history,
     summary: { total, avgDaily: history.length ? total / history.length : 0, sessions: history.length },
     spikes: detectSpikes(history),
-    split: modeledSplit(metal),
+    split: modeledSplit(asset),
     provenance: {
       source: `Yahoo Finance ${interval === '1d' ? 'daily' : interval === '1wk' ? 'weekly' : 'monthly'} volumes`,
       asOf: history.length ? history[history.length - 1].date : null,

@@ -32,7 +32,7 @@ export default function DatabentoPage() {
   const estimate = useEstimate()
   const backfill = useBackfill()
 
-  const [roots, setRoots] = useState<DatabentoRoot[]>(['GC'])
+  const [roots, setRoots] = useState<DatabentoRoot[]>([DATABENTO_ROOTS[0]])
   const [schemas, setSchemas] = useState<DatabentoSchema[]>(['ohlcv-1d', 'statistics'])
   const [start, setStart] = useState('2010-06-06')
   const [end, setEnd] = useState('')
@@ -61,7 +61,7 @@ export default function DatabentoPage() {
           info={{
             status: 'not_configured',
             missing: ['DATABENTO_API_KEY'],
-            message: 'Databento supplies CME contract history for GC, MGC, SI and SIL: every contract month, daily bars and open interest.',
+            message: `Databento supplies CME contract history for ${DATABENTO_ROOTS.join(', ')}: every contract month, daily bars and open interest.`,
           }}
         />
       </Panel>

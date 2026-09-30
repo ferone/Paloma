@@ -1,7 +1,10 @@
 // API contracts for the Markets section (server/markets <-> src/features/markets).
 // Fractions everywhere (0.012 = 1.2%) unless a field name says otherwise.
 import type { Provenance } from './api.js'
-import type { Metal } from './universe.js'
+import type { AssetId } from './universe.js'
+
+/** @deprecated Kept for the `metal` field name; the value is any `AssetId`. */
+type Metal = AssetId
 
 /** Legacy live quote shape (GET /api/quotes/:symbol, /api/batch). Percent fields are in percent units. */
 export interface Quote {
@@ -57,7 +60,7 @@ export interface CurveContract {
   stale: boolean
   /** The most-traded (highest open interest) contract; spreads/carry are measured from it. */
   isReference: boolean
-  /** Price minus reference price, $/oz. */
+  /** Price minus reference price, in the asset's price unit (see `unitLabel`). */
   spread: number | null
   /** Simple annualized carry vs the reference contract (ACT/360), fraction. */
   carry: number | null
@@ -65,7 +68,12 @@ export interface CurveContract {
 
 export interface CurveResponse {
   metal: Metal
-  root: string
+  /** Main futures root; null when the asset has no listed futures (contracts is then empty). */
+  root: string | null
+  /** Exchange of the root (COMEX, NYMEX, CME). */
+  exchange: string | null
+  /** Price unit of the contracts, e.g. "$/oz". */
+  unitLabel: string
   contracts: CurveContract[]
   referenceSymbol: string | null
   /** 13-week T-bill discount yield (^IRX), fraction. */
@@ -171,8 +179,8 @@ export interface LiquiditySnapshot {
   instruments: InstrumentLiquidity[]
   /** Daily contracts traded, summed over the listed active months, last ~30 sessions. */
   futuresVolume: { date: string; volume: number }[]
-  /** Futures root (GC, SI). */
-  futuresSymbol: string
+  /** Futures root (GC, SI); null for an asset without listed futures. */
+  futuresSymbol: string | null
   split: ModeledSplit | null
   provenance: Provenance
 }

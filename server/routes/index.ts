@@ -3,8 +3,6 @@ import { quotesRouter } from './quotes.js'
 import { batchRouter } from './batch.js'
 import { historicalRouter } from './historical.js'
 import { goldPriceRouter } from './gold-price.js'
-import { goldLiquidityRouter } from './gold-liquidity.js'
-import { goldLiquidityHistoryRouter } from './gold-liquidity-history.js'
 import { router as portfolioRouter } from '../portfolio/router.js'
 import { router as quantRouter } from '../quant/router.js'
 import { router as marketdataRouter } from '../marketdata/router.js'
@@ -24,8 +22,6 @@ export function mountRoutes(app: Express): void {
   app.use('/api/batch', batchRouter)
   app.use('/api/historical', historicalRouter)
   app.use('/api/gold-price', goldPriceRouter)
-  app.use('/api/gold-liquidity/history', goldLiquidityHistoryRouter)
-  app.use('/api/gold-liquidity', goldLiquidityRouter)
 
   // Domains
   app.use('/api/portfolio', portfolioRouter)

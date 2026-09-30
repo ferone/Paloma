@@ -27,7 +27,7 @@ export const router = Router()
 const NOT_CONFIGURED: NotConfigured = {
   status: 'not_configured',
   missing: ['DATABENTO_API_KEY'],
-  message: 'Databento provides historical CME contract data for GC, MGC, SI and SIL (spreads, curves, open interest).',
+  message: `Databento provides historical CME contract data for ${DATABENTO_ROOTS.join(', ')} (spreads, curves, open interest).`,
 }
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')

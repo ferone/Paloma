@@ -1,4 +1,4 @@
-import { MACRO_SYMBOLS, METALS, UNIVERSE, yahooContractSymbol } from '../../shared/universe.js'
+import { ASSETS, MACRO_SYMBOLS, UNIVERSE, yahooContractSymbol, type AssetSpec, type FuturesProduct } from '../../shared/universe.js'
 import { upsertDailyBars, type DailyBar } from '../db/repo.js'
 import { upsertContracts, type ContractBar } from '../db/shared-repo.js'
 import { getHistorical } from '../services/yahoo-finance.service.js'
@@ -7,7 +7,8 @@ import { canonicalSymbol, contractRow } from './contracts.js'
 import { latestPriceDate, upsertYahooContractBars } from './repo.js'
 
 // Yahoo Finance daily history → prices_daily (source 'yahoo'), plus listed
-// COMEX contract months (*.CMX) → contract_bars, never overwriting Databento.
+// futures contract months (GCZ26.CMX, PLF27.NYM, BTCZ26.CME; the exchange
+// suffix comes from the universe) → contract_bars, never overwriting Databento.
 
 export interface YahooBar {
   date: string
@@ -18,12 +19,17 @@ export interface YahooBar {
   volume: number
 }
 
-/** Every Yahoo symbol the platform keeps daily history for. */
-export function yahooHistorySymbols(): string[] {
+/**
+ * Every Yahoo symbol the platform keeps daily history for, derived from the
+ * universe: continuous futures, the reference spot series, the optional 24/7
+ * display quote, ETFs and miners of every asset, then the macro references.
+ */
+export function yahooHistorySymbols(specs: readonly AssetSpec[] = ASSETS.map((a) => UNIVERSE[a])): string[] {
   const s = new Set<string>()
-  for (const m of METALS) {
-    const u = UNIVERSE[m]
+  for (const u of specs) {
     for (const f of u.futures) s.add(f.yahoo)
+    s.add(u.spot)
+    if (u.displaySpot) s.add(u.displaySpot)
     u.etfs.forEach((e) => s.add(e))
     if (u.miners) s.add(u.miners)
   }
@@ -63,18 +69,20 @@ export function cleanYahooBars(quotes: YahooBar[]): YahooBar[] {
 const pos = (n: number) => (Number.isFinite(n) && n > 0 ? n : null)
 
 /** Listed contract months to mirror from Yahoo: active months from this month over the next `months`. */
-export function listedContractMonths(today: string, months = 24): { root: string; month: number; year: number }[] {
+export function listedContractMonths(
+  today: string,
+  months = 24,
+  products: readonly FuturesProduct[] = ASSETS.flatMap((a) => UNIVERSE[a].futures),
+): { root: string; month: number; year: number }[] {
   const out: { root: string; month: number; year: number }[] = []
   const y0 = Number(today.slice(0, 4))
   const m0 = Number(today.slice(5, 7))
-  for (const metal of METALS) {
-    for (const f of UNIVERSE[metal].futures) {
-      for (let k = 0; k <= months; k++) {
-        const idx = y0 * 12 + (m0 - 1) + k
-        const year = Math.floor(idx / 12)
-        const month = (idx % 12) + 1
-        if (f.activeMonths.includes(month)) out.push({ root: f.root, month, year })
-      }
+  for (const f of products) {
+    for (let k = 0; k <= months; k++) {
+      const idx = y0 * 12 + (m0 - 1) + k
+      const year = Math.floor(idx / 12)
+      const month = (idx % 12) + 1
+      if (f.activeMonths.includes(month)) out.push({ root: f.root, month, year })
     }
   }
   return out

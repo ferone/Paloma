@@ -1,5 +1,5 @@
 import type { SeriesPoint } from "../types/index.js";
-import { futuresProduct } from "../../../shared/universe.js";
+import { futuresProduct, type FuturesProduct } from "../../../shared/universe.js";
 import { businessDaysBefore, contractExpiry } from "../universe/contracts.js";
 import { stitchContinuous, stitchSegments, type StitchContract, type StitchSegment } from "./stitch.js";
 
@@ -24,6 +24,8 @@ import { stitchContinuous, stitchSegments, type StitchContract, type StitchSegme
  *    FND) and the next active contract takes over the following session. Trading
  *    formally continues until the 3rd-last business day of the delivery month,
  *    but that tail is delivery-period trading, not the market a spread trader uses.
+ *    CASH-SETTLED products (`cashSettled` in the universe, e.g. CME bitcoin) have
+ *    no delivery: they roll `CASH_ROLL_BDAYS` business days before LAST TRADE.
  *
  * PURE (no IO, no clock): the roll schedule is calendar arithmetic, so the
  * contract picked on date d depends only on d — never on later bars.
@@ -58,12 +60,31 @@ export interface PreparedContract {
   bars: { date: string; close: number; volume: number; openInterest: number | null }[];
 }
 
+/** Business days before LAST TRADE that a cash-settled contract hands the chain to the next one. */
+export const CASH_ROLL_BDAYS = 5;
+
+export interface RollOptions {
+  /** Product spec (defaults to the universe entry for `root`); tests pass a fake one. */
+  product?: FuturesProduct;
+  /** Stored last-trade date, preferred over the calendar rule (cash-settled only). */
+  lastTrade?: string | null;
+}
+
 /**
- * The last date a contract serves as a continuous leg: the business day before
- * First Position Day (3 business days before first notice). Uses the stored FND
- * when the marketdata domain recorded one, else the documented CME rule.
+ * The last date a contract serves as a continuous leg.
+ *  - PHYSICALLY settled: the business day before First Position Day (3 business
+ *    days before first notice). Uses the stored FND when the marketdata domain
+ *    recorded one, else the documented CME rule.
+ *  - CASH-SETTLED (no delivery, no first notice — e.g. CME bitcoin): the leg
+ *    rolls `CASH_ROLL_BDAYS` business days before LAST TRADE, while the expiring
+ *    contract is still liquid.
  */
-export function rollDateFor(root: string, month: number, year: number, firstNotice?: string | null): string {
+export function rollDateFor(root: string, month: number, year: number, firstNotice?: string | null, opts: RollOptions = {}): string {
+  const product = opts.product ?? futuresProduct(root);
+  if (product?.cashSettled) {
+    const lt = opts.lastTrade ?? contractExpiry(root, month, year)?.lastTrade ?? null;
+    if (lt) return businessDaysBefore(lt, CASH_ROLL_BDAYS);
+  }
   const fnd = firstNotice ?? contractExpiry(root, month, year)?.firstNotice ?? null;
   if (fnd) return businessDaysBefore(fnd, 3);
   // Unknown product: fall back to the 20th of the prior month (conservative).
@@ -73,8 +94,12 @@ export function rollDateFor(root: string, month: number, year: number, firstNoti
 }
 
 /** Filter to the product's active months, attach roll dates, and group bars. PURE. */
-export function prepareContracts(root: string, contracts: RawContract[], bars: RawBar[]): PreparedContract[] {
-  const product = futuresProduct(root);
+export function prepareContracts(
+  root: string,
+  contracts: RawContract[],
+  bars: RawBar[],
+  product: FuturesProduct | undefined = futuresProduct(root),
+): PreparedContract[] {
   const active = new Set(product?.activeMonths ?? []);
   const barsBy = new Map<string, PreparedContract["bars"]>();
   for (const b of bars) {
@@ -93,7 +118,7 @@ export function prepareContracts(root: string, contracts: RawContract[], bars: R
       month: c.month,
       lastTrade: c.lastTrade,
       firstNotice: c.firstNotice,
-      rollDate: rollDateFor(root, c.month, c.year, c.firstNotice),
+      rollDate: rollDateFor(root, c.month, c.year, c.firstNotice, { product, lastTrade: c.lastTrade }),
       bars: (barsBy.get(c.symbol) ?? []).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
     }))
     .sort((a, b) => a.year * 12 + a.month - (b.year * 12 + b.month));

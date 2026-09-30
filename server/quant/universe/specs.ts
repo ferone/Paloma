@@ -1,18 +1,18 @@
-import { futuresProduct } from "../../../shared/universe.js";
+import { ASSETS, UNIVERSE, type AssetSpec, type FuturesProduct, type PriceUnit } from "../../../shared/universe.js";
 import { monthCode } from "./contracts.js";
 
 /**
- * Static COMEX contract SPECIFICATIONS for the metals this fund trades — the
+ * Contract SPECIFICATIONS for every futures product in the universe — the
  * reference data behind the "Contract specifications" panel (exchange, size,
- * price unit, tick, $ point value, active months). Published exchange metadata,
- * not market data, so hard-coding the canonical values is appropriate. The $
- * point value and active months are read from `shared/universe.ts` (the single
- * source of truth) so they can never drift from the rest of the app. PURE.
+ * price unit, tick, $ point value, active months). Everything is GENERATED from
+ * `shared/universe.ts` (the single source of truth), so adding an asset there
+ * adds its specs here with no code change, and the $ point value / tick / months
+ * can never drift from the rest of the app. PURE.
  */
 export interface ContractSpec {
   product: string; // root, e.g. "GC"
   name: string;
-  exchange: string; // "COMEX"
+  exchange: string; // "COMEX" | "NYMEX" | "CME"
   contractSize: string; // human-readable, e.g. "100 troy oz"
   priceUnit: string; // "$/oz"
   tickSize: number; // minimum price increment, in price units
@@ -24,66 +24,53 @@ export interface ContractSpec {
   settlement?: string;
 }
 
-function spec(root: string, s: Omit<ContractSpec, "product" | "pointValue" | "months" | "monthCodes">): ContractSpec {
-  const p = futuresProduct(root);
-  if (!p) throw new Error(`specs: ${root} is not in shared/universe.ts`);
+const GLOBEX_HOURS = "Sun–Fri 5:00 p.m.–4:00 p.m. CT (CME Globex, 60-min break 4–5 p.m.)";
+
+/** Human unit for a contract size ("troy oz" for precious metals, "lb", "BTC"). */
+const SIZE_UNIT: Record<PriceUnit, string> = { oz: "troy oz", lb: "lb", BTC: "BTC" };
+
+/** Strip the exchange prefix from a product name ("COMEX Micro Gold" → "Micro Gold"). */
+function shortName(p: FuturesProduct): string {
+  return p.name.replace(new RegExp(`^${p.exchange} `), "");
+}
+
+/** Round away binary noise (0.1 × 100 must be exactly 10). */
+function clean(x: number): number {
+  return Math.round(x * 1e9) / 1e9;
+}
+
+/**
+ * The spec for one futures product of an asset. PURE.
+ * QUOTE-UNIT TRAP: prices are in the asset's `unitLabel` (e.g. $/oz, NOT cents);
+ * the point value absorbs the contract size — never rescale by 100.
+ */
+export function specFor(asset: AssetSpec, p: FuturesProduct): ContractSpec {
   return {
-    product: root,
-    ...s,
+    product: p.root,
+    name: shortName(p),
+    exchange: p.exchange,
+    contractSize: `${p.contractSize.toLocaleString("en-US")} ${SIZE_UNIT[asset.priceUnit]}`,
+    priceUnit: asset.unitLabel,
+    tickSize: p.tickSize,
+    tickValue: clean(p.tickSize * p.pointValue),
     pointValue: p.pointValue,
     months: [...p.activeMonths],
     monthCodes: p.activeMonths.map((m) => monthCode(m)).join(" "),
+    tradingHours: GLOBEX_HOURS,
+    settlement: p.cashSettled ? "Cash settlement" : "Physical delivery",
   };
 }
 
-const GLOBEX_HOURS = "Sun–Fri 5:00 p.m.–4:00 p.m. CT (CME Globex, 60-min break 4–5 p.m.)";
+/** Specs for every futures root of the given assets. PURE. */
+export function buildSpecs(assets: readonly AssetSpec[]): Record<string, ContractSpec> {
+  const out: Record<string, ContractSpec> = {};
+  for (const a of assets) for (const p of a.futures) out[p.root] = specFor(a, p);
+  return out;
+}
 
-// QUOTE-UNIT TRAP: gold and silver are quoted in $/oz — NOT cents. The point
-// value absorbs the contract size; never rescale by 100.
-export const SPECS: Record<string, ContractSpec> = {
-  GC: spec("GC", {
-    name: "Gold",
-    exchange: "COMEX",
-    contractSize: "100 troy oz",
-    priceUnit: "$/oz",
-    tickSize: 0.1,
-    tickValue: 10,
-    tradingHours: GLOBEX_HOURS,
-    settlement: "Physical delivery",
-  }),
-  MGC: spec("MGC", {
-    name: "Micro Gold",
-    exchange: "COMEX",
-    contractSize: "10 troy oz",
-    priceUnit: "$/oz",
-    tickSize: 0.1,
-    tickValue: 1,
-    tradingHours: GLOBEX_HOURS,
-    settlement: "Physical delivery",
-  }),
-  SI: spec("SI", {
-    name: "Silver",
-    exchange: "COMEX",
-    contractSize: "5,000 troy oz",
-    priceUnit: "$/oz",
-    tickSize: 0.005,
-    tickValue: 25,
-    tradingHours: GLOBEX_HOURS,
-    settlement: "Physical delivery",
-  }),
-  SIL: spec("SIL", {
-    name: "Micro Silver",
-    exchange: "COMEX",
-    contractSize: "1,000 troy oz",
-    priceUnit: "$/oz",
-    tickSize: 0.005,
-    tickValue: 5,
-    tradingHours: GLOBEX_HOURS,
-    settlement: "Physical delivery",
-  }),
-};
+export const SPECS: Record<string, ContractSpec> = buildSpecs(ASSETS.map((a) => UNIVERSE[a]));
 
-/** Spec by product root or contract symbol (e.g. "GC" or "GCZ26"). PURE. */
+/** Spec by product root or contract symbol (e.g. "GC" or "GCZ26"). Undefined for unknown roots. PURE. */
 export function getSpec(productOrSymbol: string): ContractSpec | undefined {
   if (SPECS[productOrSymbol]) return SPECS[productOrSymbol];
   const root = productOrSymbol.replace(/[FGHJKMNQUVXZ]\d{1,2}$/, "");

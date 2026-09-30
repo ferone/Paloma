@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildContinuousLegs, combineSeries, contractAt, prepareContracts, ratioSeries, rollDateFor } from "./continuous.js";
+import { CASH_ROLL_BDAYS, buildContinuousLegs, combineSeries, contractAt, prepareContracts, ratioSeries, rollDateFor } from "./continuous.js";
+import { FAKE_CASH } from "../testing/fakeAssets.js";
 import { assembleMetalSeasonal } from "./seasonalSpread.js";
 import { getSeasonalSpec } from "../universe/seasonal.js";
 import { makeFixture } from "../testing/fixture.js";
@@ -15,6 +16,42 @@ describe("rollDateFor — roll before First Position Day", () => {
   });
   it("prefers the stored first-notice date when the marketdata domain recorded one", () => {
     expect(rollDateFor("SI", 3, 2027, "2027-02-26")).toBe("2027-02-23");
+  });
+});
+
+describe("rollDateFor — cash-settled products roll off LAST TRADE", () => {
+  it("rolls CASH_ROLL_BDAYS business days before the last-Friday expiry (fake spec as a parameter)", () => {
+    // BTC Mar-2026 last trade = Fri 27 Mar; 5 business days earlier = Fri 20 Mar.
+    expect(CASH_ROLL_BDAYS).toBe(5);
+    expect(rollDateFor("BTC", 3, 2026, null, { product: FAKE_CASH })).toBe("2026-03-20");
+    // Dec-2026 last trade = Fri 25 Dec (holidays not modelled) → Fri 18 Dec.
+    expect(rollDateFor("BTC", 12, 2026, null, { product: FAKE_CASH })).toBe("2026-12-18");
+  });
+  it("prefers a stored last-trade date and ignores first notice", () => {
+    expect(rollDateFor("BTC", 3, 2026, "2026-02-27", { product: FAKE_CASH, lastTrade: "2026-03-26" })).toBe("2026-03-19");
+  });
+  it("never uses the '20th of the prior month' fallback for a cash product with a known expiry", () => {
+    for (let m = 1; m <= 12; m++) {
+      const d = rollDateFor("BTC", m, 2027, null, { product: FAKE_CASH });
+      expect(d.slice(0, 7)).toBe(`2027-${String(m).padStart(2, "0")}`);
+    }
+  });
+  it("physically settled products are unchanged by the option", () => {
+    expect(rollDateFor("GC", 12, 2026, null, { lastTrade: "2026-12-29" })).toBe("2026-11-25");
+  });
+  it("prepareContracts threads the product through: the cash chain serves into the contract month", () => {
+    const fx = makeFixture({ root: "BTC", startYear: 2022, endDate: "2023-12-31", spot0: 30000, seed: 3 });
+    const prepared = prepareContracts("BTC", fx.contracts, fx.bars, FAKE_CASH);
+    expect(prepared.map((c) => c.month).slice(0, 12)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]); // every month listed is active
+    for (const c of prepared) {
+      expect(c.rollDate).toBe(rollDateFor("BTC", c.month, c.year, null, { product: FAKE_CASH, lastTrade: c.lastTrade }));
+      expect(c.rollDate < c.lastTrade!).toBe(true);
+      expect(c.rollDate.slice(0, 7)).toBe(`${c.year}-${String(c.month).padStart(2, "0")}`);
+    }
+    const [c0] = buildContinuousLegs(prepared);
+    expect(contractAt(c0.segments, "2023-03-15")).toBe("BTCH23"); // still the March contract mid-month
+    expect(contractAt(c0.segments, "2023-03-24")).toBe("BTCH23"); // last day served: 5 bd before Fri 31 Mar
+    expect(contractAt(c0.segments, "2023-03-27")).toBe("BTCJ23"); // April takes over the next session
   });
 });
 

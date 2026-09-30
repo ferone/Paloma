@@ -230,6 +230,9 @@ const ICE_CAVEAT = "ICE rule, approximate: weekends handled, exchange holidays N
  * oilseeds (ZC/ZW/ZS/ZM) are PHYSICALLY DELIVERED → last trade is the business
  * day before the 15th and first notice is the last business day of the prior
  * month. Returns null for unknown products. PURE.
+ *
+ * STABLE SIGNATURE `(product, month1to12, year)`: the marketdata domain imports
+ * this as its single expiry calendar — do not change it.
  */
 export function contractExpiry(product: string, month1to12: number, year: number): ContractExpiry | null {
   switch (product) {
@@ -267,14 +270,16 @@ export function contractExpiry(product: string, month1to12: number, year: number
         note: `Physically delivered; last trade = business day before the 15th; first notice = last business day of the prior month. ${HOLIDAY_CAVEAT}`,
       };
     }
-    // ── Metals (COMEX/NYMEX): physical; trading ends the 3rd-last business day
-    //    of the delivery month; notices begin at the prior month's end. ──
+    // ── Metals (COMEX gold/silver/copper, NYMEX platinum/palladium): physical;
+    //    trading ends the 3rd-last business day of the delivery month; notices
+    //    begin at the prior month's end (the same NYMEX rule for PL and PA). ──
     case "GC":
     case "SI":
     case "MGC":
     case "SIL":
     case "HG":
-    case "PL": {
+    case "PL":
+    case "PA": {
       const prevM = month1to12 === 1 ? 12 : month1to12 - 1;
       const prevY = month1to12 === 1 ? year - 1 : year;
       return {

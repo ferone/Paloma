@@ -70,6 +70,19 @@ describe("contractExpiry", () => {
     expect(e.firstNotice).toBe("2026-05-29"); // last bd of May 2026 (31st = Sun)
   });
 
+  it("Palladium (PA) follows the NYMEX PGM rule: 3rd-last business day; FND prior month-end", () => {
+    const e = contractExpiry("PA", 12, 2026)!;
+    expect(e.cashSettled).toBe(false);
+    expect(e.lastTrade).toBe("2026-12-29"); // Dec-31 Thu, 30 Wed, 29 Tue = 3rd-last bd
+    expect(e.firstNotice).toBe("2026-11-30"); // last bd of Nov 2026 (Mon)
+    const jun = contractExpiry("PA", 6, 2026)!;
+    expect(jun.lastTrade).toBe("2026-06-26");
+    expect(jun.firstNotice).toBe("2026-05-29");
+    // Identical to platinum in every month (same exchange rule).
+    for (let y = 2024; y <= 2027; y++)
+      for (let m = 1; m <= 12; m++) expect(contractExpiry("PA", m, y)).toEqual(contractExpiry("PL", m, y));
+  });
+
   it("WTI (CL) : 3 business days before the 25th of the PRIOR month", () => {
     const e = contractExpiry("CL", 12, 2025)!;
     expect(e.lastTrade).toBe("2025-11-20"); // 25 Nov Tue → 24 Mon, 21 Fri, 20 Thu

@@ -25,6 +25,7 @@ export const backfillSchema = z.object({
     .optional(),
   schemas: z.array(z.enum(DATABENTO_SCHEMAS)).min(1).default([...DATABENTO_SCHEMAS]),
   maxCost: z.number().nonnegative().optional(),
+  windowMonths: z.number().int().min(1).max(24).optional(),
 })
 
 export function databentoClient(): DatabentoClient | null {

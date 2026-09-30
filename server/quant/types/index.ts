@@ -161,7 +161,7 @@ export interface InstrumentLeg {
   weight: number; // +1 long, -1 short; fractions for ratio spreads
 }
 
-export type InstrumentKind = "outright" | "calendar" | "inter" | "crush" | "seasonal" | "butterfly" | "ratio";
+export type InstrumentKind = "outright" | "calendar" | "inter" | "crush" | "seasonal" | "butterfly" | "ratio" | "basis";
 
 /**
  * A fundamental series wired to an instrument (kept for the neutral fundamental

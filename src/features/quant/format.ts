@@ -20,6 +20,7 @@ export const KIND_LABEL: Record<QuantKind, string> = {
   seasonal: 'Seasonal pair',
   ratio: 'Ratio',
   inter: 'Pair dollar spread',
+  basis: 'Cash-and-carry basis',
 }
 
 export const fmtWin = (w: number | null | undefined) => fmtPct(w, 0)

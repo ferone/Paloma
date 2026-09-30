@@ -1,14 +1,14 @@
 // CLI for the ML pipeline (npm run ml:export | ml:train | ml:infer).
-//   tsx server/ml/cli.ts export [gold|silver]
-//   tsx server/ml/cli.ts train  [gold|silver]
+//   tsx server/ml/cli.ts export [<asset id>]
+//   tsx server/ml/cli.ts train  [<asset id>]
 //   tsx server/ml/cli.ts infer
 import 'dotenv/config'
-import { METALS, type Metal } from '../../shared/universe.js'
+import { ASSETS, isAssetId, type AssetId } from '../../shared/universe.js'
 import { exportFeatures, refreshYahooInputs } from './data.js'
 
 async function main() {
   const [cmd = 'export', arg] = process.argv.slice(2)
-  const metals: Metal[] = arg === 'gold' || arg === 'silver' ? [arg] : [...METALS]
+  const metals: AssetId[] = isAssetId(arg) ? [arg] : [...ASSETS]
   const log = (m: string) => console.log(m)
   if (cmd === 'export') {
     await refreshYahooInputs(log)

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { MlPredictionsResponse, MlStatus } from '../../shared/ml.js'
-import { METALS, type Metal } from '../../shared/universe.js'
+import { ASSETS, isAssetId } from '../../shared/universe.js'
 import { JobBusyError, jobStatus, registerJob, runJob } from '../jobs/registry.js'
 import { pythonStatus } from './python.js'
 import { getRun, latestPredictions, listRuns, markInterruptedRuns } from './repo.js'
@@ -9,7 +9,7 @@ import { MAX_MODEL_AGE_DAYS, inferAll, trainAll } from './service.js'
 // Domain router for /api/ml, plus the ml.train / ml.infer background jobs.
 export const router = Router()
 
-const isMetal = (x: unknown): x is Metal => x === 'gold' || x === 'silver'
+const isMetal = isAssetId
 
 function assertNotTraining(other: string) {
   if (jobStatus(other)?.state === 'running') throw new JobBusyError(`${other} is running; try again when it finishes`)
@@ -18,10 +18,10 @@ function assertNotTraining(other: string) {
 // No job survives a restart, so any 'running' row is an orphan.
 markInterruptedRuns()
 
-registerJob('ml.train', 'Train the gold/silver 20-day models with walk-forward validation', async (ctx, params) => {
+registerJob('ml.train', 'Train the per-asset 20-day models with walk-forward validation', async (ctx, params) => {
   assertNotTraining('ml.infer')
   const metal = (params as { metal?: unknown } | undefined)?.metal
-  return trainAll(ctx, isMetal(metal) ? [metal] : [...METALS])
+  return trainAll(ctx, isMetal(metal) ? [metal] : [...ASSETS])
 })
 
 registerJob('ml.infer', 'Score the latest day with the saved models (retrains if missing or older than 7 days)', async (ctx) => {
@@ -35,7 +35,7 @@ router.get('/health', (_req, res) => {
 
 router.get('/status', (_req, res) => {
   const lastRuns: MlStatus['lastRuns'] = {}
-  for (const m of METALS) {
+  for (const m of ASSETS) {
     const [r] = listRuns(m, 1)
     if (r) lastRuns[m] = r
   }
@@ -46,7 +46,7 @@ router.get('/status', (_req, res) => {
 router.get('/predictions', (req, res) => {
   const metal = req.query.metal
   if (metal !== undefined && !isMetal(metal)) {
-    res.status(400).json({ error: 'metal must be gold or silver' })
+    res.status(400).json({ error: `metal must be one of ${ASSETS.join(', ')}` })
     return
   }
   const body: MlPredictionsResponse = { predictions: latestPredictions(metal) }
@@ -56,7 +56,7 @@ router.get('/predictions', (req, res) => {
 router.get('/runs', (req, res) => {
   const metal = req.query.metal
   if (metal !== undefined && !isMetal(metal)) {
-    res.status(400).json({ error: 'metal must be gold or silver' })
+    res.status(400).json({ error: `metal must be one of ${ASSETS.join(', ')}` })
     return
   }
   res.json(listRuns(metal))
@@ -84,7 +84,7 @@ function start(name: string, other: string, params: unknown, res: import('expres
 router.post('/train', (req, res) => {
   const metal = (req.body as { metal?: unknown } | undefined)?.metal
   if (metal !== undefined && metal !== null && !isMetal(metal)) {
-    res.status(400).json({ error: 'metal must be gold or silver' })
+    res.status(400).json({ error: `metal must be one of ${ASSETS.join(', ')}` })
     return
   }
   start('ml.train', 'ml.infer', { metal: metal ?? undefined }, res)

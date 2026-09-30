@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { METALS, UNIVERSE, type Metal } from '../../shared/universe.js'
+import { ASSETS, UNIVERSE, type AssetId } from '../../shared/universe.js'
 import type { MlPrediction } from '../../shared/ml.js'
 import { exportFeatures, mlDataDir, refreshYahooInputs } from './data.js'
 import { runPipeline } from './python.js'
@@ -26,7 +26,7 @@ export interface Ctx {
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, 'utf8')) as T
 
 /** Train one metal: new ml_runs row, full walk-forward, prediction, artifact. */
-export async function trainMetal(metal: Metal, ctx: Ctx, opts: { refresh?: boolean; publish?: boolean } = {}): Promise<string> {
+export async function trainMetal(metal: AssetId, ctx: Ctx, opts: { refresh?: boolean; publish?: boolean } = {}): Promise<string> {
   const { refresh = true, publish = true } = opts
   if (refresh) {
     ctx.progress(0.01, 'Refreshing Yahoo inputs')
@@ -51,7 +51,7 @@ export async function trainMetal(metal: Metal, ctx: Ctx, opts: { refresh?: boole
   }
 }
 
-export async function trainAll(ctx: Ctx, metals: Metal[] = [...METALS]): Promise<string> {
+export async function trainAll(ctx: Ctx, metals: AssetId[] = [...ASSETS]): Promise<string> {
   ctx.progress(0.01, 'Refreshing Yahoo inputs')
   await refreshYahooInputs(ctx.log)
   const out: string[] = []
@@ -63,7 +63,7 @@ export async function trainAll(ctx: Ctx, metals: Metal[] = [...METALS]): Promise
 }
 
 /** Why the saved model for `metal` cannot be reused (null = reusable). */
-export function retrainReason(metal: Metal, now = Date.now()): string | null {
+export function retrainReason(metal: AssetId, now = Date.now()): string | null {
   const run = latestRun(metal, true)
   if (!run) return 'no trained model'
   if (!run.modelPath || !existsSync(run.modelPath)) return 'model file missing'
@@ -83,8 +83,8 @@ export async function inferAll(ctx: Ctx): Promise<string> {
   await refreshYahooInputs(ctx.log)
   const out: string[] = []
   const errors: string[] = []
-  for (const [i, metal] of METALS.entries()) {
-    const sub: Ctx = { log: ctx.log, progress: (f, msg) => ctx.progress((i + f) / METALS.length, msg) }
+  for (const [i, metal] of ASSETS.entries()) {
+    const sub: Ctx = { log: ctx.log, progress: (f, msg) => ctx.progress((i + f) / ASSETS.length, msg) }
     try {
       out.push(await inferMetal(metal, sub))
     } catch (err) {
@@ -98,7 +98,7 @@ export async function inferAll(ctx: Ctx): Promise<string> {
   return [...out, ...errors].join(' · ')
 }
 
-async function inferMetal(metal: Metal, ctx: Ctx): Promise<string> {
+async function inferMetal(metal: AssetId, ctx: Ctx): Promise<string> {
   const reason = retrainReason(metal)
   if (reason) {
     ctx.log(`${metal}: retraining (${reason})`)

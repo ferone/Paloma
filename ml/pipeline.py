@@ -1,8 +1,8 @@
-"""Gold/silver 20-day direction model with honest walk-forward validation.
+"""Per-asset 20-day direction model with honest walk-forward validation.
 
 Ported and adapted from CommodityFutures/scripts/ml (Tier 2 pipeline): there it
-pooled many spread instruments; here each metal has one long outright series,
-so the model is per metal and the validation is an expanding-window
+pooled many spread instruments; here each asset has one long outright series,
+so the model is per asset and the validation is an expanding-window
 walk-forward by calendar year.
 
   * y_up  -> GradientBoostingClassifier, Platt-calibrated (sigmoid, cv=3)
@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -430,10 +431,22 @@ def do_infer(metal: str, data_dir: Path) -> dict:
             "modelPath": str(mp), "gate": bundle["gate"], "prediction": pred}
 
 
+ASSET_ID_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+
+
+def asset_id(value: str) -> str:
+    """argparse type: a lowercase, path-safe asset id (e.g. gold, silver, bitcoin)."""
+    if not ASSET_ID_RE.match(value):
+        raise argparse.ArgumentTypeError(f"invalid asset id: {value!r}")
+    return value
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=["train", "infer", "version"])
-    ap.add_argument("--metal", choices=["gold", "silver"])
+    # Any asset id from shared/universe.ts (the Node runner validates it); the id
+    # only names files (features_<id>.csv, model_<id>.joblib), so keep it path-safe.
+    ap.add_argument("--metal", "--asset", dest="metal", type=asset_id)
     ap.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
     ap.add_argument("--n-perm", type=int, default=N_PERM)
     ap.add_argument("--fast", action="store_true", help="smaller models (tests only)")
@@ -443,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
                           "numpy": np.__version__, "pandas": pd.__version__}))
         return 0
     if not a.metal:
-        ap.error("--metal is required")
+        ap.error("--metal/--asset is required")
     data_dir = Path(a.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
     result = do_train(a.metal, data_dir, a.n_perm, a.fast) if a.command == "train" else do_infer(a.metal, data_dir)

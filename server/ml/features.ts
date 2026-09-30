@@ -1,8 +1,8 @@
-import type { Metal } from '../../shared/universe.js'
-import { FEATURE_IDS, ML_HORIZON } from '../../shared/ml.js'
+import type { AssetId } from '../../shared/universe.js'
+import { ML_HORIZON, featuresFor } from '../../shared/ml.js'
 
 // Pure, look-ahead-safe feature construction. Every value at row t (a trading
-// day of the metal's front-month series) uses only observations dated ≤ t;
+// day of the asset's reference series) uses only observations dated ≤ t;
 // FRED macro series are lagged one day (< t) and COT reports are used only
 // strictly after their publication date. Targets look H rows ahead and are
 // null for the last H rows (those rows are scored, never trained on).
@@ -18,12 +18,13 @@ export interface ValuePoint {
   value: number
 }
 
+/** Speculator positions from one COT report (managed money for disagg, leveraged funds for TFF). */
 export interface CotPoint {
   reportDate: string
   publishedAt: string | null
   openInterest: number | null
-  mmLong: number | null
-  mmShort: number | null
+  specLong: number | null
+  specShort: number | null
 }
 
 export interface CurvePoint {
@@ -38,21 +39,23 @@ export interface CurvePoint {
 export type MacroId = 'DFII10' | 'T10YIE' | 'DTWEXBGS' | 'VIXCLS' | 'GVZCLS'
 
 export interface FeatureInputs {
-  metal: Metal
-  /** Front-month closes of the metal being modelled: defines the row calendar. */
+  metal: AssetId
+  /** Reference closes of the asset being modelled: defines the row calendar. */
   spot: PricePoint[]
-  gold: PricePoint[]
-  silver: PricePoint[]
+  /** The asset's relative-value pair (numerator / denominator closes); null when it has none. */
+  pair: { numerator: PricePoint[]; denominator: PricePoint[] } | null
   dxy: PricePoint[]
   tnx: PricePoint[]
   vix: PricePoint[]
   spy: PricePoint[]
-  /** GLD for gold, SLV for silver (volume used as a flows proxy). */
+  /** The asset's benchmark ETF, e.g. GLD for gold, SLV for silver (volume used as a flows proxy). */
   etf: PricePoint[]
   macro: Partial<Record<MacroId, ValuePoint[]>>
   cot: CotPoint[]
   curve: CurvePoint[]
   horizon?: number
+  /** Feature columns to build (default: `featuresFor(metal)`); tests pass an explicit list. */
+  featureIds?: string[]
 }
 
 export interface FeatureRow {
@@ -65,8 +68,10 @@ export interface FeatureRow {
 }
 
 export interface FeatureMatrix {
-  metal: Metal
+  metal: AssetId
   horizon: number
+  /** Feature columns for this asset (`featuresFor(metal)`), in catalogue order. */
+  featureIds: string[]
   rows: FeatureRow[]
   /** Features with no data at all, with the reason (e.g. "COT not loaded yet"). */
   missing: Record<string, string>
@@ -228,12 +233,12 @@ export function seasonalDrift(dates: string[], logP: Num[], H: number, window = 
   return out
 }
 
-/** COT managed-money net % OI z-score, keyed by the date the report became public. */
+/** COT speculator net % OI z-score, keyed by the date the report became public. */
 export function cotSeries(rows: CotPoint[], zWindow = 156, minReports = 52): ValuePoint[] {
   const sorted = [...rows].sort((a, b) => (a.reportDate < b.reportDate ? -1 : 1))
   const pct = sorted.map((r) =>
-    isNum(r.mmLong) && isNum(r.mmShort) && isNum(r.openInterest) && r.openInterest > 0
-      ? (r.mmLong - r.mmShort) / r.openInterest
+    isNum(r.specLong) && isNum(r.specShort) && isNum(r.openInterest) && r.openInterest > 0
+      ? (r.specLong - r.specShort) / r.openInterest
       : null,
   )
   const out: ValuePoint[] = []
@@ -258,6 +263,8 @@ export function cotSeries(rows: CotPoint[], zWindow = 156, minReports = 52): Val
 
 export function buildFeatureMatrix(inp: FeatureInputs): FeatureMatrix {
   const H = inp.horizon ?? ML_HORIZON
+  const featureIds = inp.featureIds ?? featuresFor(inp.metal).map((s) => s.id)
+  const wanted = new Set(featureIds)
   const spot = [...inp.spot].filter((p) => p.close > 0).sort((a, b) => (a.date < b.date ? -1 : 1))
   const dates = spot.map((p) => p.date)
   const n = dates.length
@@ -278,10 +285,12 @@ export function buildFeatureMatrix(inp: FeatureInputs): FeatureMatrix {
   f.ma200_dist = P.map((p, i) => (isNum(p) && isNum(ma200[i]) ? p / ma200[i]! - 1 : null))
   f.rsi14 = rsi(P, 14)
 
-  const gold = asOf(closes(inp.gold), dates)
-  const silver = asOf(closes(inp.silver), dates)
-  const gsr = gold.map((g, i) => (isNum(g) && isNum(silver[i]) && silver[i]! > 0 ? g / silver[i]! : null))
-  f.gsr_z252 = rollingZ(gsr, 252)
+  if (wanted.has('gsr_z252') && inp.pair) {
+    const num = asOf(closes(inp.pair.numerator), dates)
+    const den = asOf(closes(inp.pair.denominator), dates)
+    const ratio = num.map((g, i) => (isNum(g) && isNum(den[i]) && den[i]! > 0 ? g / den[i]! : null))
+    f.gsr_z252 = rollingZ(ratio, 252)
+  }
 
   const dxy = asOf(closes(inp.dxy), dates)
   f.dxy_mom20 = diffN(logOf(dxy), 20)
@@ -314,6 +323,7 @@ export function buildFeatureMatrix(inp: FeatureInputs): FeatureMatrix {
     derive: (vals: Num[]) => Num[],
     missingReason: string,
   ) => {
+    if (!wanted.has(id)) return
     const pts = [...(inp.macro[series] ?? [])].sort((a, b) => (a.date < b.date ? -1 : 1))
     if (pts.length === 0) {
       missing[id] = missingReason
@@ -333,11 +343,13 @@ export function buildFeatureMatrix(inp: FeatureInputs): FeatureMatrix {
   macroFeature('gvz_level', 'GVZCLS', (v) => v, 'FRED GVZCLS not loaded yet')
 
   // COT: usable only strictly after publication.
-  if (inp.cot.length === 0) {
-    missing.cot_mm_z = 'COT not loaded yet'
-    f.cot_mm_z = new Array(n).fill(null)
-  } else {
-    f.cot_mm_z = asOf(cotSeries(inp.cot), dates, { strict: true, maxStaleDays: 21 })
+  if (wanted.has('cot_mm_z')) {
+    if (inp.cot.length === 0) {
+      missing.cot_mm_z = 'COT not loaded yet'
+      f.cot_mm_z = new Array(n).fill(null)
+    } else {
+      f.cot_mm_z = asOf(cotSeries(inp.cot), dates, { strict: true, maxStaleDays: 21 })
+    }
   }
 
   // Curve (per-contract settles).
@@ -365,7 +377,7 @@ export function buildFeatureMatrix(inp: FeatureInputs): FeatureMatrix {
 
   const rows: FeatureRow[] = dates.map((date, i) => {
     const values: Record<string, Num> = {}
-    for (const id of FEATURE_IDS) {
+    for (const id of featureIds) {
       const v = f[id]?.[i]
       values[id] = isNum(v) ? v : null
     }
@@ -375,16 +387,16 @@ export function buildFeatureMatrix(inp: FeatureInputs): FeatureMatrix {
     return { date, values, yRet, yUp: yRet == null ? null : yRet > 0 ? 1 : 0 }
   })
 
-  for (const id of FEATURE_IDS) {
+  for (const id of featureIds) {
     if (!missing[id] && !rows.some((r) => r.values[id] != null)) missing[id] = 'No data for this input'
   }
-  return { metal: inp.metal, horizon: H, rows, missing }
+  return { metal: inp.metal, horizon: H, featureIds, rows, missing }
 }
 
 /** CSV consumed by ml/pipeline.py: date, <features…>, y_ret, y_up (blank = missing). */
 export function matrixToCsv(m: FeatureMatrix): string {
-  const header = ['date', ...FEATURE_IDS, 'y_ret', 'y_up'].join(',')
+  const header = ['date', ...m.featureIds, 'y_ret', 'y_up'].join(',')
   const fmt = (v: number | null) => (v == null ? '' : String(Number(v.toPrecision(10))))
-  const lines = m.rows.map((r) => [r.date, ...FEATURE_IDS.map((id) => fmt(r.values[id])), fmt(r.yRet), r.yUp == null ? '' : String(r.yUp)].join(','))
+  const lines = m.rows.map((r) => [r.date, ...m.featureIds.map((id) => fmt(r.values[id])), fmt(r.yRet), r.yUp == null ? '' : String(r.yUp)].join(','))
   return [header, ...lines].join('\n') + '\n'
 }

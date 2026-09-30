@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FEATURE_IDS } from '../../shared/ml.js'
+import { FEATURES, FEATURE_IDS, ML_INSTRUMENT, featureApplies, featuresFor, type FeatureSpec } from '../../shared/ml.js'
 import { buildCurveSeries } from './curve.js'
 import {
   asOf,
@@ -49,8 +49,7 @@ function inputs(overrides: Partial<FeatureInputs> = {}): FeatureInputs {
   return {
     metal: 'gold',
     spot: gold,
-    gold,
-    silver: walk(DATES, 18, 2),
+    pair: { numerator: gold, denominator: walk(DATES, 18, 2) },
     dxy: walk(DATES, 80, 3),
     tnx: walk(DATES, 3, 4),
     vix: walk(DATES, 18, 5),
@@ -81,8 +80,10 @@ describe('buildFeatureMatrix: look-ahead safety', () => {
     const changed: FeatureInputs = {
       ...base,
       spot: corruptAfter(base.spot, cut, scramble),
-      gold: corruptAfter(base.gold, cut, scramble),
-      silver: corruptAfter(base.silver, cut, scramble),
+      pair: {
+        numerator: corruptAfter(base.pair!.numerator, cut, scramble),
+        denominator: corruptAfter(base.pair!.denominator, cut, scramble),
+      },
       dxy: corruptAfter(base.dxy, cut, scramble),
       tnx: corruptAfter(base.tnx, cut, scramble),
       vix: corruptAfter(base.vix, cut, scramble),
@@ -154,12 +155,45 @@ describe('buildFeatureMatrix: targets', () => {
   })
 })
 
+describe('per-asset feature catalogue', () => {
+  it('gold and silver keep the full catalogue in its original order', () => {
+    expect(featuresFor('gold').map((f) => f.id)).toEqual(FEATURE_IDS)
+    expect(featuresFor('silver').map((f) => f.id)).toEqual(FEATURE_IDS)
+    expect(buildFeatureMatrix(inputs()).featureIds).toEqual(FEATURE_IDS)
+  })
+
+  it('filters by onlyFor, class and pair membership', () => {
+    const gvz = FEATURES.find((f) => f.id === 'gvz_level')!
+    expect(gvz.onlyFor).toEqual(['gold', 'silver'])
+    const f = (p: Partial<FeatureSpec>): FeatureSpec => ({ id: 'x', label: 'x', group: 'macro', source: 'fred', optional: true, description: '', ...p })
+    expect(featureApplies(f({ onlyFor: ['gold'] }), 'gold')).toBe(true)
+    expect(featureApplies(f({ onlyFor: ['gold'] }), 'silver')).toBe(false)
+    expect(featureApplies(f({ classes: ['crypto'] }), 'gold')).toBe(false)
+    expect(featureApplies(f({ classes: ['precious'] }), 'silver')).toBe(true)
+    expect(featureApplies(f({ needsPair: true }), 'silver')).toBe(true)
+  })
+
+  it('drops a feature that does not apply: no values, no missing entry, no CSV column', () => {
+    const ids = FEATURE_IDS.filter((id) => id !== 'gvz_level' && id !== 'gsr_z252' && id !== 'cot_mm_z')
+    const m = buildFeatureMatrix(inputs({ featureIds: ids, pair: null }))
+    expect(m.featureIds).toEqual(ids)
+    expect(Object.keys(m.rows[600].values)).toEqual(ids)
+    expect(m.missing.cot_mm_z).toBeUndefined()
+    const header = matrixToCsv(m).split(String.fromCharCode(10))[0].split(',')
+    expect(header).toEqual(['date', ...ids, 'y_ret', 'y_up'])
+  })
+
+  it('derives the ML instrument from the front futures root', () => {
+    expect(ML_INSTRUMENT).toEqual({ gold: 'GC.out', silver: 'SI.out' })
+  })
+})
+
 describe('COT lag', () => {
   it('a report is only usable strictly after its publication date', () => {
     const reports: CotPoint[] = []
     const tuesdays = businessDays('2012-01-03', 1000).filter((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === 2)
     tuesdays.forEach((d, i) => {
-      reports.push({ reportDate: d, publishedAt: null, openInterest: 1000, mmLong: 300 + (i % 17) * 10, mmShort: 100 })
+      reports.push({ reportDate: d, publishedAt: null, openInterest: 1000, specLong: 300 + (i % 17) * 10, specShort: 100 })
     })
     const series = cotSeries(reports)
     expect(series.length).toBeGreaterThan(50)
@@ -184,8 +218,8 @@ describe('COT lag', () => {
       reportDate: d,
       publishedAt: `${d}T00:00:00Z`.replace(d, new Date(Date.parse(`${d}T00:00:00Z`) + 7 * 86_400_000).toISOString().slice(0, 10)),
       openInterest: 1000,
-      mmLong: 200 + ((i * 7) % 13) * 20,
-      mmShort: 150,
+      specLong: 200 + ((i * 7) % 13) * 20,
+      specShort: 150,
     }))
     const s = cotSeries(reports)
     expect(s[0].date > reports[51].reportDate).toBe(true)

@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { ML_GATE, type MlPrediction } from '@shared/ml'
-import { UNIVERSE, type Metal } from '@shared/universe'
+import { UNIVERSE, type AssetId } from '@shared/universe'
 import { PALETTE, signColor } from '../../../design/tokens'
 import { fmtDate, fmtNum, fmtPct, fmtPctSigned } from '../../../design/format'
 import { EmptyState, HelpTip, Panel } from '../../../ui'
@@ -23,11 +23,17 @@ function ProbabilityScale({ p, lo, hi, muted }: { p: number; lo: number | null; 
   )
 }
 
-export function SignalCard({ metal, prediction }: { metal: Metal; prediction: MlPrediction | undefined }) {
-  const spec = UNIVERSE[metal]
+/** "Gold · GC front month"; assets without futures fall back to their reference symbol. */
+function eyebrowOf(asset: AssetId): string {
+  const spec = UNIVERSE[asset]
+  const root = spec.futures[0]?.root
+  return root ? `${spec.label} · ${root} front month` : `${spec.label} · ${spec.spot}`
+}
+
+export function SignalCard({ metal, prediction }: { metal: AssetId; prediction: MlPrediction | undefined }) {
   if (!prediction) {
     return (
-      <Panel eyebrow={`${spec.label} · ${spec.futures[0].root} front month`} title="20-day direction">
+      <Panel eyebrow={eyebrowOf(metal)} title="20-day direction">
         <EmptyState title="No prediction yet" compact>
           Train the model or run inference below. Nothing is shown until a model has been validated and scored.
         </EmptyState>
@@ -37,7 +43,7 @@ export function SignalCard({ metal, prediction }: { metal: Metal; prediction: Ml
   const validated = prediction.validationStatus === 'passed'
   return (
     <Panel
-      eyebrow={`${spec.label} · ${spec.futures[0].root} front month`}
+      eyebrow={eyebrowOf(metal)}
       title="20-day direction"
       actions={<ValidationChip status={prediction.validationStatus} />}
       provenance={{
@@ -65,7 +71,7 @@ export function SignalCard({ metal, prediction }: { metal: Metal; prediction: Ml
       <p className="mt-2 text-2xs leading-relaxed text-muted">
         {prediction.pUpLow != null && prediction.pUpHigh != null ? (
           <>
-            Out of sample, when the model gave a similar probability, {spec.label.toLowerCase()} rose{' '}
+            Out of sample, when the model gave a similar probability, {UNIVERSE[metal].label.toLowerCase()} rose{' '}
             <span className="num text-foreground">{fmtPct(prediction.pUpLow, 1)}–{fmtPct(prediction.pUpHigh, 1)}</span> of the time (80% interval).
           </>
         ) : (

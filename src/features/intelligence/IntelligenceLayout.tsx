@@ -4,14 +4,14 @@ import { useSettings } from '../../store/settings-context'
 import { PageHeader, RouteTabs } from '../../ui'
 
 export function IntelligenceLayout() {
-  // Metal in focus comes from the global switch in the top bar.
-  const { metal } = useSettings()
+  // Asset in focus comes from the global switch in the top bar.
+  const { asset } = useSettings()
   return (
     <>
       <PageHeader
-        eyebrow={`Research · ${UNIVERSE[metal].label}`}
+        eyebrow={`Research · ${UNIVERSE[asset].label}`}
         title="Intelligence"
-        description="A 20-day direction model per metal, shown with its walk-forward validation. It counts only when it passes."
+        description="A 20-day direction model per asset, shown with its walk-forward validation. It counts only when it passes."
       />
       <RouteTabs
         items={[

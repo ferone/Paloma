@@ -1,10 +1,10 @@
-import type { Metal } from '@shared/universe'
+import { UNIVERSE, type AssetId } from '@shared/universe'
 import { fmtAge, fmtPct } from '../../../design/format'
 import { Button, ErrorNote } from '../../../ui'
 import { useMlJobs, useMlStatus, useStartMlJob } from '../api'
 
 /** "Train now" / "Run inference" with live job progress (polls /api/jobs). */
-export function JobControls({ metal }: { metal?: Metal }) {
+export function JobControls({ metal }: { metal?: AssetId }) {
   const jobs = useMlJobs()
   const status = useMlStatus()
   const start = useStartMlJob()
@@ -19,13 +19,13 @@ export function JobControls({ metal }: { metal?: Metal }) {
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="primary" size="sm" disabled={!!running || !!noPython || start.isPending}
           onClick={() => start.mutate({ kind: 'train', metal })}>
-          {metal ? `Train ${metal} now` : 'Train now'}
+          {metal ? `Train ${UNIVERSE[metal].label.toLowerCase()} now` : 'Train now'}
         </Button>
         <Button size="sm" disabled={!!running || !!noPython || start.isPending} onClick={() => start.mutate({ kind: 'infer' })}>
           Run inference
         </Button>
         <span className="text-2xs text-muted">
-          Training runs the full walk-forward and permutation test (≈3 min per metal). Inference reuses the saved model and retrains it
+          Training runs the full walk-forward and permutation test (≈3 min per asset). Inference reuses the saved model and retrains it
           if it is older than {status.data?.maxModelAgeDays ?? 7} days.
         </span>
       </div>

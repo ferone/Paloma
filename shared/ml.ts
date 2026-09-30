@@ -1,6 +1,6 @@
 // ML (Intelligence) domain contracts, shared by server/ml and src/features/intelligence.
 // The cross-domain summary other domains read is `MlPredictionsLite` in shared/artifacts.ts.
-import type { Metal } from './universe.js'
+import { ASSETS, RELATIVE_VALUE_PAIRS, UNIVERSE, type AssetClass, type AssetId } from './universe.js'
 
 /** Forecast horizon in trading days. Targets look H rows ahead. */
 export const ML_HORIZON = 20
@@ -30,12 +30,25 @@ export interface FeatureSpec {
   source: 'yahoo' | 'fred' | 'cftc' | 'contracts' | 'calendar'
   /** Optional features may be absent (their feed not loaded yet); the model drops them. */
   optional: boolean
+  /** Asset classes the feature applies to (default: every class). */
+  classes?: AssetClass[]
+  /** Explicit asset allow-list (default: every asset of the allowed classes). */
+  onlyFor?: AssetId[]
+  /** Applies only to assets that belong to a relative-value pair (the pair ratio is the input). */
+  needsPair?: boolean
 }
 
 /**
  * Feature catalogue. Every feature at date t uses only data dated ≤ t
  * (macro series: < t, i.e. lagged one day; COT: only reports published before t).
- * `P` is the metal's front-month close (GC=F / SI=F), returns are log returns.
+ * `P` is the asset's reference close (`AssetSpec.spot`, e.g. GC=F / SI=F), returns are log returns.
+ *
+ * The catalogue is filtered per asset by `featuresFor` (`classes`, `onlyFor`,
+ * `needsPair`); the CSV columns and their order follow this list.
+ * - gsr_z252 needs a relative-value pair (gold and silver via gold/silver).
+ * - gvz_level is an explicit gold + silver list: GVZ is gold's implied vol, and
+ *   silver has always been trained with it as a precious-metals vol proxy. New
+ *   precious assets (platinum, palladium) do NOT inherit it; decide per asset.
  */
 export const FEATURES: FeatureSpec[] = [
   { id: 'mom5', label: '5-day momentum', group: 'momentum', source: 'yahoo', optional: false, description: 'ln(P_t / P_t−5).' },
@@ -48,30 +61,47 @@ export const FEATURES: FeatureSpec[] = [
   { id: 'ma50_dist', label: 'Distance from 50d MA', group: 'trend', source: 'yahoo', optional: false, description: 'P_t / mean(P, 50d) − 1.' },
   { id: 'ma200_dist', label: 'Distance from 200d MA', group: 'trend', source: 'yahoo', optional: false, description: 'P_t / mean(P, 200d) − 1.' },
   { id: 'rsi14', label: 'RSI 14', group: 'trend', source: 'yahoo', optional: false, description: 'Wilder relative strength index over 14 days (0–100).' },
-  { id: 'gsr_z252', label: 'Gold/silver ratio z', group: 'cross-asset', source: 'yahoo', optional: false, description: 'z-score of GC/SI over the trailing 252 days.' },
+  { id: 'gsr_z252', label: 'Pair ratio z', group: 'cross-asset', source: 'yahoo', optional: false, needsPair: true, description: 'z-score over the trailing 252 days of the asset\'s relative-value pair ratio (numerator / denominator reference closes, e.g. GC/SI for gold and silver).' },
   { id: 'dxy_mom20', label: 'Dollar index 20d momentum', group: 'cross-asset', source: 'yahoo', optional: false, description: 'ln change of DX-Y.NYB over 20 days (as-of aligned).' },
   { id: 'tnx_chg20', label: '10y yield 20d change', group: 'cross-asset', source: 'yahoo', optional: false, description: 'Change in ^TNX (percentage points) over 20 days.' },
   { id: 'vix_level', label: 'VIX level', group: 'cross-asset', source: 'yahoo', optional: false, description: '^VIX close.' },
   { id: 'vix_chg20', label: 'VIX 20d change', group: 'cross-asset', source: 'yahoo', optional: false, description: 'Change in ^VIX over 20 days.' },
   { id: 'spy_mom20', label: 'S&P 500 20d momentum', group: 'cross-asset', source: 'yahoo', optional: false, description: 'ln change of SPY over 20 days.' },
-  { id: 'etf_volume_z', label: 'ETF volume z (flows proxy)', group: 'flows', source: 'yahoo', optional: false, description: 'z-score (120d) of the 5-day mean log volume of GLD (gold) or SLV (silver).' },
+  { id: 'etf_volume_z', label: 'ETF volume z (flows proxy)', group: 'flows', source: 'yahoo', optional: false, description: 'z-score (120d) of the 5-day mean log volume of the asset\'s benchmark ETF (GLD for gold, SLV for silver).' },
   { id: 'doy_sin', label: 'Day of year (sin)', group: 'seasonal', source: 'calendar', optional: false, description: 'sin(2π·doy/365.25).' },
   { id: 'doy_cos', label: 'Day of year (cos)', group: 'seasonal', source: 'calendar', optional: false, description: 'cos(2π·doy/365.25).' },
   { id: 'seasonal_drift', label: 'Seasonal drift', group: 'seasonal', source: 'yahoo', optional: false, description: 'Mean 20-day forward return from the same ±10 calendar days in prior years, using only windows fully completed by t (≥3 years).' },
   { id: 'real_yield_chg20', label: 'Real yield 20d change', group: 'macro', source: 'fred', optional: true, description: 'Change in 10y TIPS yield (FRED DFII10) over 20 observations, lagged one day.' },
   { id: 'breakeven_chg20', label: 'Breakeven 20d change', group: 'macro', source: 'fred', optional: true, description: 'Change in 10y breakeven inflation (FRED T10YIE) over 20 observations, lagged one day.' },
   { id: 'usd_broad_mom20', label: 'Broad dollar 20d momentum', group: 'macro', source: 'fred', optional: true, description: 'ln change of the trade-weighted dollar (FRED DTWEXBGS) over 20 observations, lagged one day.' },
-  { id: 'gvz_level', label: 'Gold VIX (GVZ)', group: 'macro', source: 'fred', optional: true, description: 'CBOE gold volatility index (FRED GVZCLS), lagged one day.' },
-  { id: 'cot_mm_z', label: 'COT managed-money z', group: 'positioning', source: 'cftc', optional: true, description: 'z-score (156 reports) of managed-money net positions as % of open interest; a report is used only from the day after it was published.' },
+  { id: 'gvz_level', label: 'Gold VIX (GVZ)', group: 'macro', source: 'fred', optional: true, onlyFor: ['gold', 'silver'], description: 'CBOE gold volatility index (FRED GVZCLS), lagged one day.' },
+  { id: 'cot_mm_z', label: 'COT speculator z', group: 'positioning', source: 'cftc', optional: true, description: 'z-score (156 reports) of speculator net positions as % of open interest (managed money in the disaggregated report, leveraged funds in TFF); a report is used only from the day after it was published.' },
   { id: 'curve_spread_z', label: 'Front spread z', group: 'curve', source: 'contracts', optional: true, description: 'z-score (252d) of (2nd − 1st active contract) / 1st.' },
   { id: 'curve_fly_z', label: 'Front butterfly z', group: 'curve', source: 'contracts', optional: true, description: 'z-score (252d) of (1st − 2·2nd + 3rd) / 1st.' },
   { id: 'carry_slope', label: 'Carry slope', group: 'curve', source: 'contracts', optional: true, description: 'Annualized ln(2nd / 1st) per month between the two contracts.' },
 ]
 
+/** Every feature id in the catalogue (the union across assets). */
 export const FEATURE_IDS = FEATURES.map((f) => f.id)
 
-/** Instrument id used in ml_predictions and the cross-domain artifact. */
-export const ML_INSTRUMENT: Record<Metal, string> = { gold: 'GC.out', silver: 'SI.out' }
+/** Whether a catalogue feature applies to an asset. */
+export function featureApplies(f: FeatureSpec, asset: AssetId): boolean {
+  if (f.classes && !f.classes.includes(UNIVERSE[asset].assetClass)) return false
+  if (f.onlyFor && !f.onlyFor.includes(asset)) return false
+  if (f.needsPair && !RELATIVE_VALUE_PAIRS.some((p) => p.numerator === asset || p.denominator === asset)) return false
+  return true
+}
+
+/** The features modelled for an asset, in catalogue order. */
+export function featuresFor(asset: AssetId): FeatureSpec[] {
+  return FEATURES.filter((f) => featureApplies(f, asset))
+}
+
+/** Instrument id used in ml_predictions and the cross-domain artifact: `<front root>.out`. */
+export const mlInstrumentFor = (asset: AssetId): string => `${UNIVERSE[asset].futures[0]?.root ?? asset.toUpperCase()}.out`
+
+/** Instrument id per asset (derived from each spec's front futures root). */
+export const ML_INSTRUMENT = Object.fromEntries(ASSETS.map((a) => [a, mlInstrumentFor(a)])) as Record<AssetId, string>
 
 export interface FeatureAvailability {
   id: string
@@ -167,7 +197,7 @@ export interface MlMetrics {
 
 export interface MlRunSummary {
   id: number
-  metal: Metal
+  metal: AssetId
   startedAt: string
   finishedAt: string | null
   status: 'running' | 'succeeded' | 'failed'
@@ -199,7 +229,7 @@ export interface MlRunDetail extends MlRunSummary {
 
 export interface MlPrediction {
   runId: number
-  metal: Metal
+  metal: AssetId
   instrumentId: string
   /** Date of the feature row that was scored. */
   date: string
@@ -230,7 +260,7 @@ export interface MlPythonStatus {
 
 export interface MlStatus {
   python: MlPythonStatus
-  lastRuns: Partial<Record<Metal, MlRunSummary>>
+  lastRuns: Partial<Record<AssetId, MlRunSummary>>
   /** Model older than this many days is retrained automatically on inference. */
   maxModelAgeDays: number
 }

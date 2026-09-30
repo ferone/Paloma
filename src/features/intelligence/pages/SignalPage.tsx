@@ -1,4 +1,4 @@
-import { METALS } from '@shared/universe'
+import { ASSETS } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
 import { ErrorNote, Explainer, Panel, PanelSkeleton } from '../../../ui'
 import { useMlPredictions } from '../api'
@@ -6,10 +6,10 @@ import { JobControls } from '../components/JobControls'
 import { SignalCard } from '../components/SignalCard'
 
 export default function SignalPage() {
-  const { metal } = useSettings()
+  const { asset } = useSettings()
   const preds = useMlPredictions()
-  // Selected metal first; both are always shown so they can be compared.
-  const order = [metal, ...METALS.filter((m) => m !== metal)]
+  // Selected asset first; every asset is shown so they can be compared.
+  const order = [asset, ...ASSETS.filter((m) => m !== asset)]
 
   return (
     <div className="space-y-6">
@@ -31,9 +31,10 @@ export default function SignalPage() {
 
       <Explainer title="What this signal is, and what it is not">
         <p>
-          For each metal, a gradient-boosted classifier estimates the probability that the front-month futures close is higher 20
-          trading days from now. The inputs are momentum, volatility, trend, the gold/silver ratio, the dollar, 10-year yields, VIX,
-          equities, ETF volume and seasonality, plus real yields, COT positioning and the futures curve once those feeds are loaded.
+          For each asset, a gradient-boosted classifier estimates the probability that its reference price (the front-month futures
+          close for metals) is higher 20 trading days from now. The inputs are momentum, volatility, trend, the dollar, 10-year yields,
+          VIX, equities, benchmark-ETF volume and seasonality; a relative-value ratio where the asset has a pair (gold/silver); plus real
+          yields, speculator COT positioning and the futures curve once those feeds are loaded.
         </p>
         <p>
           The probability is <strong>calibrated</strong>: across past out-of-sample predictions, readings near 60% should have come true

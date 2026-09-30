@@ -140,6 +140,18 @@ def test_no_signal_is_not_passed():
         assert res["metrics"]["gate"]["status"] != "passed"
 
 
+def test_accepts_any_path_safe_asset_id():
+    # Any universe asset id reaches the pipeline; only path-safe ids are accepted.
+    for ok in ["gold", "silver", "bitcoin", "copper", "platinum", "palladium"]:
+        assert pl.asset_id(ok) == ok
+    for bad in ["../x", "Gold", "", "a b", "x" * 40]:
+        try:
+            pl.asset_id(bad)
+        except Exception:  # noqa: BLE001
+            continue
+        raise AssertionError(f"accepted {bad!r}")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_") and callable(v)]
     failed = 0

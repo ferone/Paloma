@@ -68,7 +68,7 @@ export function AppShell() {
 
       {open && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setOpen(false)} aria-hidden />}
 
-      <div className="lg:pl-60">
+      <div className="lg:pl-60 print:pl-0">
         <TopBar
           menuButton={
             <button
@@ -82,7 +82,7 @@ export function AppShell() {
             </button>
           }
         />
-        <main id="main" className="mx-auto max-w-[1600px] px-4 py-6 md:px-8 md:py-8">
+        <main id="main" className="mx-auto max-w-[1600px] px-4 py-6 md:px-8 md:py-8 print:max-w-none print:p-0">
           <Outlet />
         </main>
       </div>

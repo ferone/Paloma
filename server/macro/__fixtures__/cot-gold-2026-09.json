@@ -1,0 +1,50 @@
+[
+  {
+    "report_date_as_yyyy_mm_dd": "2026-09-22T00:00:00.000",
+    "market_and_exchange_names": "GOLD - COMMODITY EXCHANGE INC.",
+    "cftc_contract_market_code": "088691",
+    "open_interest_all": "412800",
+    "prod_merc_positions_long": "17719",
+    "prod_merc_positions_short": "44496",
+    "swap_positions_long_all": "14626",
+    "swap__positions_short_all": "250752",
+    "m_money_positions_long_all": "135699",
+    "m_money_positions_short_all": "8310",
+    "other_rept_positions_long": "118283",
+    "other_rept_positions_short": "19819",
+    "nonrept_positions_long_all": "52437",
+    "nonrept_positions_short_all": "15387"
+  },
+  {
+    "report_date_as_yyyy_mm_dd": "2026-09-15T00:00:00.000",
+    "market_and_exchange_names": "GOLD - COMMODITY EXCHANGE INC.",
+    "cftc_contract_market_code": "088691",
+    "open_interest_all": "409899",
+    "prod_merc_positions_long": "16396",
+    "prod_merc_positions_short": "44457",
+    "swap_positions_long_all": "14690",
+    "swap__positions_short_all": "248350",
+    "m_money_positions_long_all": "142394",
+    "m_money_positions_short_all": "9278",
+    "other_rept_positions_long": "115665",
+    "other_rept_positions_short": "18443",
+    "nonrept_positions_long_all": "47460",
+    "nonrept_positions_short_all": "16077"
+  },
+  {
+    "report_date_as_yyyy_mm_dd": "2026-09-08T00:00:00.000",
+    "market_and_exchange_names": "GOLD - COMMODITY EXCHANGE INC.",
+    "cftc_contract_market_code": "088691",
+    "open_interest_all": "411227",
+    "prod_merc_positions_long": "16588",
+    "prod_merc_positions_short": "47549",
+    "swap_positions_long_all": "14542",
+    "swap__positions_short_all": "253855",
+    "m_money_positions_long_all": "145804",
+    "m_money_positions_short_all": "10832",
+    "other_rept_positions_long": "115203",
+    "other_rept_positions_short": "18215",
+    "nonrept_positions_long_all": "52554",
+    "nonrept_positions_short_all": "14240"
+  }
+]

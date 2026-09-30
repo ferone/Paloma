@@ -10,6 +10,8 @@ export const env = {
   openrouterKey: process.env.OPENROUTER_API_KEY || '',
   openrouterModel: process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4.6',
   fredKey: process.env.FRED_API_KEY || '',
+  /** Optional CFTC Socrata app token (raises COT rate limits). */
+  cftcAppToken: process.env.CFTC_APP_TOKEN || '',
   /** Max USD a single Databento pull may cost without an explicit override. */
   databentoBudget: Number(process.env.DATABENTO_BUDGET || 1),
 }

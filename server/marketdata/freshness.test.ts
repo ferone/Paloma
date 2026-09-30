@@ -18,7 +18,7 @@ describe('freshness', () => {
     expect(byDataset.get('cot_reports')).toMatchObject({ exists: true, rows: 0 })
     // Generic tables belong to other domains; exists must mirror the actual schema.
     const tables = new Set((getDb().prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) => r.name))
-    for (const name of ['transactions', 'ml_runs']) {
+    for (const name of ['pf_transactions', 'ml_runs']) {
       expect(byDataset.get(name)?.exists).toBe(tables.has(name))
     }
   })
@@ -45,9 +45,9 @@ describe('freshness', () => {
 
   it('reports generic tables once another domain creates them', () => {
     const d = useTestDb()
-    d.exec('CREATE TABLE nav_snapshots (date TEXT, nav REAL)')
-    d.exec(`INSERT INTO nav_snapshots VALUES ('2026-09-01', 1), ('2026-09-30', 2)`)
-    expect(freshness('2026-10-01').rows.find((r) => r.dataset === 'nav_snapshots')).toMatchObject({ exists: true, rows: 2, from: '2026-09-01', to: '2026-09-30' })
+    d.exec('CREATE TABLE pf_nav_snapshots (date TEXT, nav REAL)')
+    d.exec(`INSERT INTO pf_nav_snapshots VALUES ('2026-09-01', 1), ('2026-09-30', 2)`)
+    expect(freshness('2026-10-01').rows.find((r) => r.dataset === 'pf_nav_snapshots')).toMatchObject({ exists: true, rows: 2, from: '2026-09-01', to: '2026-09-30' })
   })
 })
 

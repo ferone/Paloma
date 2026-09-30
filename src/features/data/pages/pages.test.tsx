@@ -28,7 +28,7 @@ const freshness: FreshnessResponse = {
   rows: [
     { dataset: 'prices_daily', source: 'yahoo', exists: true, rows: 103388, symbols: 20, from: '2000-01-03', to: '2026-09-30', lastJob: { name: 'marketdata.yahoo', finishedAt: '2026-09-30T15:00:00Z' }, ageDays: 0, stale: false, maxAgeDays: 4 },
     { dataset: 'contract_bars', source: 'databento', exists: true, rows: 281, symbols: 24, from: '2026-08-31', to: '2026-09-18', lastJob: null, ageDays: 12, stale: true, maxAgeDays: 4 },
-    { dataset: 'transactions', source: '—', exists: false, rows: 0, symbols: 0, from: null, to: null, lastJob: null, ageDays: null, stale: false, maxAgeDays: null },
+    { dataset: 'pf_transactions', source: '—', exists: false, rows: 0, symbols: 0, from: null, to: null, lastJob: null, ageDays: null, stale: false, maxAgeDays: null },
   ],
 }
 

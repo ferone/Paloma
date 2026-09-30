@@ -61,6 +61,8 @@ describe('export whitelist and queries', () => {
     ])
     upsertContracts([{ symbol: 'GCZ26', root: 'GC', year: 2026, month: 12, lastTrade: '2026-12-29', firstNotice: '2026-11-30' }])
     upsertContractBars([{ symbol: 'GCZ26', date: '2026-09-29', open: 1, high: 2, low: 0.5, close: 1.5, volume: 10, openInterest: 5, source: 'databento' }])
+    // Replace the migrated ai_reports with a minimal fixture table to test verbatim export + CSV escaping.
+    db.exec(`DROP TABLE ai_reports`)
     db.exec(`CREATE TABLE ai_reports (id INTEGER PRIMARY KEY, created_at TEXT, body TEXT)`)
     db.prepare('INSERT INTO ai_reports (created_at, body) VALUES (?, ?), (?, ?)').run('2026-09-29 10:00:00', 'Gold, "firm"\nstill', '2026-09-30 23:59:00', 'late')
   })
@@ -72,7 +74,7 @@ describe('export whitelist and queries', () => {
   })
 
   it('returns a clean not-found for whitelisted tables that do not exist yet', () => {
-    expect(() => buildExportQuery('transactions', {})).toThrow(/does not exist yet/)
+    expect(() => buildExportQuery('pf_transactions', {})).toThrow(/does not exist yet/)
   })
 
   it('filters prices_daily by symbol, source and inclusive date range with bound parameters', () => {

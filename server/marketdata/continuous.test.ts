@@ -39,4 +39,18 @@ describe('front-month selection', () => {
     )
     expect(f.map((b) => `${b.date}:${b.symbol}`)).toEqual(['2026-11-25:GCG27', '2026-11-26:GCG27', '2026-11-30:GCG27'])
   })
+  it('handles cash-settled contracts (no first notice) by rolling before last trade', () => {
+    const btc = (symbol: string, month: number, lastTrade: string): ContractRow => ({ symbol, root: 'BTC', year: 2026, month, lastTrade, firstNotice: null })
+    const cs = [btc('BTCV26', 10, '2026-10-30'), btc('BTCX26', 11, '2026-11-27')]
+    const f = pickFronts(
+      [
+        bar('BTCV26', '2026-10-29', null, 9000),
+        bar('BTCX26', '2026-10-29', null, 3000),
+        bar('BTCV26', '2026-10-30', null, 9999), // last-trade day: October is no longer eligible
+        bar('BTCX26', '2026-10-30', null, 4000),
+      ],
+      cs,
+    )
+    expect(f.map((b) => `${b.date}:${b.symbol}`)).toEqual(['2026-10-29:BTCV26', '2026-10-30:BTCX26'])
+  })
 })

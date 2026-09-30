@@ -14,12 +14,20 @@ import { listContracts, readRootBars, type ContractBar, type ContractRow } from 
 
 const monthIndex = (c: { year: number; month: number }) => c.year * 12 + c.month
 
+/**
+ * Last date a contract can be the front: before first notice for physically
+ * settled products; before last trade for cash-settled ones (e.g. CME bitcoin),
+ * which have no first-notice day.
+ */
+const frontUntil = (c: ContractRow): string | null => c.firstNotice ?? c.lastTrade
+
 /** The front contract's bar for each date (ascending). PURE. */
 export function pickFronts(bars: ContractBar[], contracts: ContractRow[], floorIndex = 0): ContractBar[] {
   const bySymbol = new Map(contracts.map((c) => [c.symbol, c]))
   const byDate = new Map<string, ContractBar[]>()
   for (const b of bars) {
-    if (!bySymbol.get(b.symbol)?.firstNotice) continue
+    const c = bySymbol.get(b.symbol)
+    if (!c || !frontUntil(c)) continue
     let list = byDate.get(b.date)
     if (!list) byDate.set(b.date, (list = []))
     list.push(b)
@@ -29,7 +37,7 @@ export function pickFronts(bars: ContractBar[], contracts: ContractRow[], floorI
   for (const date of [...byDate.keys()].sort()) {
     const candidates = byDate.get(date)!.filter((b) => {
       const c = bySymbol.get(b.symbol)!
-      return c.firstNotice! > date && monthIndex(c) >= floor
+      return frontUntil(c)! > date && monthIndex(c) >= floor
     })
     if (!candidates.length) continue
     const hasOi = candidates.some((b) => b.openInterest != null)

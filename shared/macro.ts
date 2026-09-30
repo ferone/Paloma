@@ -1,7 +1,7 @@
 // Macro & positioning API contracts (owned by the macro workstream).
 // Server: server/macro/*. Client: src/features/macro/*.
 import type { JobStatus, Provenance } from './api.js'
-import type { Metal } from './universe.js'
+import type { AssetId } from './universe.js'
 
 export type Stance = 'tailwind' | 'headwind' | 'neutral'
 
@@ -44,7 +44,7 @@ export interface MacroSeriesSnapshot extends MacroSeriesMeta {
 }
 
 export interface ScorecardRow {
-  /** Driver id (usually a series id, e.g. DFII10, or COT_MM). */
+  /** Driver id (usually a series id, e.g. DFII10, or the COT speculator driver COT_MM / COT_LF). */
   id: string
   label: string
   seriesId: string
@@ -74,7 +74,7 @@ export interface MacroRegime {
 }
 
 export interface MacroDashboard {
-  metal: Metal
+  asset: AssetId
   asOf: string | null
   regime: MacroRegime
   scorecard: ScorecardRow[]
@@ -92,25 +92,49 @@ export interface SeriesResponse {
   series: (MacroSeriesMeta & { points: SeriesPoint[]; provenance: Provenance })[]
 }
 
-export type CotMarket = 'GOLD' | 'SILVER'
+/** CFTC market key (`AssetSpec.cot.market`, e.g. GOLD, SILVER, BTC). */
+export type CotMarket = string
+
+/** CFTC report family: disaggregated (commodities) or Traders in Financial Futures (financials, incl. bitcoin). */
+export type CotReportFamily = 'disagg' | 'tff'
+
+/**
+ * The speculator category of a report family: managed money (disaggregated) or
+ * leveraged funds (TFF). Positioning signals (scorecard, ML) read through it.
+ */
+export interface CotSpeculatorMeta {
+  /** Category id in cot_positions (`mm`, `lev_money`). */
+  category: string
+  /** "Managed money", "Leveraged funds". */
+  label: string
+  /** Compact label for stats ("MM", "Lev. funds"). */
+  short: string
+  /** Scorecard driver id (`COT_MM`, `COT_LF`). */
+  driverId: string
+}
 
 export interface CotPoint {
   reportDate: string
   publishedAt: string | null
   openInterest: number | null
-  mmNet: number | null
-  /** Managed-money net as a fraction of open interest. */
-  mmNetPctOi: number | null
-  /** Percentile (0..1) of mmNetPctOi within the trailing 3 years (156 reports), inclusive. */
-  mmPercentile3y: number | null
-  mmZ3y: number | null
-  mmNetChange: number | null
-  prodNet: number | null
-  swapNet: number | null
+  /** Speculator (managed money / leveraged funds) net long. */
+  specNet: number | null
+  /** Speculator net as a fraction of open interest. */
+  specNetPctOi: number | null
+  /** Percentile (0..1) of specNetPctOi within the trailing 3 years (156 reports), inclusive. */
+  specPercentile3y: number | null
+  specZ3y: number | null
+  specNetChange: number | null
+  /** Net long of every category in the report family, keyed by category id. */
+  nets: Record<string, number | null>
 }
 
 export interface CotCategoryRow {
+  /** Category id (prod, swap, mm, … or dealer, asset_mgr, lev_money, …). */
+  id: string
   name: string
+  /** True for the family's speculator category. */
+  speculator: boolean
   long: number | null
   short: number | null
   net: number | null
@@ -125,21 +149,30 @@ export interface CotCategoryRow {
 export interface CotResponse {
   market: CotMarket
   marketName: string
+  report: CotReportFamily
+  speculator: CotSpeculatorMeta
   latest: {
     reportDate: string
     publishedAt: string | null
     openInterest: number | null
     changeOpenInterest: number | null
     categories: CotCategoryRow[]
-    mmNetPctOi: number | null
-    mmPercentile3y: number | null
-    mmZ3y: number | null
+    specNetPctOi: number | null
+    specPercentile3y: number | null
+    specZ3y: number | null
   } | null
   history: CotPoint[]
   provenance: Provenance
 }
 
-export type CorrelationFactor = 'gold' | 'silver' | 'realYield' | 'dxy' | 'vix' | 'spy'
+/** Market factors every asset is correlated against. */
+export type MacroFactor = 'realYield' | 'dxy' | 'vix' | 'spy'
+
+/**
+ * A correlation factor: another asset (the relative-value partner where a pair
+ * exists, otherwise the asset's class peers) or a market factor.
+ */
+export type CorrelationFactor = AssetId | MacroFactor
 
 export interface CorrelationFactorMeta {
   id: CorrelationFactor
@@ -150,7 +183,7 @@ export interface CorrelationFactorMeta {
 
 export interface RollingCorrelationPoint {
   date: string
-  /** Correlation of the metal's return with each factor; null when insufficient data. */
+  /** Correlation of the asset's return with each factor; null when insufficient data. */
   values: Partial<Record<CorrelationFactor, number | null>>
 }
 
@@ -158,14 +191,14 @@ export interface BetaRow {
   factor: CorrelationFactor
   /** Correlation over the window. */
   correlation: number | null
-  /** OLS slope of the metal's daily return on the factor's daily change. */
+  /** OLS slope of the asset's daily return on the factor's daily change. */
   beta: number | null
   /** Observations used. */
   n: number
 }
 
 export interface CorrelationResponse {
-  metal: Metal
+  asset: AssetId
   window: number
   asOf: string | null
   factors: CorrelationFactorMeta[]
@@ -178,3 +211,6 @@ export interface CorrelationResponse {
 export interface RefreshResponse {
   job: JobStatus
 }
+
+/** Series id of an asset's reference price in /api/macro/series (GOLD, SILVER, ...). */
+export const priceSeriesId = (asset: AssetId): string => asset.toUpperCase()

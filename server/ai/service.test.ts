@@ -6,11 +6,31 @@ import { ARTIFACTS, type QuantSnapshotLite } from '../../shared/artifacts.js'
 import { BadRequest, parseRequest, startReport } from './service.js'
 import { deleteReport, failOrphans, getReport, insertRunning, listReports } from './repo.js'
 import { filterModels, getAiSettings, putAiSettings } from './settings.js'
+import { buildMessages } from './prompts.js'
+import { contextFor } from './context.js'
 
 const reply = (content: string, annotations: unknown[] = []) =>
   vi.fn(async () =>
     Response.json({ model: 'x', choices: [{ message: { content, annotations } }], usage: { total_tokens: 900, cost: 0.004 } }),
   )
+
+describe('AI prompts', () => {
+  beforeEach(() => {
+    useTestDb()
+  })
+
+  it('briefs a real-assets analyst with the asset and its class in context', () => {
+    const m = buildMessages({ kind: 'macro_brief', metal: 'silver', online: false, blocks: [], today: '2026-10-01' })
+    expect(m[0].content).toContain('real-assets analyst')
+    expect(m[0].content).not.toContain('gold and silver')
+    expect(m[1].content).toContain('Asset in focus: Silver (precious metals, COMEX futures SI, priced in $/oz).')
+    expect(m[1].content).toContain('precious metals drivers')
+    const blocks = contextFor('macro_brief', 'silver')
+    expect(blocks.map((b) => b.name)).toEqual(['Macro dashboard', 'COT positioning'])
+    expect(blocks[1].text).toContain('CFTC COT (SILVER): not available')
+    expect(contextFor('portfolio_commentary', 'gold').map((b) => b.name)).toEqual(['Portfolio summary', 'Macro dashboard (gold)', 'Macro dashboard (silver)'])
+  })
+})
 
 describe('AI report service', () => {
   beforeEach(() => {
@@ -77,6 +97,9 @@ describe('AI report service', () => {
     expect(() => parseRequest({ kind: 'nope' })).toThrow(BadRequest)
     expect(() => parseRequest({ kind: 'ask', input: {} })).toThrow(/question/)
     expect(() => parseRequest({ kind: 'trade_brief', metal: 'gold' })).toThrow(/opportunity/)
+    // An unknown asset is rejected, never silently turned into gold.
+    expect(() => parseRequest({ kind: 'macro_brief', metal: 'unobtainium' })).toThrow(/unknown asset/)
+    expect(parseRequest({ kind: 'macro_brief', asset: 'silver' }).metal).toBe('silver')
     const snap: QuantSnapshotLite = {
       asOf: '2026-09-30',
       dataThrough: '2026-09-29',

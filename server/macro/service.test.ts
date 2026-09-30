@@ -1,10 +1,22 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useTestDb } from '../db/client.js'
 import { readArtifact, upsertDailyBars } from '../db/repo.js'
-import { upsertCot, upsertMacro } from '../db/shared-repo.js'
+import { readFileSync } from 'node:fs'
+import { readCot, upsertMacro } from '../db/shared-repo.js'
 import { ARTIFACTS, type MacroDashboardLite } from '../../shared/artifacts.js'
 import type { CorrelationFactor, SeriesPoint } from '../../shared/macro.js'
-import { buildDashboard, computeCorrelations, publishMacroArtifact, snapshot } from './service.js'
+import { readCotReports, readSpeculator, upsertCotReports } from './cot-repo.js'
+import { fromCotRow, parseCotReports, type SocrataCotRow } from './cot.js'
+import {
+  assetPeers,
+  buildDashboard,
+  computeCorrelations,
+  correlationFactors,
+  cotResponse,
+  publishMacroArtifact,
+  refreshCot,
+  snapshot,
+} from './service.js'
 import { FRED_SERIES } from './catalog.js'
 
 function businessDays(n: number, end = '2026-09-28'): string[] {
@@ -17,6 +29,8 @@ function businessDays(n: number, end = '2026-09-28'): string[] {
   }
   return out
 }
+
+const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), 'utf8')) as SocrataCotRow[]
 
 describe('macro service', () => {
   beforeEach(() => {
@@ -47,8 +61,8 @@ describe('macro service', () => {
     upsertMacro(days.map((date, i) => ({ seriesId: 'DFII10', date, value: 2.9 - i * 0.004, source: 'fred' })))
     upsertMacro(days.map((date, i) => ({ seriesId: 'DTWEXBGS', date, value: 125 - i * 0.05, source: 'fred' })))
     upsertMacro(days.map((date) => ({ seriesId: 'VIXCLS', date, value: 30, source: 'fred' })))
-    upsertCot([
-      {
+    upsertCotReports([
+      fromCotRow({
         market: 'GOLD',
         reportDate: '2026-09-22',
         publishedAt: '2026-09-25T20:30:00Z',
@@ -63,7 +77,7 @@ describe('macro service', () => {
         otherShort: 19819,
         nonrepLong: 52437,
         nonrepShort: 15387,
-      },
+      }),
     ])
     const d = buildDashboard('gold')
     expect(d.empty).toBe(false)
@@ -111,6 +125,41 @@ describe('macro service', () => {
     expect(r.matrix.values[0][0]).toBe(1)
     expect(r.rolling.length).toBe(199 - 62)
     expect(r.rolling.at(-1)!.values.gold).toBeUndefined()
+  })
+
+  it('stores both COT families in cot_positions and keeps cot_reports for disaggregated markets', () => {
+    const gold = parseCotReports(fixture('cot-gold-2026-09.json'), 'disagg', 'GOLD')
+    const btc = parseCotReports(fixture('cot-btc-tff-2026-09.json'), 'tff', 'BTC')
+    upsertCotReports([...gold, ...btc])
+    expect(readCotReports('GOLD', 'disagg')).toEqual(gold)
+    expect(readCotReports('BTC', 'tff')).toEqual(btc)
+    expect(readCot('GOLD')).toHaveLength(3)
+    expect(readCot('BTC')).toHaveLength(0) // TFF never lands in the disaggregated wide table
+    expect(readSpeculator('BTC', 'tff').at(-1)).toMatchObject({ long: 4745, short: 12698 })
+    expect(readSpeculator('GOLD', 'disagg').at(-1)).toMatchObject({ long: 135699, short: 8310 })
+    const r = cotResponse('gold')!
+    expect(r).toMatchObject({ market: 'GOLD', report: 'disagg', speculator: { category: 'mm' } })
+    expect(r.latest!.categories.find((c) => c.speculator)!.id).toBe('mm')
+    expect(cotResponse('NOPE')).toBeNull()
+  })
+
+  it('refreshes every universe COT market from its family dataset', async () => {
+    const urls: string[] = []
+    const f = async (u: string) => {
+      urls.push(u)
+      return Response.json(fixture('cot-gold-2026-09.json'))
+    }
+    const msg = await refreshCot(undefined, f as unknown as typeof fetch)
+    expect(msg).toContain('GOLD 3 reports')
+    expect(msg).toContain('SILVER 3 reports')
+    expect(urls.every((u) => u.includes('72hh-3qpy'))).toBe(true)
+    expect(readCot('SILVER')).toHaveLength(3)
+  })
+
+  it('correlates an asset with its relative-value partner', () => {
+    expect(assetPeers('gold')).toEqual(['silver'])
+    expect(assetPeers('silver')).toEqual(['gold'])
+    expect(correlationFactors('silver').map((f) => f.id)).toEqual(['gold', 'silver', 'realYield', 'dxy', 'vix', 'spy'])
   })
 
   it('reads price series from the prices_daily yahoo cache', async () => {

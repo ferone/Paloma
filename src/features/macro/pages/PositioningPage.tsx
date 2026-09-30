@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import type { CotCategoryRow, CotMarket, CotResponse } from '@shared/macro'
-import { METALS, UNIVERSE, type Metal } from '@shared/universe'
+import type { CotCategoryRow, CotResponse } from '@shared/macro'
+import { ASSETS, UNIVERSE, type AssetId } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
 import { Chip, DataTable, EmptyState, ErrorNote, Explainer, HelpTip, Panel, PanelSkeleton, Segmented, Stat, type Column } from '../../../ui'
 import { fmtCompact, fmtDate, fmtNum, fmtPct, fmtPctSigned, fmtSigned } from '../../../design/format'
@@ -11,25 +11,27 @@ import { tickMonth, useChartColors } from '../lib'
 import { cotStanceLabel } from '../cot'
 
 export default function PositioningPage() {
-  const { metal } = useSettings()
-  // Metal in focus first, then the other one.
-  const order: Metal[] = [metal, ...METALS.filter((m) => m !== metal)]
+  const { asset } = useSettings()
+  // Asset in focus first, then every other asset with a CFTC market.
+  const order: AssetId[] = [asset, ...ASSETS.filter((a) => a !== asset)].filter((a) => UNIVERSE[a].cot != null)
   return (
     <div className="space-y-6">
       <Explainer title="How to read positioning">
         <p>
-          The CFTC Commitments of Traders report splits COMEX futures open interest by trader type. <strong>Managed money</strong> (hedge funds and
-          CTAs) is the speculative, trend-following cohort; <strong>producers/merchants</strong> and <strong>swap dealers</strong> are mostly hedgers
-          and bullion banks and usually sit net short.
+          The CFTC Commitments of Traders report splits futures open interest by trader type. Commodities are reported in the{' '}
+          <em>disaggregated</em> report, where <strong>managed money</strong> (hedge funds and CTAs) is the speculative, trend-following cohort and{' '}
+          <strong>producers/merchants</strong> and <strong>swap dealers</strong> are mostly hedgers and bullion banks. Financial futures (bitcoin
+          among them) are reported in <em>Traders in Financial Futures</em>, where <strong>leveraged funds</strong> play the speculator role
+          alongside dealers and asset managers.
         </p>
         <p>
-          We track managed-money net length as a share of open interest and rank it against the last three years (156 weekly reports). Above the 85th
+          We track the speculators’ net length as a share of open interest and rank it against the last three years (156 weekly reports). Above the 85th
           percentile the trade is crowded (a contrarian headwind); below the 15th it is washed out (a tailwind). Positions are as of Tuesday and are
           published the following Friday at 15:30 ET, so the chart only &ldquo;knows&rdquo; a report from its release date.
         </p>
       </Explainer>
-      {order.map((m) => (
-        <MarketSection key={m} metal={m} />
+      {order.map((a) => (
+        <MarketSection key={a} asset={a} />
       ))}
     </div>
   )
@@ -41,12 +43,16 @@ const RANGES = [
   { value: '9999', label: 'All' },
 ] as const
 
-function MarketSection({ metal }: { metal: Metal }) {
-  const market = UNIVERSE[metal].cotMarket as CotMarket
-  const q = useCot(market)
+function MarketSection({ asset }: { asset: AssetId }) {
+  const spec = UNIVERSE[asset]
+  const q = useCot(spec.cot!.market)
+  const exchange = spec.futures[0]?.exchange
   return (
-    <section aria-label={`${UNIVERSE[metal].label} positioning`}>
-      <h2 className="mb-3 text-[15px] font-medium text-foreground">{UNIVERSE[metal].label} · COMEX</h2>
+    <section aria-label={`${spec.label} positioning`}>
+      <h2 className="mb-3 text-[15px] font-medium text-foreground">
+        {spec.label}
+        {exchange ? ` · ${exchange}` : ''}
+      </h2>
       {q.isLoading ? (
         <PanelSkeleton rows={6} />
       ) : q.error ? (
@@ -56,35 +62,36 @@ function MarketSection({ metal }: { metal: Metal }) {
           <EmptyState title="No COT reports yet">Run a data refresh; the CFTC API needs no key.</EmptyState>
         </Panel>
       ) : (
-        <MarketBody data={q.data} metal={metal} />
+        <MarketBody data={q.data} asset={asset} />
       )}
     </section>
   )
 }
 
-function MarketBody({ data, metal }: { data: CotResponse; metal: Metal }) {
+function MarketBody({ data, asset }: { data: CotResponse; asset: AssetId }) {
   const l = data.latest!
-  const mm = l.categories.find((c) => c.name === 'Managed money')
-  const stance = cotStanceLabel(l.mmPercentile3y)
+  const spec = l.categories.find((c) => c.speculator)
+  const who = data.speculator
+  const stance = cotStanceLabel(l.specPercentile3y)
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <Panel
         density="dense"
         title={
-          <HelpTip term="Managed-money net, % of open interest">
-            (Managed-money longs − shorts) ÷ total open interest. Shaded zones are this market’s 3-year 15th and 85th percentiles.
+          <HelpTip term={`${who.label} net, % of open interest`}>
+            ({who.label} longs − shorts) ÷ total open interest. Shaded zones are this market’s 3-year 15th and 85th percentiles.
           </HelpTip>
         }
         provenance={data.provenance}
         actions={<Chip tone={stance.tone}>{stance.label}</Chip>}
       >
         <div className="mb-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat size="sm" label="MM net % OI" value={fmtPct(l.mmNetPctOi, 1)} />
-          <Stat size="sm" label="3y percentile" value={l.mmPercentile3y != null ? fmtNum(l.mmPercentile3y * 100, 0) : '—'} />
-          <Stat size="sm" label="3y z-score" value={fmtNum(l.mmZ3y, 2)} />
-          <Stat size="sm" label="MM net Δ week" value={fmtSigned(mm?.changeNet, 0)} deltaValue={mm?.changeNet} />
+          <Stat size="sm" label={`${who.short} net % OI`} value={fmtPct(l.specNetPctOi, 1)} />
+          <Stat size="sm" label="3y percentile" value={l.specPercentile3y != null ? fmtNum(l.specPercentile3y * 100, 0) : '—'} />
+          <Stat size="sm" label="3y z-score" value={fmtNum(l.specZ3y, 2)} />
+          <Stat size="sm" label={`${who.short} net Δ week`} value={fmtSigned(spec?.changeNet, 0)} deltaValue={spec?.changeNet} />
         </div>
-        <CotChart data={data} metal={metal} />
+        <CotChart data={data} asset={asset} />
       </Panel>
       <Panel
         density="dense"
@@ -110,13 +117,13 @@ function quantile(sorted: number[], q: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo)
 }
 
-function CotChart({ data, metal }: { data: CotResponse; metal: Metal }) {
+function CotChart({ data, asset }: { data: CotResponse; asset: AssetId }) {
   const c = useChartColors()
   const [range, setRange] = useState<'156' | '260' | '9999'>('260')
-  const hist = data.history.filter((h) => h.mmNetPctOi != null)
-  const shown = useMemo(() => hist.slice(-Number(range)).map((h) => ({ date: h.reportDate, v: h.mmNetPctOi! * 100, pct: h.mmPercentile3y })), [hist, range])
+  const hist = data.history.filter((h) => h.specNetPctOi != null)
+  const shown = useMemo(() => hist.slice(-Number(range)).map((h) => ({ date: h.reportDate, v: h.specNetPctOi! * 100, pct: h.specPercentile3y })), [hist, range])
   const band = useMemo(() => {
-    const last3y = hist.slice(-156).map((h) => h.mmNetPctOi! * 100).sort((a, b) => a - b)
+    const last3y = hist.slice(-156).map((h) => h.specNetPctOi! * 100).sort((a, b) => a - b)
     return { p15: quantile(last3y, 0.15), p85: quantile(last3y, 0.85) }
   }, [hist])
   const lo = Math.min(...shown.map((s) => s.v), band.p15)
@@ -148,13 +155,15 @@ function CotChart({ data, metal }: { data: CotResponse; metal: Metal }) {
                 return (
                   <div className="rounded-md border border-border bg-surface-3 px-2.5 py-1.5 text-2xs shadow-lg">
                     <div className="text-muted">{fmtDate(p.date)}</div>
-                    <div className="num text-foreground">MM net {fmtNum(p.v, 1)}% of OI</div>
+                    <div className="num text-foreground">
+                      {data.speculator.short} net {fmtNum(p.v, 1)}% of OI
+                    </div>
                     <div className="num text-muted">{p.pct != null ? `${fmtNum(p.pct * 100, 0)}th pct (3y)` : 'percentile n/a'}</div>
                   </div>
                 )
               }}
             />
-            <Line type="monotone" dataKey="v" stroke={metal === 'gold' ? c.gold : c.silver} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="v" stroke={c.asset[asset]} strokeWidth={1.5} dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -164,12 +173,12 @@ function CotChart({ data, metal }: { data: CotResponse; metal: Metal }) {
 
 function CategoryTable({ rows }: { rows: CotCategoryRow[] }) {
   const cols: Column<CotCategoryRow>[] = [
-    { key: 'name', header: 'Category', cell: (r) => r.name },
+    { key: 'name', header: 'Category', cell: (r) => (r.speculator ? <span className="font-medium text-foreground">{r.name}</span> : r.name) },
     { key: 'long', header: 'Long', numeric: true, cell: (r) => fmtCompact(r.long) },
     { key: 'short', header: 'Short', numeric: true, cell: (r) => fmtCompact(r.short) },
     { key: 'net', header: 'Net', numeric: true, cell: (r) => <span className={signColor(r.net)}>{fmtSigned(r.net, 0)}</span> },
     { key: 'dnet', header: 'Δ net w/w', numeric: true, cell: (r) => <span className={signColor(r.changeNet)}>{fmtSigned(r.changeNet, 0)}</span> },
     { key: 'pct', header: '% OI', numeric: true, cell: (r) => fmtPctSigned(r.netPctOi, 1) },
   ]
-  return <DataTable columns={cols} rows={rows} rowKey={(r) => r.name} dense caption="COT positions by trader category" />
+  return <DataTable columns={cols} rows={rows} rowKey={(r) => r.id} dense caption="COT positions by trader category" />
 }

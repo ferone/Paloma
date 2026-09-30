@@ -1,5 +1,6 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { SeriesUnit } from '@shared/macro'
+import { UNIVERSE, type AssetId } from '@shared/universe'
 import { fmtDate } from '../../../design/format'
 import { CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { fmtLevel, tickMonth, useChartColors } from '../lib'
@@ -39,11 +40,12 @@ function SingleTooltip({ label, unit }: { label: string; unit: SeriesUnit }) {
   )
 }
 
-/** The metal's price, drawn once at the top of the drivers section. */
-export function MetalPriceChart({ label, color, data }: { label: string; color: 'gold' | 'silver'; data: AlignedPoint[] }) {
+/** The asset's price, drawn once at the top of the drivers section. */
+export function AssetPriceChart({ asset, data }: { asset: AssetId; data: AlignedPoint[] }) {
   const c = useChartColors()
   if (data.length < 2) return <p className="py-10 text-center text-xs text-muted">Not enough price history.</p>
-  const stroke = color === 'gold' ? c.gold : c.silver
+  const stroke = c.asset[asset]
+  const { label, unitLabel } = UNIVERSE[asset]
   return (
     <div className="h-[168px]">
       <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
@@ -51,7 +53,7 @@ export function MetalPriceChart({ label, color, data }: { label: string; color: 
           <CartesianGrid stroke={c.grid} vertical={false} />
           <XAxis dataKey="date" {...axisTick(c)} tickFormatter={tickMonth} minTickGap={60} />
           <YAxis {...axisTick(c)} width={48} domain={['auto', 'auto']} tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0))} />
-          <SingleTooltip label={`${label} $/oz`} unit="usd" />
+          <SingleTooltip label={`${label} ${unitLabel}`} unit="usd" />
           <Line type="monotone" dataKey="v" stroke={stroke} strokeWidth={1.75} dot={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>

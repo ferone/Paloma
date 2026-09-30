@@ -12,7 +12,7 @@ const days = Array.from({ length: 300 }, (_, i) => new Date(Date.UTC(2025, 6, 1)
 const pts = (base: number, drift: number) => days.map((date, i) => ({ date, value: base + i * drift + Math.sin(i / 7) }))
 
 const dashboard: MacroDashboard = {
-  metal: 'gold',
+  asset: 'gold',
   asOf: '2026-09-30',
   regime: {
     label: 'Real yields rising · Dollar stable · Risk mixed',
@@ -48,26 +48,35 @@ const cotHistory = days.map((d, i) => ({
   reportDate: d,
   publishedAt: `${d}T20:30:00Z`,
   openInterest: 400000,
-  mmNet: 100000 + i * 100,
-  mmNetPctOi: 0.25 + Math.sin(i / 10) * 0.05,
-  mmPercentile3y: 0.6,
-  mmZ3y: 0.2,
-  mmNetChange: 100,
-  prodNet: -20000,
-  swapNet: -200000,
+  specNet: 100000 + i * 100,
+  specNetPctOi: 0.25 + Math.sin(i / 10) * 0.05,
+  specPercentile3y: 0.6,
+  specZ3y: 0.2,
+  specNetChange: 100,
+  nets: { prod: -20000, swap: -200000 },
 }))
+// GOLD answers as a disaggregated market, SILVER as a TFF one, so both speculator labels render.
 const cot = (market: 'GOLD' | 'SILVER'): CotResponse => ({
   market,
   marketName: `${market} - COMMODITY EXCHANGE INC.`,
+  report: market === 'GOLD' ? 'disagg' : 'tff',
+  speculator:
+    market === 'GOLD'
+      ? { category: 'mm', label: 'Managed money', short: 'MM', driverId: 'COT_MM' }
+      : { category: 'lev_money', label: 'Leveraged funds', short: 'Lev. funds', driverId: 'COT_LF' },
   latest: {
     reportDate: '2026-09-22',
     publishedAt: '2026-09-25T20:30:00Z',
     openInterest: 412800,
     changeOpenInterest: 2901,
-    categories: [{ name: 'Managed money', long: 135699, short: 8310, net: 127389, changeLong: -6695, changeShort: -968, changeNet: -5727, netPctOi: 0.3086 }],
-    mmNetPctOi: 0.3086,
-    mmPercentile3y: 0.61,
-    mmZ3y: 0.2,
+    categories: [
+      market === 'GOLD'
+        ? { id: 'mm', name: 'Managed money', speculator: true, long: 135699, short: 8310, net: 127389, changeLong: -6695, changeShort: -968, changeNet: -5727, netPctOi: 0.3086 }
+        : { id: 'lev_money', name: 'Leveraged funds', speculator: true, long: 4745, short: 12698, net: -7953, changeLong: -800, changeShort: 799, changeNet: -1599, netPctOi: -0.356 },
+    ],
+    specNetPctOi: 0.3086,
+    specPercentile3y: 0.61,
+    specZ3y: 0.2,
   },
   history: cotHistory,
   provenance: { source: 'CFTC', asOf: '2026-09-22' },
@@ -75,7 +84,7 @@ const cot = (market: 'GOLD' | 'SILVER'): CotResponse => ({
 
 const factors = ['gold', 'silver', 'realYield', 'dxy', 'vix', 'spy'] as const
 const corr: CorrelationResponse = {
-  metal: 'gold',
+  asset: 'gold',
   window: 63,
   asOf: '2026-09-28',
   factors: factors.map((id) => ({ id, label: id, transform: 't' })),
@@ -159,6 +168,9 @@ describe('macro pages render', { timeout: 30_000 }, () => {
     await wrap(<Page />)
     await waitFor(() => expect(screen.getAllByText('Positions by trader category')).toHaveLength(2))
     expect(screen.getAllByText('Managed money').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Leveraged funds').length).toBeGreaterThan(0)
+    expect(screen.getByText('Lev. funds net % OI')).toBeTruthy()
+    expect(screen.getByText('Gold · COMEX')).toBeTruthy()
   })
 
   it('correlations: matrix with text values', async () => {

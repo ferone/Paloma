@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { NotConfigured } from '../../shared/api.js'
 import type { AiReport, ReportKind, ReportRequest, SourceRef } from '../../shared/ai.js'
 import { REPORT_KINDS } from '../../shared/ai.js'
-import { METALS, type Metal } from '../../shared/universe.js'
+import { isAssetId, parseAssetId } from '../../shared/universe.js'
 import { ARTIFACTS, type QuantOpportunityLite, type QuantSnapshotLite } from '../../shared/artifacts.js'
 import { readArtifact } from '../db/repo.js'
 import { env } from '../lib/env.js'
@@ -32,7 +32,9 @@ export function parseRequest(body: unknown): ReportRequest {
   const b = (body ?? {}) as Record<string, unknown>
   const kind = b.kind as ReportKind
   if (!REPORT_KINDS.includes(kind)) throw new BadRequest(`kind must be one of ${REPORT_KINDS.join(', ')}`)
-  const metal = (METALS.includes(b.metal as Metal) ? b.metal : 'gold') as Metal
+  const raw = b.asset ?? b.metal
+  if (raw != null && !isAssetId(raw)) throw new BadRequest(`unknown asset: ${String(raw)}`)
+  const metal = parseAssetId(raw)
   const input = (b.input ?? {}) as NonNullable<ReportRequest['input']>
   if (kind === 'ask') {
     const q = typeof input.question === 'string' ? input.question.trim() : ''
@@ -48,7 +50,7 @@ export function parseRequest(body: unknown): ReportRequest {
     }
     if (!opp || typeof opp.id !== 'string' || typeof opp.label !== 'string')
       throw new BadRequest('trade_brief needs an opportunity: post input.opportunity, or run the quant engine so a snapshot exists')
-    return { kind, metal: (METALS.includes(opp.metal) ? opp.metal : metal) as Metal, input: { opportunity: opp } }
+    return { kind, metal: isAssetId(opp.metal) ? opp.metal : metal, input: { opportunity: opp } }
   }
   return { kind, metal }
 }

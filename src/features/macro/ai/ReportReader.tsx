@@ -196,7 +196,7 @@ export function ReportReader({ report: r, onRegenerate, onDelete, busy }: Reader
     <article className="mx-auto max-w-[70ch]">
       <header className="border-b border-border pb-4">
         <div className="label mb-2">
-          {KIND_LABEL[r.kind]} · {UNIVERSE[r.metal].label} · {fmtDateTime(r.createdAt)}
+          {KIND_LABEL[r.kind]} · {UNIVERSE[r.metal]?.label ?? r.metal} · {fmtDateTime(r.createdAt)}
         </div>
         <h2 className="display text-[clamp(1.5rem,2.4vw,2rem)] leading-tight text-foreground">
           {r.body?.kind === 'portfolio_commentary' && r.body.headline ? r.body.headline : r.title}

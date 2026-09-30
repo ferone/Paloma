@@ -83,7 +83,7 @@ export default function AnalystPage() {
                 }}
               >
                 <Field label="Ask the analyst" hint="Answered with the live macro, COT, quant and portfolio context.">
-                  <Textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. How exposed is silver to a risk-off shock right now?" maxLength={2000} />
+                  <Textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={`e.g. How exposed is ${UNIVERSE[metal].label.toLowerCase()} to a risk-off shock right now?`} maxLength={2000} />
                 </Field>
                 <Button type="submit" size="sm" variant="primary" className="mt-2" disabled={generate.isPending || question.trim().length < 3}>
                   Ask

@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
-import type { MacroDashboard, ScorecardRow } from '@shared/macro'
-import { UNIVERSE } from '@shared/universe'
+import { priceSeriesId, type MacroDashboard, type ScorecardRow } from '@shared/macro'
+import { ASSETS, UNIVERSE } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
 import { Button, Chip, DataTable, EmptyState, ErrorNote, Explainer, HelpTip, Panel, PanelSkeleton, Segmented, type Column } from '../../../ui'
 import { fmtDate, fmtNum, fmtSigned } from '../../../design/format'
 import { useMacroDashboard, useMacroRefresh, useMacroSeries } from '../api'
 import { STANCE_LABEL, STANCE_TONE, alignToDates, changeCorrelation, fmtChange, fmtLevel, isoYearsAgo, thin } from '../lib'
-import { DriverChart, MetalPriceChart } from '../components/PairChart'
+import { AssetPriceChart, DriverChart } from '../components/PairChart'
 
 export default function DashboardPage() {
-  const { metal } = useSettings()
-  const dash = useMacroDashboard(metal)
+  const { asset } = useSettings()
+  const dash = useMacroDashboard(asset)
   const refresh = useMacroRefresh()
 
   if (dash.isLoading) return <PanelSkeleton rows={8} />
@@ -28,8 +28,8 @@ export default function DashboardPage() {
             </Button>
           }
         >
-          The scorecard needs FRED series (keyless download works without a FRED key), Yahoo prices for GC=F, SI=F, DXY and SPY, and the
-          CFTC Commitments of Traders. The first refresh takes about 30 seconds.
+          The scorecard needs FRED series (keyless download works without a FRED key), Yahoo prices ({ASSETS.map((a) => UNIVERSE[a].spot).join(', ')},
+          DXY and SPY) and the CFTC Commitments of Traders. The first refresh takes about 30 seconds.
         </EmptyState>
       </Panel>
     )
@@ -48,7 +48,7 @@ function RegimeStrip({ d }: { d: MacroDashboard }) {
     <section aria-label="Macro regime" className="rounded-lg border border-border bg-surface px-5 py-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <div className="label mb-1.5">Regime · {UNIVERSE[d.metal].label}</div>
+          <div className="label mb-1.5">Regime · {UNIVERSE[d.asset].label}</div>
           <p className="display text-[clamp(1.25rem,2vw,1.6rem)] leading-snug text-foreground">
             {d.regime.parts.map((p, i) => (
               <span key={p.key}>
@@ -93,8 +93,8 @@ function RegimeStrip({ d }: { d: MacroDashboard }) {
             spreads at or below their 3-year mean → risk-on; otherwise mixed.
           </p>
           <p>
-            Colour marks the effect on {UNIVERSE[d.metal].label.toLowerCase()}: risk-off supports gold as a haven but weighs on silver, which also
-            behaves like an industrial metal.
+            Colour marks the effect on {UNIVERSE[d.asset].label.toLowerCase()}. Risk-off supports a safe haven (gold) but weighs on cyclical
+            assets such as silver, industrial metals and crypto, which trade with growth and risk appetite.
           </p>
         </Explainer>
       </div>
@@ -103,9 +103,10 @@ function RegimeStrip({ d }: { d: MacroDashboard }) {
 }
 
 const JARGON: Record<string, string> = {
-  DFII10: 'Real yield: the return on 10-year inflation-protected Treasuries after inflation. Gold pays no yield, so a higher real yield raises the cost of holding it.',
+  DFII10: 'Real yield: the return on 10-year inflation-protected Treasuries after inflation. Real assets pay no coupon, so a higher real yield raises the cost of holding them.',
   T10YIE: 'Breakeven inflation: the inflation rate the bond market is pricing over ten years (nominal minus TIPS yield).',
   COT_MM: 'Managed money: hedge funds and CTAs in the CFTC Commitments of Traders report. Their net long as a share of open interest measures speculative crowding.',
+  COT_LF: 'Leveraged funds: hedge funds and CTAs in the CFTC Traders in Financial Futures report. Their net long as a share of open interest measures speculative crowding.',
 }
 
 function Scorecard({ d }: { d: MacroDashboard }) {
@@ -150,11 +151,11 @@ function Scorecard({ d }: { d: MacroDashboard }) {
   return (
     <Panel
       title="Macro scorecard"
-      eyebrow={UNIVERSE[d.metal].label}
+      eyebrow={UNIVERSE[d.asset].label}
       density="dense"
       provenance={{ source: 'FRED · Yahoo · CFTC; stances by the documented rules below', asOf: d.asOf }}
     >
-      <DataTable columns={cols} rows={d.scorecard} rowKey={(r) => r.id} dense caption="Macro drivers with stance for the metal in focus" />
+      <DataTable columns={cols} rows={d.scorecard} rowKey={(r) => r.id} dense caption="Macro drivers with stance for the asset in focus" />
       <div className="mt-3">
         <Explainer title="Rules behind each stance">
           <ul className="space-y-1">
@@ -171,14 +172,12 @@ function Scorecard({ d }: { d: MacroDashboard }) {
   )
 }
 
-const PAIRS: { id: string; label: string; note?: string }[] = [
-  { id: 'DFII10', label: 'Real yield vs price' },
-  { id: 'DTWEXBGS', label: 'Dollar vs price' },
-  { id: 'T10YIE', label: 'Breakeven inflation vs price' },
-  { id: 'VIXCLS', label: 'VIX vs price' },
-  { id: 'BAMLH0A0HYM2', label: 'High-yield spread vs price' },
-  { id: 'GVZCLS', label: 'Gold volatility (GVZ) vs price' },
-]
+/**
+ * Driver charts in display order. Only series the dashboard carries for the
+ * asset's class are drawn (e.g. GVZ for precious metals, QQQ for crypto), up to six.
+ */
+const CHART_CANDIDATES = ['DFII10', 'DTWEXBGS', 'T10YIE', 'VIXCLS', 'BAMLH0A0HYM2', 'GVZCLS', 'INDPRO_YOY', 'QQQ', 'M2_YOY']
+const MAX_CHARTS = 6
 
 const RANGES = [
   { value: '1', label: '1Y' },
@@ -188,70 +187,74 @@ const RANGES = [
 
 function SmallMultiples({ d }: { d: MacroDashboard }) {
   const [range, setRange] = useState<'1' | '3' | '5'>('3')
-  const metalId = d.metal === 'gold' ? 'GOLD' : 'SILVER'
+  const priceId = priceSeriesId(d.asset)
+  const pairs = useMemo(() => {
+    const have = new Set(d.series.map((s) => s.id))
+    return CHART_CANDIDATES.filter((id) => have.has(id)).slice(0, MAX_CHARTS)
+  }, [d.series])
   const from = useMemo(() => isoYearsAgo(Number(range)), [range])
-  const q = useMacroSeries([metalId, ...PAIRS.map((p) => p.id)], from)
+  const q = useMacroSeries([priceId, ...pairs], from)
   const byId = useMemo(() => new Map((q.data?.series ?? []).map((s) => [s.id, s])), [q.data])
-  const metal = byId.get(metalId)
+  const price = byId.get(priceId)
 
-  // One date axis for all seven charts: the metal's (thinned) trading days.
+  // One date axis for all charts: the asset's (thinned) trading days.
   // Each driver is forward-filled onto exactly these dates, so hovering any
   // chart puts every crosshair on the same date.
   const aligned = useMemo(() => {
-    if (!metal?.points.length) return null
-    const dates = thin(metal.points, 400).map((p) => p.date)
+    if (!price?.points.length) return null
+    const dates = thin(price.points, 400).map((p) => p.date)
     return {
-      metal: alignToDates(dates, metal.points),
-      drivers: new Map(PAIRS.map((p) => [p.id, alignToDates(dates, byId.get(p.id)?.points ?? [])])),
+      price: alignToDates(dates, price.points),
+      drivers: new Map(pairs.map((id) => [id, alignToDates(dates, byId.get(id)?.points ?? [])])),
     }
-  }, [metal, byId])
+  }, [price, byId, pairs])
 
   return (
     <section aria-label="Drivers against price">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[15px] font-medium text-foreground">Drivers against {UNIVERSE[d.metal].label.toLowerCase()}</h2>
+        <h2 className="text-[15px] font-medium text-foreground">Drivers against {UNIVERSE[d.asset].label.toLowerCase()}</h2>
         <Segmented ariaLabel="Chart range" value={range} options={RANGES} onChange={setRange} />
       </div>
       {q.error ? (
         <ErrorNote error={q.error} onRetry={() => q.refetch()} />
       ) : !q.data ? (
         <PanelSkeleton rows={6} />
-      ) : !metal?.points.length || !aligned ? (
+      ) : !price?.points.length || !aligned ? (
         <Panel>
-          <EmptyState title={`No ${UNIVERSE[d.metal].label.toLowerCase()} price history cached`}>Run a data refresh to cache Yahoo daily closes.</EmptyState>
+          <EmptyState title={`No ${UNIVERSE[d.asset].label.toLowerCase()} price history cached`}>Run a data refresh to cache Yahoo daily closes.</EmptyState>
         </Panel>
       ) : (
         <div className="space-y-4">
           <Panel
             density="dense"
-            title={`${UNIVERSE[d.metal].label} price`}
-            provenance={{ source: `Yahoo ${UNIVERSE[d.metal].spot} daily close`, asOf: metal.provenance.asOf, note: 'Hover any chart: all panels follow the same date' }}
+            title={`${UNIVERSE[d.asset].label} price`}
+            provenance={{ source: `Yahoo ${UNIVERSE[d.asset].spot} daily close`, asOf: price.provenance.asOf, note: 'Hover any chart: all panels follow the same date' }}
           >
-            <MetalPriceChart label={UNIVERSE[d.metal].label} color={d.metal} data={aligned.metal} />
+            <AssetPriceChart asset={d.asset} data={aligned.price} />
           </Panel>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {PAIRS.map((p) => {
-              const s = byId.get(p.id)
-              const corr = s && s.points.length ? changeCorrelation(metal.points, s.points) : null
+            {pairs.map((id) => {
+              const s = byId.get(id)
+              const corr = s && s.points.length ? changeCorrelation(price.points, s.points) : null
               return (
                 <Panel
-                  key={p.id}
-                  title={s?.label ?? p.id}
+                  key={id}
+                  title={s?.label ?? id}
                   density="dense"
                   actions={
                     corr ? (
                       <span
                         className="num text-2xs text-muted"
-                        title={`Correlation of daily changes with ${UNIVERSE[d.metal].label.toLowerCase()} over the selected range (${corr.n} days)`}
+                        title={`Correlation of daily changes with ${UNIVERSE[d.asset].label.toLowerCase()} over the selected range (${corr.n} days)`}
                       >
                         ρ <span className={corr.rho > 0.15 ? 'text-pos-text' : corr.rho < -0.15 ? 'text-neg-text' : 'text-foreground'}>{fmtSigned(corr.rho, 2)}</span>
                       </span>
                     ) : null
                   }
-                  provenance={{ source: `FRED ${p.id}`, asOf: s?.provenance.asOf ?? null }}
+                  provenance={{ source: s?.provenance.source ?? id, asOf: s?.provenance.asOf ?? null }}
                 >
                   {s && s.points.length ? (
-                    <DriverChart label={s.label} unit={s.unit} data={aligned.drivers.get(p.id) ?? []} />
+                    <DriverChart label={s.label} unit={s.unit} data={aligned.drivers.get(id) ?? []} />
                   ) : (
                     <EmptyState compact title="No data for this series yet" />
                   )}

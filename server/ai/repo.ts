@@ -1,13 +1,13 @@
 import { getDb } from '../db/client.js'
 import type { AiReport, AiReportSummary, ReportBody, ReportKind, ReportRequest, SourceRef } from '../../shared/ai.js'
-import type { Metal } from '../../shared/universe.js'
+import { UNIVERSE, isAssetId, type AssetId } from '../../shared/universe.js'
 
 // ai_reports repository (migration 041).
 
 interface Row {
   id: number
   kind: ReportKind
-  metal: Metal
+  metal: AssetId
   model: string
   prompt_hash: string
   request: string
@@ -34,7 +34,7 @@ const KIND_TITLE: Record<ReportKind, string> = {
 }
 
 function titleOf(r: Row, body: ReportBody | null, req: ReportRequest): string {
-  const metal = r.metal === 'silver' ? 'Silver' : 'Gold'
+  const metal = isAssetId(r.metal) ? UNIVERSE[r.metal].label : String(r.metal)
   if (r.kind === 'ask') return (req.input?.question ?? 'Question').slice(0, 120)
   if (r.kind === 'trade_brief') return `${KIND_TITLE.trade_brief} · ${req.input?.opportunity?.label ?? req.input?.opportunityId ?? metal}`
   if (r.kind === 'portfolio_commentary') return body?.kind === 'portfolio_commentary' && body.headline ? body.headline : KIND_TITLE.portfolio_commentary
@@ -69,7 +69,7 @@ function toReport(r: Row): AiReport {
 
 export function insertRunning(p: {
   kind: ReportKind
-  metal: Metal
+  metal: AssetId
   model: string
   promptHash: string
   request: ReportRequest
@@ -139,7 +139,7 @@ export function getReport(id: number): AiReport | null {
   return r ? toReport(r) : null
 }
 
-export function listReports(filter: { kind?: ReportKind; metal?: Metal; limit?: number } = {}): AiReportSummary[] {
+export function listReports(filter: { kind?: ReportKind; metal?: AssetId; limit?: number } = {}): AiReportSummary[] {
   const rows = getDb()
     .prepare(
       `SELECT * FROM ai_reports WHERE (? IS NULL OR kind = ?) AND (? IS NULL OR metal = ?)

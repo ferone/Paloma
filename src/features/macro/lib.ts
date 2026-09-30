@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import type { ChangeKind, SeriesUnit, SeriesPoint, Stance } from '@shared/macro'
 import { fmtNum, fmtPctSigned, fmtSigned, fmtUsd } from '../../design/format'
-import { cssVar } from '../../design/tokens'
+import { ASSET_COLOR, cssVar } from '../../design/tokens'
+import { ASSETS, type AssetId } from '@shared/universe'
 import { useTheme } from '../../app/theme'
 
 /** Level formatting per unit. */
@@ -56,8 +57,8 @@ export function useChartColors() {
       text: v('--muted'),
       fg: v('--foreground'),
       surface: v('--surface'),
-      gold: v('--metal-gold'),
-      silver: v('--metal-silver'),
+      /** Per-asset chart colour (from each spec's colorVar), keyed by AssetId. */
+      asset: Object.fromEntries(ASSETS.map((a) => [a, v(ASSET_COLOR[a])])) as Record<AssetId, string>,
       brand: v('--brand'),
       pos: v('--pos'),
       neg: v('--neg'),

@@ -26,3 +26,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local data (SQLite DB, downloads, ML models)
+data/
+.playwright-mcp/

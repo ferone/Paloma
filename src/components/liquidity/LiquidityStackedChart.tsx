@@ -80,17 +80,17 @@ export function LiquidityStackedChart({ data, range, spikes = [] }: LiquiditySta
                 borderRadius: 8,
               }}
               labelStyle={{ color: '#9ca3af', marginBottom: 4 }}
-              labelFormatter={(label: string) => {
-                const d = new Date(label + 'T00:00:00')
+              labelFormatter={(label) => {
+                const d = new Date(String(label) + 'T00:00:00')
                 return d.toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',
                 })
               }}
-              formatter={(value: number, name: string) => {
+              formatter={(value, name) => {
                 const config = SOURCE_CONFIG.find((s) => s.key === name)
-                return [formatDollarVolume(value), config?.label ?? name]
+                return [formatDollarVolume(Number(value ?? 0)), config?.label ?? String(name)]
               }}
               itemSorter={(item) => {
                 const idx = SOURCE_CONFIG.findIndex((s) => s.key === item.dataKey)
@@ -123,8 +123,8 @@ export function LiquidityStackedChart({ data, range, spikes = [] }: LiquiditySta
                   fontWeight: 700,
                   offset: 0,
                   // Background circle effect via custom content
-                  content: ({ viewBox }: { viewBox?: { x?: number; y?: number } }) => {
-                    const x = viewBox?.x ?? 0
+                  content: (props) => {
+                    const x = (props.viewBox as { x?: number } | undefined)?.x ?? 0
                     return (
                       <g>
                         <circle cx={x} cy={4} r={8} fill="#f59e0b" />

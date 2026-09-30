@@ -1,8 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- yahoo-finance2 v3 result types are too loose to model usefully here */
 import YahooFinance from 'yahoo-finance2'
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getQuote(symbol: string) {
   const result: any = await yahooFinance.quote(symbol)
   return {

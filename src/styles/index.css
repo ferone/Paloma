@@ -1,37 +1,236 @@
 @import "tailwindcss";
 
-@theme {
-  --color-gold-50: #fefce8;
-  --color-gold-100: #fef9c3;
-  --color-gold-200: #fef08a;
-  --color-gold-300: #fde047;
-  --color-gold-400: #facc15;
-  --color-gold-500: #eab308;
-  --color-gold-600: #ca8a04;
-  --color-gold-700: #a16207;
-  --color-gold-800: #854d0e;
-  --color-gold-900: #713f12;
-  --color-gold-950: #422006;
+/* Class-based dark mode: <html class="dark"> is set before paint (index.html). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens — OKLCH. See .impeccable.md / DESIGN.md.
+ * Light is :root; .dark overrides. Surfaces are warm-tinted ink (hue ~75, very
+ * low chroma) so the gold accent reads as a signal, never a flood.
+ * FILL tokens (charts, meters) are shared; *-text tokens darken in light mode
+ * so they pass AA on near-white.
+ */
+:root {
+  color-scheme: light;
+
+  --background: oklch(0.985 0.004 85);
+  --foreground: oklch(0.2 0.01 75);
+  --surface: oklch(0.965 0.006 85);
+  --surface-2: oklch(0.935 0.008 85);
+  --surface-3: oklch(0.9 0.01 85);
+  --border: oklch(0.87 0.01 80);
+  --border-strong: oklch(0.78 0.014 80);
+  --muted: oklch(0.48 0.014 75);
+  --faint: oklch(0.62 0.012 75);
+
+  /* Brand: a desaturated bullion gold, used sparingly. */
+  --brand: oklch(0.58 0.11 80);
+  --brand-strong: oklch(0.5 0.11 75);
+  --brand-soft: oklch(0.58 0.11 80 / 0.1);
+
+  /* Metal series colours (charts). */
+  --metal-gold: oklch(0.68 0.13 80);
+  --metal-silver: oklch(0.58 0.02 250);
+
+  /* Semantic gain/loss — FILL shared, TEXT per theme. */
+  --pos: oklch(0.7 0.14 155);
+  --neg: oklch(0.64 0.19 25);
+  --pos-text: oklch(0.47 0.12 155);
+  --neg-text: oklch(0.52 0.18 25);
+
+  /* Tier / verdict palette. */
+  --tier-strong: oklch(0.72 0.14 155);
+  --tier-moderate: oklch(0.78 0.13 80);
+  --tier-watch: oklch(0.7 0.09 235);
+  --tier-avoid: oklch(0.64 0.19 25);
+  --tier-strong-text: oklch(0.46 0.12 155);
+  --tier-moderate-text: oklch(0.5 0.11 70);
+  --tier-watch-text: oklch(0.48 0.11 240);
+  --tier-avoid-text: oklch(0.52 0.18 25);
+
+  /* Modeled / estimated data marker. */
+  --modeled: oklch(0.6 0.1 300);
+  --modeled-text: oklch(0.48 0.12 300);
+
+  /* Categorical chart series (validated for separation in both themes). */
+  --series-1: oklch(0.68 0.13 80);
+  --series-2: oklch(0.6 0.11 240);
+  --series-3: oklch(0.65 0.12 160);
+  --series-4: oklch(0.62 0.14 30);
+  --series-5: oklch(0.6 0.1 300);
+  --series-6: oklch(0.58 0.02 250);
+
+  --shadow-panel: 0 1px 0 oklch(0.2 0.01 75 / 0.04);
 }
 
-body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+.dark {
+  color-scheme: dark;
+
+  --background: oklch(0.155 0.006 75);
+  --foreground: oklch(0.94 0.006 85);
+  --surface: oklch(0.19 0.007 75);
+  --surface-2: oklch(0.225 0.008 75);
+  --surface-3: oklch(0.265 0.009 75);
+  --border: oklch(0.29 0.009 75);
+  --border-strong: oklch(0.38 0.01 75);
+  --muted: oklch(0.66 0.012 80);
+  --faint: oklch(0.5 0.01 80);
+
+  --brand: oklch(0.8 0.11 85);
+  --brand-strong: oklch(0.86 0.1 88);
+  --brand-soft: oklch(0.8 0.11 85 / 0.1);
+
+  --metal-gold: oklch(0.8 0.12 85);
+  --metal-silver: oklch(0.8 0.015 250);
+
+  --pos-text: var(--pos);
+  --neg-text: oklch(0.7 0.17 25);
+
+  --tier-strong-text: var(--tier-strong);
+  --tier-moderate-text: var(--tier-moderate);
+  --tier-watch-text: oklch(0.76 0.09 235);
+  --tier-avoid-text: oklch(0.7 0.17 25);
+
+  --modeled-text: oklch(0.74 0.1 300);
+
+  --series-1: oklch(0.8 0.12 85);
+  --series-2: oklch(0.72 0.1 240);
+  --series-3: oklch(0.74 0.12 160);
+  --series-4: oklch(0.72 0.13 35);
+  --series-5: oklch(0.72 0.1 300);
+  --series-6: oklch(0.8 0.015 250);
+
+  --shadow-panel: none;
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-metal-gold: var(--metal-gold);
+  --color-metal-silver: var(--metal-silver);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-pos-text: var(--pos-text);
+  --color-neg-text: var(--neg-text);
+  --color-tier-strong: var(--tier-strong);
+  --color-tier-moderate: var(--tier-moderate);
+  --color-tier-watch: var(--tier-watch);
+  --color-tier-avoid: var(--tier-avoid);
+  --color-tier-strong-text: var(--tier-strong-text);
+  --color-tier-moderate-text: var(--tier-moderate-text);
+  --color-tier-watch-text: var(--tier-watch-text);
+  --color-tier-avoid-text: var(--tier-avoid-text);
+  --color-modeled: var(--modeled);
+  --color-modeled-text: var(--modeled-text);
+
+  /* Legacy `gold-*` utilities (pre-redesign components) map onto the brand
+     tokens until they are migrated. Do not use in new code. */
+  --color-gold-300: var(--brand-strong);
+  --color-gold-400: var(--brand);
+  --color-gold-500: var(--brand);
+  --color-gold-600: var(--brand-strong);
+
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* Type scale (1.2 minor third) for the dense views; display sizes are fluid. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+@layer base {
+  html {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss01', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    min-height: 100dvh;
+  }
+  ::selection {
+    background: var(--brand-soft);
+  }
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
 }
 
-::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 4px;
+@layer components {
+  /* Numbers: tabular figures everywhere data is compared. */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums slashed-zero;
+    letter-spacing: -0.01em;
+  }
+  /* Small-caps label used above figures and table headers. */
+  .label {
+    font-size: var(--text-2xs);
+    line-height: 1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .display {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-variation-settings: 'SOFT' 30, 'WONK' 0;
+    letter-spacing: -0.02em;
+  }
+
+  /* Chips set colour only; call sites add layout + ring-1. */
+  .chip-strong { color: var(--tier-strong-text); background: color-mix(in oklch, var(--tier-strong) 13%, transparent); --tw-ring-color: color-mix(in oklch, var(--tier-strong) 35%, transparent); }
+  .chip-moderate { color: var(--tier-moderate-text); background: color-mix(in oklch, var(--tier-moderate) 14%, transparent); --tw-ring-color: color-mix(in oklch, var(--tier-moderate) 38%, transparent); }
+  .chip-watch { color: var(--tier-watch-text); background: color-mix(in oklch, var(--tier-watch) 13%, transparent); --tw-ring-color: color-mix(in oklch, var(--tier-watch) 35%, transparent); }
+  .chip-avoid { color: var(--tier-avoid-text); background: color-mix(in oklch, var(--tier-avoid) 12%, transparent); --tw-ring-color: color-mix(in oklch, var(--tier-avoid) 35%, transparent); }
+  .chip-neutral { color: var(--muted); background: color-mix(in oklch, var(--muted) 12%, transparent); --tw-ring-color: color-mix(in oklch, var(--muted) 30%, transparent); }
+  .chip-modeled { color: var(--modeled-text); background: color-mix(in oklch, var(--modeled) 12%, transparent); --tw-ring-color: color-mix(in oklch, var(--modeled) 35%, transparent); }
+  .chip-brand { color: var(--brand-strong); background: var(--brand-soft); --tw-ring-color: color-mix(in oklch, var(--brand) 35%, transparent); }
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+/* Scrollbars that recede. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Print: always light, no chrome (Investor factsheet). */
+@media print {
+  :root, .dark {
+    color-scheme: light;
+  }
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
 }

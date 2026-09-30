@@ -117,9 +117,9 @@ export function GoldLiquidityPanel() {
                     formatDollarVolume(value ?? 0),
                     'Dollar Volume',
                   ]}
-                  labelFormatter={(label?: string) => {
+                  labelFormatter={(label) => {
                     const inst = instruments.find((i) => i.symbol === label)
-                    return inst?.name ?? label ?? ''
+                    return inst?.name ?? String(label ?? '')
                   }}
                 />
                 <Bar dataKey="dollarVolume" radius={[0, 4, 4, 0]}>

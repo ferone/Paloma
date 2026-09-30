@@ -4,45 +4,66 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Paloma is a gold/ETF market dashboard: a React 19 + Vite SPA (`src/`) backed by a small Express 5 API (`server/`) that proxies Yahoo Finance.
+**Gold Investment Dashboard** (repo folder: Paloma) is a fund-grade platform for a gold- and silver-focused fund. It is a React 19 + Vite 7 SPA (`src/`), an Express 5 API (`server/`) with a local SQLite database, and types shared by both (`shared/`).
+- **Gold and silver are symmetric.** Every metal-specific module is parameterized by `Metal` from `shared/universe.ts`.
+- **Quant engine.** Much of the quantitative engine is ported from the sibling repo `C:\Development Projects\CommodityFutures` (pure-TS modules in `lib/engine`, `lib/seasonality`, `lib/validation`, `lib/opportunities`, `lib/simulation`, `lib/data`, `lib/ai`; the Python ML is in `scripts/ml`).
+- **Design direction:** `.impeccable.md` (Design Context). Read it before any UI work.
 
 ## Commands
 
 ```bash
-npm run dev          # Vite (5173) + API server (3001, tsx watch) concurrently
-npm run dev:client   # Vite only
-npm run dev:server   # API only
-npm run build        # tsc -b (client + vite config only) && vite build
-npm run lint         # eslint over the whole repo
-npx tsc -p tsconfig.server.json --noEmit   # type-check the server
+npm run dev          # Vite (5173) + API (3001, tsx watch), concurrently
+npm run build        # tsc -b (client + vite config + server) && vite build
+npm run typecheck    # tsc -b only
+npm run lint         # eslint
+npm test             # vitest run (all *.test.ts[x] in src/, server/, shared/)
+npx vitest run server/db/repo.test.ts     # single test file
+npx vitest run -t "FIFO"                  # tests matching a name
+npm run db:migrate   # apply pending SQLite migrations (the server also does this on boot)
 ```
 
-- There is no test framework. Verify changes by running `npm run dev` and exercising the page or hitting the endpoint (e.g. `curl localhost:3001/api/gold-liquidity/history?range=1Y`).
-- `npm run build` does **not** type-check `server/` — the root `tsconfig.json` only references `tsconfig.app.json` and `tsconfig.node.json`. Run the server tsc command above after server changes.
-- Env: copy `.env.example` to `.env`. `PORT` defaults to 3001. `ALPHA_VANTAGE_API_KEY` is only read by `server/services/alpha-vantage.service.ts`, which is currently not wired into any route.
+- **Tests:** component tests opt into jsdom with a `// @vitest-environment jsdom` docblock; everything else runs under node. Server repository tests call `useTestDb()` (`server/db/client.ts`), which swaps the process-wide connection for an in-memory DB with all migrations applied.
+- **Environment:** copy `.env.example` to `.env`. Integrations are optional and every feature must degrade to an explicit "not configured" state. The integrations are:
+  - Databento: `DATABENTO_API_KEY`, `DATABENTO_BUDGET`
+  - OpenRouter: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`
+  - FRED: `FRED_API_KEY`
+  - CFTC (optional): `CFTC_APP_TOKEN`
+
+  Keys are read only through `server/lib/env.ts` and reach the client only as booleans (`GET /api/status`).
+- **Local data:** `data/` (SQLite DB, downloads, ML models) is gitignored.
+- **Node version:** 20 works, but `yahoo-finance2` warns that it wants Node 22 or newer.
 
 ## Architecture
 
-### Request flow
-Browser → axios (`src/api/client.ts`, baseURL `/api`) → Vite dev proxy (`vite.config.ts`, `/api` → `localhost:3001`) → Express route → `yahoo-finance.service.ts` → Yahoo Finance.
+### Layout
+```
+shared/          types + universe used by BOTH sides (client imports via @shared/*, server via relative ../../shared/x.js)
+server/
+  index.ts       boots express, opens DB (runs migrations), mountRoutes()
+  routes/index.ts   the ONLY place routers are mounted (legacy Yahoo proxies + one router per domain)
+  lib/env.ts     typed config; integrationStatus()
+  db/            client.ts (better-sqlite3, WAL), migrate.ts, migrations/NNN_*.sql, repo.ts (settings, artifacts, prices_daily, job_runs)
+  <domain>/      portfolio · quant · marketdata · macro · ai · ml — each exports `router` from router.ts
+  services/      yahoo-finance.service.ts (live quotes/history)
+  data/          static curated datasets (liquidity constants, market events), NOT the marketdata domain
+src/
+  app/           router.tsx (composes feature routes), nav.ts (IA), AppShell, TopBar, theme.tsx, page.tsx (lazy wrapper)
+  design/        tokens.ts (PALETTE of CSS vars, TIER, signColor, cssVar()), format.ts (all number/date formatting)
+  ui/            primitives: Panel, Stat, Chip, DataTable, PageHeader, Segmented, RouteTabs, Explainer/HelpTip, EmptyState/NotConfiguredState, Field/Input/Select, Skeleton/ErrorNote
+  features/<domain>/  routes.tsx + pages/components/hooks for: overview, portfolio, markets, quant, macro, intelligence, data, investor, settings
+  components/, pages/, hooks/, lib/   pre-redesign code (markets pages still mount it) — migrate into features/, don't extend
+```
 
-### Server (`server/`)
-- ESM with `"type": "module"`: relative imports inside `server/` must use the `.js` extension (e.g. `'./routes/quotes.js'`) even though the files are `.ts`.
-- `index.ts` mounts one router per resource under `/api/*`, with a global rate limiter (100 req/min).
-- `middleware/cache.ts` is an in-memory `node-cache` keyed on `req.originalUrl`, applied per route as `cacheMiddleware('quote' | 'intraday' | 'daily' | 'gold')`. It works by wrapping `res.json`, so a route must respond via `res.json()` for caching to work. Add new TTL keys to the `TTL` object.
-- `services/yahoo-finance.service.ts` normalizes Yahoo responses (`getQuote`, `getBatchQuotes` using `Promise.allSettled` so failed symbols are dropped silently, `getHistorical`). Time ranges (`1D`…`ALL`) map to Yahoo periods here, and to intervals in `routes/historical.ts`.
-- Gold liquidity (`routes/gold-liquidity.ts`, `routes/gold-liquidity-history.ts`):
-  - Real data: dollar volume from Yahoo across `GOLD_INSTRUMENTS` (`GC=F`, GLD, IAU, SGOL, GDX). Futures dollar volume = `volume × 100 oz × price`; ETFs = `volume × price`.
-  - **Modeled data**: the source breakdown (institutional, central banks, …) and region/country splits are *fixed percentages* from `data/gold-constants.ts` applied to the real total. They are not live data.
-  - The history route detects volume spikes (>1.2σ above the mean, top 6) and annotates each one with the nearest curated event (within 3 days) from `data/market-events.ts`. Extend that file to explain new spikes.
-- `/api/gold-liquidity/history` is mounted after `/api/gold-liquidity`. It works because the parent router only defines `GET /`.
-
-### Client (`src/`)
-- `App.tsx`: React Router with lazily loaded pages under `AppShell`, each wrapped in `ErrorBoundary` + `Suspense`. Pages: Dashboard (`/`), Comparison, Signals (`/signals/:symbol?`), Simulator, Liquidity.
-- Data layer pattern: `api/*.api.ts` (axios fetchers) → `api/query-keys.ts` (central TanStack Query key factory) → `hooks/use*.ts` (one `useQuery` hook per resource) → components. Add new endpoints through all three layers.
-- Auto-refresh: `SettingsProvider` (`store/settings-context.tsx`) holds a global `autoRefresh` toggle. Hooks get their `refetchInterval` from `useAutoRefresh()` (`lib/date-utils.getRefreshInterval`). Global query defaults are in `store/query-client.ts`.
-- Response types live in `src/types/index.ts` and are maintained by hand to match the server's JSON shapes. Nothing is shared with `server/`, so update both sides when a response shape changes.
-- Computation is done client-side in `lib/`: technical indicators (SMA/EMA/RSI…), portfolio simulation math, and series normalization for comparisons.
-- Charts: `lightweight-charts` for price/candlestick charts, `recharts` for other visualizations (liquidity, comparison, simulator).
-- Styling: Tailwind v4 via `@tailwindcss/vite`. The custom `gold-*` palette is defined in `@theme` in `src/styles/index.css`. The UI is dark-only. Per-symbol colors and the ETF lists are in `src/lib/constants.ts`.
-- The client tsconfig is strict, with `noUnusedLocals`/`noUnusedParameters` and `verbatimModuleSyntax`, so use `import type` for type-only imports.
+### Conventions that span files
+- **Adding a server domain:** create `server/<domain>/router.ts`, then mount it in `server/routes/index.ts`. Server-internal relative imports must end in `.js` (ESM), even for `.ts` files.
+- **Adding a client section:** create `src/features/<x>/routes.tsx` exporting `routes: RouteObject[]`, then spread it in `src/app/router.tsx` and add a nav entry in `src/app/nav.ts`. Pages are `lazy()` and wrapped with `page()`.
+- **Migrations:** numbered SQL files applied once, in order, inside a transaction. Ranges are reserved per domain: 001–009 core, 010 portfolio, 020 quant, 030 marketdata, 040 macro/ai, 050 ml, 060 markets. Never edit an applied migration; add a new one.
+- **Data flow on the client:** axios `src/api/client.ts` (baseURL `/api`, proxied by Vite to 3001) → TanStack Query hooks inside the feature. Query keys are feature-local arrays, prefixed with the domain name.
+- **Unconfigured integrations:** responses for a missing integration are `NotConfigured` (`shared/api.ts`); render them with `NotConfiguredState` / `isNotConfigured`. Any figure that is estimated carries `Provenance.modeled = true` and shows a "Modeled" chip.
+- **Styling:**
+  - Colours come from OKLCH CSS variables in `src/styles/index.css`, which define light (`:root`) and dark (`.dark`, the default) themes.
+  - Use the semantic utilities (`bg-surface`, `text-muted`, `text-pos-text`, `border-border`, `chip-*` classes). Never use raw hex values or Tailwind's gray palette in new code. The legacy `gold-*` utilities are aliases kept only for old components.
+  - Numbers use the `.num` class (tabular mono); small-caps labels use `.label`; headlines use `.display` (Fraunces serif).
+  - SVG charts pass `PALETTE.*` via `style`, because attributes don't resolve `var()`. Canvas charts (lightweight-charts) resolve colours with `cssVar()` and must re-resolve when the theme changes.
+- **Formatting:** all number and date formatting goes through `src/design/format.ts` (em dash for missing values, typographic minus).
+- **Commits:** never add Claude or co-author attribution lines (the user's global rule).

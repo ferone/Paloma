@@ -337,6 +337,9 @@ const SPEC_ADJ: Record<CotReportFamily, { adj: string; short: string; label: str
 }
 
 export function cotRule(report: CotReportFamily = 'disagg'): string {
+  if (report === 'tff') {
+    return 'Informational only: in CME bitcoin, leveraged funds are structurally net short because they hedge the cash-and-carry basis trade (long spot/ETFs, short futures), so their net position is not read as a directional contrarian signal'
+  }
   return `${SPEC_ADJ[report].adj} net % of open interest, 3y percentile ≥ ${T.cotCrowded * 100}th → headwind (crowded long, contrarian); ≤ ${T.cotWashed * 100}th → tailwind (positioning washed out)`
 }
 
@@ -344,6 +347,10 @@ export function cotStance(p: CotPoint | null, report: CotReportFamily = 'disagg'
   if (!p || p.specPercentile3y == null || p.specNetPctOi == null) return noData
   const pct = ordinal(Math.round(p.specPercentile3y * 100))
   const txt = `${SPEC_ADJ[report].short} net ${n1(p.specNetPctOi * 100)}% of OI, ${pct} pct (3y)`
+  if (report === 'tff') {
+    const side = p.specNetPctOi < 0 ? 'net short, mostly basis-trade hedges' : 'net long'
+    return { stance: 'neutral', reason: `${txt}: ${side}; not a directional signal` }
+  }
   if (p.specPercentile3y >= T.cotCrowded) return { stance: 'headwind', reason: `${txt}: crowded long` }
   if (p.specPercentile3y <= T.cotWashed) return { stance: 'tailwind', reason: `${txt}: washed out` }
   return { stance: 'neutral', reason: `${txt}` }

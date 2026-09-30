@@ -93,7 +93,10 @@ describe('macro scorecard rules', () => {
     const rows = buildScorecard('gold', map(), p(0.9))
     expect(rows.at(-1)).toMatchObject({ id: 'COT_MM', label: 'Managed-money positioning (COT)', stance: 'headwind', value: 30 })
     expect(cotStance(p(0.9), 'tff').reason).toMatch(/^LF net/)
-    expect(cotRule('tff')).toMatch(/^Leveraged-fund net/)
+    // TFF (bitcoin): leveraged-fund shorts are basis-trade hedges, so the row is informational.
+    expect(cotStance(p(0.9), 'tff').stance).toBe('neutral')
+    expect(cotStance(p(0.05), 'tff').stance).toBe('neutral')
+    expect(cotRule('tff')).toMatch(/^Informational only/)
   })
 
   it('missing drivers stay neutral with an explicit reason', () => {

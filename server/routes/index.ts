@@ -13,6 +13,7 @@ import { router as aiRouter } from '../ai/router.js'
 import { router as mlRouter } from '../ml/router.js'
 import { router as jobsRouter } from '../jobs/router.js'
 import { router as overviewRouter } from '../overview/router.js'
+import { router as marketsRouter } from '../markets/router.js'
 import { integrationStatus } from '../lib/env.js'
 
 // Single place where every API surface is mounted. Each domain owns its router
@@ -35,6 +36,7 @@ export function mountRoutes(app: Express): void {
   app.use('/api/ml', mlRouter)
   app.use('/api/jobs', jobsRouter)
   app.use('/api/overview', overviewRouter)
+  app.use('/api/markets', marketsRouter)
 
   app.get('/api/status', (_req, res) => {
     res.json(integrationStatus())

@@ -133,13 +133,6 @@
   --color-modeled: var(--modeled);
   --color-modeled-text: var(--modeled-text);
 
-  /* Legacy `gold-*` utilities (pre-redesign components) map onto the brand
-     tokens until they are migrated. Do not use in new code. */
-  --color-gold-300: var(--brand-strong);
-  --color-gold-400: var(--brand);
-  --color-gold-500: var(--brand);
-  --color-gold-600: var(--brand-strong);
-
   --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
   --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', monospace;

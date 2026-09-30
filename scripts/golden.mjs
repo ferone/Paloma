@@ -14,6 +14,9 @@ import { join, resolve } from 'node:path'
 const ROOT = resolve(import.meta.dirname, '..')
 const G = join(ROOT, 'data', 'golden')
 const TSX = join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs')
+// GOLDEN_PORT lets parallel checkouts capture without clashing (uses PORT and PORT+1).
+const PORT_GOLD = Number(process.env.GOLDEN_PORT || 3401)
+const PORT_DEMO = PORT_GOLD + 1
 
 const [cmd, a, b] = process.argv.slice(2)
 
@@ -104,12 +107,12 @@ async function capture(label) {
   const mlDir = join(ROOT, 'data', 'ml')
   for (const f of readdirSync(mlDir).filter((f) => /^features_.*\.csv$/.test(f))) copyFileSync(join(mlDir, f), join(out, f))
 
-  const gold = await startServer(join(dir, 'gold.db'), 3401)
-  const demo = await startServer(join(dir, 'demo.db'), 3402)
+  const gold = await startServer(join(dir, 'gold.db'), PORT_GOLD)
+  const demo = await startServer(join(dir, 'demo.db'), PORT_DEMO)
   try {
     for (const [port, list] of [
-      [3401, GOLD_ENDPOINTS],
-      [3402, DEMO_ENDPOINTS],
+      [PORT_GOLD, GOLD_ENDPOINTS],
+      [PORT_DEMO, DEMO_ENDPOINTS],
     ]) {
       for (const p of list) {
         const file = p.replace(/^\/api\//, '').replace(/[^a-z0-9.-]+/gi, '_') + '.json'
@@ -126,7 +129,19 @@ async function capture(label) {
 // Fields that legitimately differ between runs (clock time, run ids).
 const VOLATILE = new Set(['generatedAt', 'timestamp', 'computedAt', 'startedAt', 'finishedAt', 'durationMs', 'runId', 'id', 'createdAt', 'ageDays'])
 // Renames the refactor is allowed to make: old key -> new key.
-const RENAMES = { ounces: 'exposureUnits', ozPerContract: 'pointValue', metal: 'asset' }
+const RENAMES = {
+  ounces: 'exposureUnits',
+  ozPerContract: 'pointValue',
+  metal: 'asset',
+  netExposureOz: 'netExposure',
+  exposureByMetal: 'exposureByAsset',
+  byMetal: 'byAsset',
+  fineOz: 'fineQty',
+  ledgerOz: 'ledgerQty',
+}
+// With --allow-additions, keys present only in the newer capture are accepted
+// (new fields); any changed or removed value still counts as a difference.
+const allowAdditions = process.argv.includes('--allow-additions')
 
 function normalize(v) {
   if (Array.isArray(v)) return v.map(normalize)
@@ -146,6 +161,7 @@ function normalize(v) {
 
 function diffs(x, y, path = '', out = []) {
   if (out.length > 25) return out
+  if (allowAdditions && x === undefined && y !== undefined) return out
   if (typeof x !== typeof y || Array.isArray(x) !== Array.isArray(y)) {
     out.push(`${path}: ${JSON.stringify(x)?.slice(0, 80)} != ${JSON.stringify(y)?.slice(0, 80)}`)
   } else if (x && typeof x === 'object') {

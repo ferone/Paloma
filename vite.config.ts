@@ -26,5 +26,7 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.ts', 'shared/**/*.test.ts'],
     // Component tests opt into jsdom with a `// @vitest-environment jsdom` docblock.
     setupFiles: ['./vitest.setup.ts'],
+    // Page render tests (jsdom + large fixtures) can exceed 5 s on a busy machine.
+    testTimeout: 15_000,
   },
 })

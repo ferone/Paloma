@@ -169,7 +169,7 @@ describe('macro pages render', { timeout: 30_000 }, () => {
     await waitFor(() => expect(screen.getAllByText('Positions by trader category')).toHaveLength(2))
     expect(screen.getAllByText('Managed money').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Leveraged funds').length).toBeGreaterThan(0)
-    expect(screen.getByText('Lev. funds net % OI')).toBeTruthy()
+    expect(screen.getAllByText('Lev. funds net % OI').length).toBeGreaterThan(0)
     expect(screen.getByText('Gold · COMEX')).toBeTruthy()
   })
 

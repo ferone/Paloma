@@ -28,7 +28,7 @@ describe('AI prompts', () => {
     const blocks = contextFor('macro_brief', 'silver')
     expect(blocks.map((b) => b.name)).toEqual(['Macro dashboard', 'COT positioning'])
     expect(blocks[1].text).toContain('CFTC COT (SILVER): not available')
-    expect(contextFor('portfolio_commentary', 'gold').map((b) => b.name)).toEqual(['Portfolio summary', 'Macro dashboard (gold)', 'Macro dashboard (silver)'])
+    expect(contextFor('portfolio_commentary', 'gold').map((b) => b.name)).toEqual(['Portfolio summary', 'Macro dashboard (gold)', 'Macro dashboard (silver)', 'Macro dashboard (bitcoin)'])
   })
 })
 

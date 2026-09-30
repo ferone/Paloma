@@ -110,7 +110,7 @@ describe('macro service', () => {
       dxy.push({ date, value: x })
     }
     const noise = (base: number) => days.map((date) => ({ date, value: base * Math.exp(rnd()) }))
-    const levels: Record<CorrelationFactor, SeriesPoint[]> = {
+    const levels: Partial<Record<CorrelationFactor, SeriesPoint[]>> = {
       gold,
       silver: gold.map((p) => ({ date: p.date, value: p.value / 80 })),
       realYield: noise(2),
@@ -152,7 +152,9 @@ describe('macro service', () => {
     const msg = await refreshCot(undefined, f as unknown as typeof fetch)
     expect(msg).toContain('GOLD 3 reports')
     expect(msg).toContain('SILVER 3 reports')
-    expect(urls.every((u) => u.includes('72hh-3qpy'))).toBe(true)
+    // Commodities come from the disaggregated dataset, bitcoin from TFF.
+    expect(urls.filter((u) => u.includes('72hh-3qpy')).length).toBeGreaterThan(0)
+    expect(urls.some((u) => u.includes('gpe5-46if'))).toBe(true)
     expect(readCot('SILVER')).toHaveLength(3)
   })
 

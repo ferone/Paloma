@@ -54,7 +54,8 @@ describe("SPECS — generated from the universe", () => {
     expect(getSpec("MGCG27")?.product).toBe("MGC");
     expect(getSpec("SIH7")?.product).toBe("SI");
     expect(getSpec("XX")).toBeUndefined();
-    expect(getSpec("BTCZ26")).toBeUndefined();
+    expect(getSpec("BTCZ26")?.product).toBe("BTC");
+    expect(getSpec("ZZZZ26")).toBeUndefined();
   });
 });
 

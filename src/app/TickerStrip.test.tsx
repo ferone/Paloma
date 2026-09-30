@@ -42,7 +42,7 @@ describe('TickerStrip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose tickers' }))
     const ratio = screen.getByRole('checkbox', { name: /Au\/Ag/ })
     fireEvent.click(ratio)
-    expect(JSON.parse(localStorage.getItem(TICKER_STORAGE_KEY)!)).toEqual(['asset:gold', 'asset:silver'])
+    expect(JSON.parse(localStorage.getItem(TICKER_STORAGE_KEY)!)).toEqual(['asset:gold', 'asset:silver', 'asset:btc', 'pair:BG'])
     expect(screen.queryByText('80.0')).toBeNull()
   })
 })

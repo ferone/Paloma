@@ -208,7 +208,15 @@ const isAssetFactor = (f: CorrelationFactor): f is AssetId => !MACRO_FACTORS.som
  */
 export function assetPeers(a: AssetId): AssetId[] {
   const partners = RELATIVE_VALUE_PAIRS.flatMap((p) => (p.numerator === a ? [p.denominator] : p.denominator === a ? [p.numerator] : []))
-  return partners.length ? partners : assetsInClass(UNIVERSE[a].assetClass).filter((x) => x !== a)
+  // Prefer same-class partners (gold ↔ silver). A cross-class pair (bitcoin/gold)
+  // only supplies peers to an asset with no same-class partner, so adding a new
+  // asset never changes an existing asset's correlation window.
+  const cls = UNIVERSE[a].assetClass
+  const sameClass = partners.filter((p) => UNIVERSE[p].assetClass === cls)
+  if (sameClass.length) return sameClass
+  const classPeers = assetsInClass(cls).filter((x) => x !== a)
+  if (classPeers.length) return classPeers
+  return partners
 }
 
 /** The asset, its peers (universe order), then the market factors. */
@@ -252,7 +260,9 @@ export function computeCorrelations(
   levels: Partial<Record<CorrelationFactor, SeriesPoint[]>>,
   maxPoints = 756,
 ): Omit<CorrelationResponse, 'provenance'> {
-  const factors = correlationFactors(asset)
+  // A factor with no data yet (e.g. a new asset before its first refresh) is
+  // dropped rather than emptying the aligned date axis for every factor.
+  const factors = correlationFactors(asset).filter((f) => f.id === asset || (levels[f.id]?.length ?? 0) > 0)
   const ids = factors.map((f) => f.id)
   const { dates, cols } = factorMatrix(ids, levels)
   const col = (id: CorrelationFactor) => cols[id] ?? []

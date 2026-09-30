@@ -2,13 +2,16 @@ import { describe, it, expect } from "vitest";
 import { SEASONAL_SPECS, PRODUCTS, allPairsSeasonalSpecs, consecutiveSeasonalSpecs, isYearCrossingSeasonal, seasonalProducts, seasonalSpecsFor } from "./seasonal.js";
 import { FAKE_CASH, fakeAsset } from "../testing/fakeAssets.js";
 import { SPECS } from "./specs.js";
+import { futuresProduct } from "../../../shared/universe.js";
 
 describe("seasonal specs — metals, active months only", () => {
   it("products are the full-size GC and SI with their SPECS pointValue + active months", () => {
-    expect(PRODUCTS.map((p) => p.product)).toEqual(["GC", "SI"]);
+    expect(PRODUCTS.map((p) => p.product)).toEqual(["GC", "SI", "BTC"]);
     for (const p of PRODUCTS) {
       expect(p.pointValue).toBe(SPECS[p.product].pointValue);
-      expect(p.months).toEqual(SPECS[p.product].months);
+      // Seasonal pairs use seasonalMonths when set (bitcoin: quarterlies), else the active months.
+      const f = futuresProduct(p.product)!;
+      expect(p.months).toEqual(f.seasonalMonths ?? SPECS[p.product].months);
     }
   });
 
@@ -19,7 +22,8 @@ describe("seasonal specs — metals, active months only", () => {
   });
 
   it("never references a serial (inactive) month", () => {
-    const active: Record<string, number[]> = { GC: [2, 4, 6, 8, 10, 12], SI: [3, 5, 7, 9, 12] };
+    // Seasonal months: active months for the metals, the quarterlies for bitcoin.
+    const active: Record<string, number[]> = { GC: [2, 4, 6, 8, 10, 12], SI: [3, 5, 7, 9, 12], BTC: [3, 6, 9, 12] };
     for (const s of SEASONAL_SPECS) {
       expect(active[s.product]).toContain(s.frontMonth);
       expect(active[s.product]).toContain(s.backMonth);

@@ -184,7 +184,7 @@ describe('per-asset feature catalogue', () => {
   })
 
   it('derives the ML instrument from the front futures root', () => {
-    expect(ML_INSTRUMENT).toEqual({ gold: 'GC.out', silver: 'SI.out' })
+    expect(ML_INSTRUMENT).toEqual({ gold: 'GC.out', silver: 'SI.out', btc: 'BTC.out' })
   })
 })
 

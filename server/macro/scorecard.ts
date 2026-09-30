@@ -195,7 +195,11 @@ function pairRatioDriver(p: RelativeValuePair): DriverRule {
 }
 
 /** Ratio drivers for every pair where the asset is the denominator. */
-const denominatorPairDrivers = (a: AssetId): DriverRule[] => RELATIVE_VALUE_PAIRS.filter((p) => p.denominator === a).map(pairRatioDriver)
+// The ratio rule reads a HIGH ratio as "the denominator is cheap" — a mean-
+// reversion claim that holds within a class (gold/silver), not across classes
+// (bitcoin/gold trends), so cross-class pairs never become scorecard drivers.
+const denominatorPairDrivers = (a: AssetId): DriverRule[] =>
+  RELATIVE_VALUE_PAIRS.filter((p) => p.denominator === a && UNIVERSE[p.numerator].assetClass === UNIVERSE[a].assetClass).map(pairRatioDriver)
 
 // ── Class driver sets ──────────────────────────────────────────────────────
 

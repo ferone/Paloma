@@ -41,6 +41,6 @@ describe("registry — gold and silver, symmetric", () => {
   it("allSymbols has no duplicates; roots are the four COMEX products", () => {
     const symbols = allSymbols();
     expect(new Set(symbols).size).toBe(symbols.length);
-    expect(allRoots().sort()).toEqual(["GC", "MGC", "SI", "SIL"]);
+    expect(allRoots().sort()).toEqual(["BTC", "GC", "MBT", "MGC", "SI", "SIL"]);
   });
 });

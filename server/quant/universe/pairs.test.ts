@@ -66,7 +66,7 @@ describe("the configured gold/silver pair", () => {
   it("lookups: by key, by asset, product membership", () => {
     expect(pairByKey("gold-silver")?.id).toBe("GS");
     expect(pairByKey("nope")).toBeUndefined();
-    expect(pairsForAsset("gold").map((p) => p.id)).toEqual(["GS"]);
+    expect(pairsForAsset("gold").map((p) => p.id)).toEqual(["GS", "BG"]);
     expect(pairsForAsset("silver").map((p) => p.id)).toEqual(["GS"]);
     expect(isPairProduct("GS")).toBe(true);
     expect(isPairProduct("GC")).toBe(false);

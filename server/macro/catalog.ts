@@ -151,10 +151,13 @@ export function ratioSeriesMeta(p: RelativeValuePair): MacroSeriesMeta {
   const venue = exNum && exNum === den.futures[0]?.exchange ? `${exNum} front-month closes` : 'reference closes'
   const numL = num.label.toLowerCase()
   const denL = den.label.toLowerCase()
+  // "one ounce of gold", but "one bitcoin" (the unit already names the asset).
+  const oneNum = UNIT_WORD[num.priceUnit][0] === numL ? `one ${numL}` : `one ${UNIT_WORD[num.priceUnit][0]} of ${numL}`
+  const denQty = UNIT_WORD[den.priceUnit][1] === `${denL}s` || UNIT_WORD[den.priceUnit][1] === denL ? UNIT_WORD[den.priceUnit][1] : `${UNIT_WORD[den.priceUnit][1]} of ${denL}`
   return {
     id: ratioSeriesId(p),
     label: ratioLabel(p),
-    description: `${UNIT_WORD[den.priceUnit][1]} of ${denL} needed to buy one ${UNIT_WORD[num.priceUnit][0]} of ${numL} (${venue} ${num.spot} / ${den.spot}). A high ratio means ${denL} is cheap relative to ${numL}.`,
+    description: `${denQty} needed to buy ${oneNum} (${venue} ${num.spot} / ${den.spot}). A high ratio means ${denL} is cheap relative to ${numL}.`,
     unit: 'ratio',
     changeKind: 'pct',
     frequency: 'daily',

@@ -3,8 +3,8 @@
 // instruments, units, sessions and data sources from here. Adding an asset is
 // a data change: extend `AssetId`, add a `UNIVERSE` entry, done.
 
-export type AssetId = 'gold' | 'silver'
-export const ASSETS: readonly AssetId[] = ['gold', 'silver'] as const
+export type AssetId = 'gold' | 'silver' | 'btc'
+export const ASSETS: readonly AssetId[] = ['gold', 'silver', 'btc'] as const
 
 /** @deprecated Use `AssetId`. Kept while domains migrate. */
 export type Metal = AssetId
@@ -152,6 +152,33 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     cotMarket: 'SILVER',
     colorVar: '--metal-silver',
   },
+  btc: {
+    id: 'btc',
+    metal: 'btc',
+    label: 'Bitcoin',
+    short: 'BTC',
+    assetClass: 'crypto',
+    // Reference series: the CME front future (weekday bars keep NAV, ML and
+    // 252-day conventions consistent with the other assets). Spot trades 24/7
+    // and is shown on tickers via displaySpot only.
+    spot: 'BTC=F',
+    displaySpot: 'BTC-USD',
+    priceUnit: 'BTC',
+    unitLabel: '$/BTC',
+    displayDecimals: 0,
+    session: '24x7',
+    futures: [
+      // CME Bitcoin: cash-settled to the CME CF BRR, every calendar month listed, expires the last Friday.
+      { root: 'BTC', name: 'CME Bitcoin', exchange: 'CME', yahoo: 'BTC=F', contractSize: 5, pointValue: 5, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], seasonalMonths: [3, 6, 9, 12], cashSettled: true, ozPerContract: 0 },
+      { root: 'MBT', name: 'CME Micro Bitcoin', exchange: 'CME', yahoo: 'MBT=F', contractSize: 0.1, pointValue: 0.1, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], seasonalMonths: [3, 6, 9, 12], cashSettled: true, ozPerContract: 0 },
+    ],
+    etfs: ['IBIT', 'FBTC'],
+    benchmarkEtf: 'IBIT',
+    physical: { unit: 'BTC', kind: 'custody', instrumentId: 'BTC-SPOT' },
+    cot: { report: 'tff', code: '133741', market: 'BTC' },
+    cotMarket: 'BTC',
+    colorVar: '--asset-bitcoin',
+  },
 }
 
 export function assetSpec(id: AssetId): AssetSpec {
@@ -194,6 +221,8 @@ export interface RelativeValuePair {
 
 export const RELATIVE_VALUE_PAIRS: RelativeValuePair[] = [
   { id: 'GS', key: 'gold-silver', label: 'Gold / silver', numerator: 'gold', denominator: 'silver' },
+  // Bitcoin priced in ounces of gold: the "digital vs physical store of value" gauge.
+  { id: 'BG', key: 'btc-gold', label: 'Bitcoin / gold', numerator: 'btc', denominator: 'gold' },
 ]
 
 /** Futures month codes (CME convention). */

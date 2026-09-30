@@ -31,8 +31,8 @@ export const MACRO_COMPARISON = ['SPY', 'QQQ', 'TLT', MACRO_SYMBOLS.dxy] as cons
 export function seriesColor(symbol: string, index: number, t: ChartTheme): string {
   if (symbol === UNIVERSE.gold.spot) return t.gold
   if (symbol === UNIVERSE.silver.spot) return t.silver
-  // Skip series-1 (gold hue) and series-6 (silver hue) for everything else.
-  const pool = [t.series[1], t.series[2], t.series[3], t.series[4], t.brand]
+  // Skip series-1 (gold hue) and series-6 (silver hue): those belong to the metals.
+  const pool = [t.series[1], t.series[2], t.series[3], t.series[4]]
   return pool[index % pool.length]
 }
 

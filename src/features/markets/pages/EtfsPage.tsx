@@ -1,8 +1,7 @@
-import clsx from 'clsx'
 import type { EtfRow } from '@shared/markets'
 import { UNIVERSE } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
-import { Chip, DataTable, ErrorNote, Explainer, HelpTip, Panel, PanelSkeleton, type Column } from '../../../ui'
+import { Chip, DataTable, ErrorNote, Explainer, Panel, PanelSkeleton, type Column } from '../../../ui'
 import { fmtCompact, fmtNum, fmtPct, fmtPctSigned, fmtUsdCompact } from '../../../design/format'
 import { signColor } from '../../../design/tokens'
 import { useEtfs } from '../hooks'
@@ -35,8 +34,13 @@ export default function EtfsPage() {
     },
     { key: 'price', header: 'Price', numeric: true, cell: (r) => fmtNum(r.price), sortValue: (r) => r.price },
     { key: 'chg', header: 'Day', numeric: true, cell: (r) => ret(r.changePercent), sortValue: (r) => r.changePercent },
-    { key: 'vol', header: 'Volume', numeric: true, cell: (r) => fmtCompact(r.volume), sortValue: (r) => r.volume },
-    { key: 'dvol', header: '$ volume', numeric: true, cell: (r) => fmtUsdCompact(r.dollarVolume), sortValue: (r) => r.dollarVolume },
+    {
+      key: 'dvol',
+      header: '$ volume',
+      numeric: true,
+      cell: (r) => <span title={`${fmtCompact(r.volume)} shares`}>{fmtUsdCompact(r.dollarVolume)}</span>,
+      sortValue: (r) => r.dollarVolume,
+    },
     { key: 'aum', header: 'AUM', numeric: true, cell: (r) => fmtUsdCompact(r.aum), sortValue: (r) => r.aum },
     { key: 'er', header: 'Fee', numeric: true, cell: (r) => fmtPct(r.expenseRatio), sortValue: (r) => r.expenseRatio },
     {
@@ -48,12 +52,8 @@ export default function EtfsPage() {
     },
     {
       key: 'prem',
-      header: (
-        <HelpTip term="Prem/disc">
-          Market price vs NAV. Published NAV where Yahoo reports one; for closed-end trusts (no published NAV here) a modeled estimate, marked
-          Modeled.
-        </HelpTip>
-      ),
+      // Plain `title` tooltips on right-edge headers: a HelpTip popover would overflow the table.
+      header: <span title="Market price vs NAV: published NAV where available, otherwise a modeled estimate (marked Modeled). See the notes below.">Prem/disc</span>,
       numeric: true,
       cell: (r) =>
         r.premiumMethod === 'none' ? (
@@ -72,14 +72,14 @@ export default function EtfsPage() {
     { key: 'y1', header: '1Y', numeric: true, cell: (r) => ret(r.returns.y1), sortValue: (r) => r.returns.y1 },
     {
       key: 'td',
-      header: <HelpTip term="Track. diff">1Y fund return minus 1Y return of {d.spotSymbol} (front future, the spot proxy). Includes fees and futures roll.</HelpTip>,
+      header: <span title={`1Y fund return minus 1Y return of ${d.spotSymbol} (front future, the spot proxy). Includes fees and futures roll.`}>Track. diff</span>,
       numeric: true,
       cell: (r) => ret(r.trackingDiff1y),
       sortValue: (r) => r.trackingDiff1y,
     },
     {
       key: 'te',
-      header: <HelpTip term="Track. err.">Annualized volatility of weekly (fund − spot proxy) return differences over 1Y.</HelpTip>,
+      header: <span title="Annualized volatility of weekly (fund − spot proxy) return differences over 1Y.">Track. err.</span>,
       numeric: true,
       cell: (r) => fmtPct(r.trackingError1y, 1),
       sortValue: (r) => r.trackingError1y,
@@ -91,35 +91,41 @@ export default function EtfsPage() {
   const cheapest = [...physical].filter((r) => r.expenseRatio != null).sort((a, b) => (a.expenseRatio as number) - (b.expenseRatio as number))[0]
   const deepest = [...physical].filter((r) => r.dollarVolume != null).sort((a, b) => (b.dollarVolume as number) - (a.dollarVolume as number))[0]
 
+  const pick = (keys: string[]) => columns.filter((c) => keys.includes(c.key))
+  const marketCols = pick(['symbol', 'price', 'chg', 'dvol', 'aum', 'er', 'nav', 'prem'])
+  const perfCols = pick(['symbol', 'm1', 'm3', 'ytd', 'y1', 'td', 'te', 'corr'])
+
   return (
     <div className="space-y-4">
-      <Panel
-        density="dense"
-        title={`${spec.label} ETFs`}
-        eyebrow="Physically backed funds + miners"
-        actions={
-          <div className="num hidden gap-4 text-xs text-muted md:flex">
-            <span>
-              Spot proxy {d.spotSymbol}: 1M {ret(d.spotReturns.m1)} · YTD {ret(d.spotReturns.ytd)} · 1Y {ret(d.spotReturns.y1)}
+      <div className="grid items-start gap-4 2xl:grid-cols-2">
+        <Panel density="dense" title={`${spec.label} ETFs · price, liquidity, premium`} eyebrow="Physically backed funds + miners" provenance={d.provenance}>
+          <DataTable columns={marketCols} rows={d.rows} rowKey={(r) => r.symbol} dense initialSort={{ key: 'dvol', dir: 'desc' }} caption="ETF price, liquidity and premium" />
+          <p className="mt-3 text-xs text-muted">
+            {deepest && (
+              <>
+                Deepest liquidity: <span className="num text-foreground">{deepest.symbol}</span> ({fmtUsdCompact(deepest.dollarVolume)} today).{' '}
+              </>
+            )}
+            {cheapest && (
+              <>
+                Lowest fee: <span className="num text-foreground">{cheapest.symbol}</span> ({fmtPct(cheapest.expenseRatio)}).
+              </>
+            )}
+          </p>
+        </Panel>
+        <Panel
+          density="dense"
+          title="Returns & tracking vs spot"
+          eyebrow={
+            <span className="num normal-case tracking-normal">
+              Spot proxy {d.spotSymbol}: 1M {ret(d.spotReturns.m1)} · 3M {ret(d.spotReturns.m3)} · YTD {ret(d.spotReturns.ytd)} · 1Y {ret(d.spotReturns.y1)}
             </span>
-          </div>
-        }
-        provenance={d.provenance}
-      >
-        <DataTable columns={columns} rows={d.rows} rowKey={(r) => r.symbol} dense initialSort={{ key: 'dvol', dir: 'desc' }} caption="ETF premium, returns and tracking" />
-        <p className={clsx('mt-3 text-xs text-muted')}>
-          {deepest && (
-            <>
-              Deepest liquidity: <span className="num text-foreground">{deepest.symbol}</span> ({fmtUsdCompact(deepest.dollarVolume)} today).{' '}
-            </>
-          )}
-          {cheapest && (
-            <>
-              Lowest fee: <span className="num text-foreground">{cheapest.symbol}</span> ({fmtPct(cheapest.expenseRatio)}).
-            </>
-          )}
-        </p>
-      </Panel>
+          }
+          provenance={{ source: `Yahoo Finance daily closes (1Y) · spot proxy ${d.spotSymbol}`, asOf: d.provenance.asOf }}
+        >
+          <DataTable columns={perfCols} rows={d.rows} rowKey={(r) => r.symbol} dense initialSort={{ key: 'y1', dir: 'desc' }} caption="ETF returns and tracking" />
+        </Panel>
+      </div>
 
       <Explainer title="How premiums and tracking are calculated">
         <p>

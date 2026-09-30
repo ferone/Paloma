@@ -12,6 +12,7 @@ export function baseChartOptions(t: ChartTheme, intraday: boolean): DeepPartial<
       textColor: t.muted,
       fontFamily: t.font,
       fontSize: 11,
+      panes: { separatorColor: t.border, separatorHoverColor: t.alpha(t.faint, 0.3) },
     },
     grid: {
       vertLines: { color: t.alpha(t.border, 0.5) },

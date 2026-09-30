@@ -116,11 +116,20 @@ export function detectSpikes(history: { date: string; total: number }[], count =
   const mean = vals.reduce((s, v) => s + v, 0) / vals.length
   const std = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length)
   if (std === 0) return []
-  return history
+  // Strongest first; skip bars within 5 days of a stronger spike so one
+  // multi-day episode doesn't take every slot.
+  const picked: { date: string; total: number; z: number }[] = []
+  const candidates = history
     .map((d) => ({ date: d.date, total: d.total, z: (d.total - mean) / std }))
     .filter((d) => d.z > 1.2)
     .sort((a, b) => b.z - a.z)
-    .slice(0, count)
+  for (const c of candidates) {
+    if (picked.length >= count) break
+    const t = Date.parse(`${c.date}T00:00:00Z`)
+    if (picked.some((p) => Math.abs(Date.parse(`${p.date}T00:00:00Z`) - t) <= 5 * 86_400_000)) continue
+    picked.push(c)
+  }
+  return picked
     .map((s) => {
       const t = Date.parse(`${s.date}T00:00:00Z`)
       let best: (typeof MARKET_EVENTS)[number] | null = null

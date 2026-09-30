@@ -73,10 +73,10 @@ function renderAt(node: ReactNode, path = '/', route = '/') {
 describe('Markets pages', () => {
   it('term structure shows shape, carry and the contracts table', async () => {
     renderAt(<CurvePage />)
-    expect(await screen.findByText('Listed contract months')).toBeInTheDocument()
-    expect(screen.getByText('Contango')).toBeInTheDocument()
+    expect(await screen.findByText('Listed contract months')).toBeTruthy()
+    expect(screen.getByText('Contango')).toBeTruthy()
     expect(screen.getAllByText('Ref').length).toBeGreaterThan(0)
-    expect(await screen.findByText(/History is still being recorded/)).toBeInTheDocument()
+    expect(await screen.findByText(/History is still being recorded/)).toBeTruthy()
   })
 
   it('ETFs show NAV premia and flag modeled ones', async () => {
@@ -88,8 +88,8 @@ describe('Markets pages', () => {
 
   it('liquidity labels every modeled figure', async () => {
     renderAt(<LiquidityPage />)
-    expect(await screen.findByText(/Today's dollar volume by instrument/)).toBeInTheDocument()
-    expect(screen.getByText(/source split modeled from World Gold Council shares/)).toBeInTheDocument()
+    expect(await screen.findByText(/Today's dollar volume by instrument/)).toBeTruthy()
+    expect(screen.getByText(/source split modeled from World Gold Council shares/)).toBeTruthy()
     const split = screen.getByText(/By participant type/).parentElement as HTMLElement
     // 5 sources, each with its own chip
     expect(within(split).getAllByText('Modeled')).toHaveLength(5)
@@ -97,20 +97,20 @@ describe('Markets pages', () => {
 
   it('comparison renders returns and the correlation matrix', async () => {
     renderAt(<ComparisonPage />)
-    expect(await screen.findByText('Correlation of daily returns (1Y)')).toBeInTheDocument()
+    expect(await screen.findByText('Correlation of daily returns (1Y)')).toBeTruthy()
     expect(await screen.findAllByText('1.00')).not.toHaveLength(0)
   })
 
   it('technicals compute indicators for the routed symbol', async () => {
     renderAt(<TechnicalsPage />, '/markets/signals/GLD', '/markets/signals/:symbol')
-    expect(await screen.findByText('Signal summary')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: /^RSI \d/ })).toBeInTheDocument()
+    expect(await screen.findByText('Signal summary')).toBeTruthy()
+    expect(screen.getByRole('img', { name: /^RSI \d/ })).toBeTruthy()
   })
 
   it('prices page renders hero, chart panel, ratio and ETF strip', async () => {
     renderAt(<PricesPage />)
-    expect(await screen.findByText(/COMEX front future \(GC=F\)/)).toBeInTheDocument()
-    expect(screen.getByText('Gold ETFs & miners')).toBeInTheDocument()
-    expect(await screen.findByText('Gold/silver ratio')).toBeInTheDocument()
+    expect(await screen.findByText(/COMEX front future \(GC=F\)/)).toBeTruthy()
+    expect(screen.getByText('Gold ETFs & miners')).toBeTruthy()
+    expect(await screen.findByText('Gold/silver ratio')).toBeTruthy()
   })
 })

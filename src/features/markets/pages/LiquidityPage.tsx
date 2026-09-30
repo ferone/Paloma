@@ -135,7 +135,7 @@ function SourceSplit({ split, total, t }: { split: ModeledSplit; total: number; 
           Estimated split of today's volume <Chip tone="modeled">Modeled</Chip>
         </span>
       }
-      provenance={split.provenance}
+      provenance={{ ...split.provenance, asOf: undefined }}
     >
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
@@ -341,7 +341,7 @@ function HistoryBody({ data: d, view }: { data: LiquidityHistoryResponse; view: 
 
       {d.spikes.length > 0 && (
         <div className="mt-4 border-t border-border pt-3">
-          <div className="label mb-2">Volume spikes (more than 1.2σ above the range mean)</div>
+          <div className="label mb-2">Volume spikes (more than 1.2 standard deviations above the range mean)</div>
           <ol className="space-y-1">
             {d.spikes.map((sp, i) => (
               <li key={sp.date}>

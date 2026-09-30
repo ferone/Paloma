@@ -43,7 +43,7 @@ export function IndicatorChart({ symbol, bars, mas, rsi }: Props) {
         .filter((p): p is { time: Time; value: number } => p.value != null)
 
     for (const ma of mas) {
-      const s = chart.addSeries(LineSeries, { color: ma.color, lineWidth: 1, title: ma.label, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false })
+      const s = chart.addSeries(LineSeries, { color: ma.color, lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false })
       s.setData(line(ma.values))
     }
 

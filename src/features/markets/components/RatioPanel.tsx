@@ -40,18 +40,18 @@ export function RatioPanel() {
       }
       provenance={{ source: 'Yahoo Finance · GC=F ÷ SI=F, weekly closes (5Y); live value from front futures', asOf: series.at(-1)?.date ?? null }}
     >
-      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3">
         <Stat label="Now" value={fmtNum(current, 1)} size="md" />
         <Stat label="5Y average" value={fmtNum(avg, 1)} size="sm" />
         <Stat label="5Y percentile" value={fmtPct(pct, 0)} size="sm" hint="Share of weeks below today" />
         <Stat label="5Y range" value={`${fmtNum(lo, 1)}–${fmtNum(hi, 1)}`} size="sm" />
       </div>
       {loading ? (
-        <Skeleton className="h-36 w-full" />
+        <Skeleton className="h-52 w-full" />
       ) : error ? (
         <ErrorNote error={error} />
       ) : (
-        <div className="h-36">
+        <div className="h-52">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={series} margin={{ left: 0, right: 4, top: 4, bottom: 0 }}>
               <defs>

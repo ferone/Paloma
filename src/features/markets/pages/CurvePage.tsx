@@ -61,7 +61,7 @@ export default function CurvePage() {
         </ErrorBoundary>
       </div>
       <ContractsTable curve={c} />
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-4 xl:grid-cols-2">
         <ErrorBoundary>
           <CarryHistory />
         </ErrorBoundary>

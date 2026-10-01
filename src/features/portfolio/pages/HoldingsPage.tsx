@@ -35,7 +35,7 @@ export default function HoldingsPage() {
         <Panel title="Allocation by asset" eyebrow="Share of NAV" provenance={{ source: 'Fund ledger', asOf: s.asOf, note: `Gross exposure ${fmtUsdCompact(s.grossExposure)} (${fmtPct(s.nav ? s.grossExposure / s.nav : null, 0)} of NAV)` }}>
           <AllocationBar
             caption="Allocation by asset"
-            items={s.byMetal.map((m) => ({ key: m.metal, label: assetLabel(m.metal), value: m.value, weight: m.weight, color: ASSET_BUCKET_COLOR[m.metal] }))}
+            items={s.byAsset.map((m) => ({ key: m.asset, label: assetLabel(m.asset), value: m.value, weight: m.weight, color: ASSET_BUCKET_COLOR[m.asset] }))}
           />
           {s.netExposure.length > 0 && (
             <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 border-t border-border pt-3">

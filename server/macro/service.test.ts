@@ -87,10 +87,10 @@ describe('macro service', () => {
     expect(d.tailwinds).toBeGreaterThanOrEqual(3)
 
     publishMacroArtifact()
-    const art = readArtifact<MacroDashboardLite & { byMetal: Record<string, { regime: string }> }>(ARTIFACTS.macroDashboard)!
+    const art = readArtifact<MacroDashboardLite & { byAsset: Record<string, { regime: string }> }>(ARTIFACTS.macroDashboard)!
     expect(art.data.regime).toBe(d.regime.label)
     expect(art.data.drivers.find((x) => x.id === 'DFII10')!.stance).toBe('tailwind')
-    expect(art.data.byMetal.silver.regime).toContain('Risk-off')
+    expect(art.data.byAsset.silver.regime).toContain('Risk-off')
   })
 
   it('computes correlations on aligned levels', () => {

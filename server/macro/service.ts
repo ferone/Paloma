@@ -416,11 +416,11 @@ export async function refreshCot(ctx: JobContext = noop, fetchImpl?: typeof fetc
 
 /**
  * Publish the cross-domain summary (ARTIFACTS.macroDashboard). The core fields
- * describe the universe's first asset; byMetal carries every asset.
+ * describe the universe's first asset; byAsset carries every asset.
  */
 export function publishMacroArtifact(): MacroDashboardLite {
   const dashboards = new Map(ASSETS.map((m) => [m, buildDashboard(m)]))
-  const byMetal = Object.fromEntries(
+  const byAsset = Object.fromEntries(
     ASSETS.map((m) => {
       const d = dashboards.get(m)!
       return [
@@ -434,11 +434,11 @@ export function publishMacroArtifact(): MacroDashboardLite {
     }),
   )
   const lead = ASSETS[0]
-  const lite: MacroDashboardLite & { byMetal: typeof byMetal } = {
+  const lite: MacroDashboardLite & { byAsset: typeof byAsset } = {
     asOf: dashboards.get(lead)!.asOf ?? new Date().toISOString().slice(0, 10),
-    regime: byMetal[lead].regime,
-    drivers: byMetal[lead].drivers,
-    byMetal,
+    regime: byAsset[lead].regime,
+    drivers: byAsset[lead].drivers,
+    byAsset,
   }
   writeArtifact(ARTIFACTS.macroDashboard, lite)
   return lite

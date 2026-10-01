@@ -16,7 +16,6 @@ import { vaultTotals } from './views.js'
 const BTC = 'btc' as AssetId
 const BTC_SPEC: AssetSpec = {
   id: BTC,
-  metal: BTC,
   label: 'Bitcoin',
   short: 'BTC',
   assetClass: 'crypto',
@@ -26,13 +25,12 @@ const BTC_SPEC: AssetSpec = {
   displayDecimals: 0,
   session: '24x7',
   futures: [
-    { root: 'BTC', name: 'CME Bitcoin', exchange: 'CME', yahoo: 'BTC=F', contractSize: 5, pointValue: 5, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], cashSettled: true, ozPerContract: 5 },
+    { root: 'BTC', name: 'CME Bitcoin', exchange: 'CME', yahoo: 'BTC=F', contractSize: 5, pointValue: 5, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], cashSettled: true },
   ],
   etfs: ['IBIT'],
   benchmarkEtf: 'IBIT',
   physical: { unit: 'BTC', kind: 'custody', instrumentId: 'BTC-CUSTODY' },
   cot: null,
-  cotMarket: '',
   colorVar: '--series-4',
 }
 const specOf = (a: AssetId) => (a === BTC ? BTC_SPEC : UNIVERSE[a])

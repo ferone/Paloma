@@ -4,7 +4,7 @@ import { useSettings } from '../../store/settings-context'
 import { PageHeader, RouteTabs } from '../../ui'
 
 export function MarketsLayout() {
-  const { metal } = useSettings()
+  const { asset: metal } = useSettings()
   const spec = UNIVERSE[metal]
   const product = spec.futures[0]
   return (

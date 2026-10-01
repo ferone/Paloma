@@ -18,7 +18,7 @@ const KIND_HELP: Record<Exclude<ReportKind, 'ask'>, string> = {
 }
 
 export default function AnalystPage() {
-  const { metal } = useSettings()
+  const { asset: metal } = useSettings()
   const [params] = useSearchParams()
   const status = useAiStatus()
   const reports = useReports()

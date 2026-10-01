@@ -124,7 +124,7 @@ describe('portfolio repositories + service', () => {
     const art = readArtifact<PortfolioSummaryLite>(ARTIFACTS.portfolioSummary)!.data
     expect(art.nav).toBeCloseTo(s.nav, 6)
     expect(Object.keys(art).sort()).toEqual(
-      ['allocation', 'asOf', 'byMetal', 'dayPnl', 'dayReturn', 'mtdReturn', 'nav', 'navPerUnit', 'sinceInceptionReturn', 'unitsOutstanding', 'ytdReturn'].sort(),
+      ['allocation', 'asOf', 'byAsset', 'dayPnl', 'dayReturn', 'mtdReturn', 'nav', 'navPerUnit', 'sinceInceptionReturn', 'unitsOutstanding', 'ytdReturn'].sort(),
     )
 
     const perf = await buildPerformance(c, 'blend')

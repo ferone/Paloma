@@ -105,8 +105,8 @@ describe('AI report service', () => {
       asOf: '2026-09-30',
       dataThrough: '2026-09-29',
       opportunities: [
-        { id: 'GC.fly.0-1-2', metal: 'gold', label: 'GC fly', side: 'long', tier: 'STRONG', verdict: 'BUY', qtRank: 80, z: -2.1, oosStatus: 'passed' },
-        { id: 'GC.cal.0-1', metal: 'gold', label: 'GC calendar', side: 'short', tier: 'WATCH', verdict: 'AVOID', qtRank: 40, z: 1, oosStatus: 'untested' },
+        { id: 'GC.fly.0-1-2', asset: 'gold', label: 'GC fly', side: 'long', tier: 'STRONG', verdict: 'BUY', qtRank: 80, z: -2.1, oosStatus: 'passed' },
+        { id: 'GC.cal.0-1', asset: 'gold', label: 'GC calendar', side: 'short', tier: 'WATCH', verdict: 'AVOID', qtRank: 40, z: 1, oosStatus: 'untested' },
       ],
     }
     writeArtifact(ARTIFACTS.quantSnapshot, snap)

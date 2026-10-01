@@ -73,12 +73,12 @@ export function cotBlock(asset: AssetId): ContextBlock {
 export function quantBlock(metal: AssetId, focus?: QuantOpportunityLite): ContextBlock {
   const a = readArtifact<QuantSnapshotLite>(ARTIFACTS.quantSnapshot)
   if (!a) return { name: 'Quant snapshot', present: false, asOf: null, text: 'QUANT SNAPSHOT: not available (the quant engine has not published a snapshot).', urls: [] }
-  const opps = a.data.opportunities.filter((o) => o.metal === metal).slice(0, 12)
+  const opps = a.data.opportunities.filter((o) => o.asset === metal).slice(0, 12)
   const line = (o: QuantOpportunityLite) =>
     `- ${o.id} "${o.label}": ${o.side} · tier ${o.tier} · verdict ${o.verdict} · rank ${f(o.qtRank, 0)} · z ${f(o.z)} · out-of-sample ${o.oosStatus}`
   const lines = [`QUANT SNAPSHOT (engine data through ${a.data.dataThrough ?? 'n/a'}, run ${a.data.asOf}). Top ${UNIVERSE[metal].label.toLowerCase()} opportunities:`]
   lines.push(...(opps.length ? opps.map(line) : ['- none for this asset']))
-  for (const b of a.data.basis?.filter((x) => x.metal === metal) ?? [])
+  for (const b of a.data.basis?.filter((x) => x.asset === metal) ?? [])
     lines.push(
       `CASH-AND-CARRY BASIS ${b.id} (${b.asOf}, ${b.contract}, ${b.daysToExpiry} d to expiry): basis ${f(b.basis)}% p.a., T-bill ${f(b.tbill)}%, excess carry ${f(b.excess)}% · z ${f(b.z)} · half-life ${f(b.halfLife, 1)} d · out-of-sample ${b.oosStatus} · verdict ${b.verdict}. A carry harvest (long spot / short future), not a directional bet.`,
     )
@@ -89,7 +89,7 @@ export function quantBlock(metal: AssetId, focus?: QuantOpportunityLite): Contex
 export function mlBlock(metal: AssetId): ContextBlock {
   const a = readArtifact<MlPredictionsLite>(ARTIFACTS.mlPredictions)
   if (!a) return { name: 'ML predictions', present: false, asOf: null, text: 'ML PREDICTIONS: not available.', urls: [] }
-  const preds = a.data.predictions.filter((p) => p.metal === metal).slice(0, 10)
+  const preds = a.data.predictions.filter((p) => p.asset === metal).slice(0, 10)
   const lines = [`ML PREDICTIONS (as of ${a.data.asOf}):`]
   for (const p of preds)
     lines.push(`- ${p.instrumentId} ${p.horizonDays}d: ${p.pUp != null ? `P(up) ${f(p.pUp)}` : ''}${p.pConverge != null ? `P(converge) ${f(p.pConverge)}` : ''} · validation ${p.validationStatus}`)
@@ -105,7 +105,7 @@ export function portfolioBlock(): ContextBlock {
     `PORTFOLIO SUMMARY as of ${p.asOf}: NAV $${f(p.nav, 0)}${p.navPerUnit != null ? `, NAV/unit ${f(p.navPerUnit, 4)}` : ''}.`,
     `Returns: day ${pctS(p.dayReturn, 2)}, MTD ${pctS(p.mtdReturn, 2)}, YTD ${pctS(p.ytdReturn, 2)}, since inception ${pctS(p.sinceInceptionReturn, 2)}.`,
     `Allocation by sleeve: ${p.allocation.map((x) => `${x.sleeve} ${(x.weight * 100).toFixed(1)}%`).join(', ') || 'n/a'}.`,
-    `By asset: ${p.byMetal.map((x) => `${x.metal} ${(x.weight * 100).toFixed(1)}%`).join(', ') || 'n/a'}.`,
+    `By asset: ${p.byAsset.map((x) => `${x.asset} ${(x.weight * 100).toFixed(1)}%`).join(', ') || 'n/a'}.`,
   ]
   return { name: 'Portfolio summary', present: true, asOf: p.asOf, text: lines.join('\n'), urls: [] }
 }

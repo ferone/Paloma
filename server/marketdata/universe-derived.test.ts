@@ -13,7 +13,6 @@ const SUFFIX = { COMEX: '.CMX', NYMEX: '.NYM', CME: '.CME' } as const
 
 const btc: AssetSpec = {
   id: 'gold', // any id: only the instrument fields are read
-  metal: 'gold',
   label: 'Bitcoin',
   short: 'BTC',
   assetClass: 'crypto',
@@ -24,14 +23,13 @@ const btc: AssetSpec = {
   displayDecimals: 0,
   session: '24x7',
   futures: [
-    { root: 'BTC', name: 'CME Bitcoin', exchange: 'CME', yahoo: 'BTC=F', contractSize: 5, pointValue: 5, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], cashSettled: true, ozPerContract: 0 },
+    { root: 'BTC', name: 'CME Bitcoin', exchange: 'CME', yahoo: 'BTC=F', contractSize: 5, pointValue: 5, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], cashSettled: true },
   ],
   etfs: ['IBIT', 'FBTC'],
   benchmarkEtf: 'IBIT',
   physical: null,
   cot: { report: 'tff', code: '133741', market: 'BITCOIN' },
   colorVar: '--asset-btc',
-  cotMarket: 'BITCOIN',
 }
 
 describe('Databento roots and COT markets come from the universe', () => {

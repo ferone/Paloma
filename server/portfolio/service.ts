@@ -110,8 +110,8 @@ export function valuationDates(symbols: string[], book: { dates(symbol: string):
 }
 
 export function toLite(s: PortfolioSummaryLite): PortfolioSummaryLite {
-  const { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byMetal } = s
-  return { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byMetal }
+  const { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byAsset } = s
+  return { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byAsset }
 }
 
 /** A result with fallback marks is re-computed after this long instead of MAX_AGE_MS. */

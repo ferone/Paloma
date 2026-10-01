@@ -19,7 +19,7 @@ const RANGES = ['1M', '3M', '6M', '1Y', '5Y', 'ALL'] as const
 type Range = (typeof RANGES)[number]
 
 export default function LiquidityPage() {
-  const { metal } = useSettings()
+  const { asset: metal } = useSettings()
   const snap = useLiquidity(metal)
   return (
     <div className="space-y-4">
@@ -231,7 +231,7 @@ function Regions({ split, total, scaleLabel = "today's volume" }: { split: Model
 type View = 'instrument' | 'source'
 
 function History() {
-  const { metal } = useSettings()
+  const { asset: metal } = useSettings()
   const [range, setRange] = useState<Range>('1Y')
   const [view, setView] = useState<View>('instrument')
   const q = useLiquidityHistory(metal, range)

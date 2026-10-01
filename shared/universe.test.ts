@@ -25,8 +25,6 @@ describe('universe', () => {
     for (const a of ASSETS) {
       const s = UNIVERSE[a]
       expect(s.id).toBe(a)
-      expect(s.metal).toBe(a)
-      expect(s.cotMarket).toBe(s.cot?.market)
       for (const f of s.futures) {
         expect(f.pointValue).toBeGreaterThan(0)
         expect(f.contractSize).toBeGreaterThan(0)

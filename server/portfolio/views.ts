@@ -197,7 +197,7 @@ export function buildSummary(c: Computed): PortfolioSummary {
     sinceInceptionReturn: null,
     dayPnl: null,
     allocation: [],
-    byMetal: [],
+    byAsset: [],
     inceptionDate: c.inception,
     cash: 0,
     grossExposure: 0,
@@ -222,10 +222,10 @@ export function buildSummary(c: Computed): PortfolioSummary {
     .filter(([, v]) => Math.abs(v) > 0.005)
     .map(([sleeve, value]) => ({ sleeve, value, weight: w(value) }))
     .sort((a, b) => b.value - a.value)
-  // `metal` is the published artifact's field name (shared/artifacts.ts); it holds an AssetId.
-  const byMetal = (Object.entries(last.byAsset) as [AssetId | 'cash' | 'other', number][])
+  // Published in the portfolio:summary artifact (shared/artifacts.ts PortfolioSummaryLite.byAsset).
+  const byAsset = (Object.entries(last.byAsset) as [AssetId | 'cash' | 'other', number][])
     .filter(([, v]) => Math.abs(v) > 0.005)
-    .map(([metal, value]) => ({ metal, value, weight: w(value) }))
+    .map(([asset, value]) => ({ asset, value, weight: w(value) }))
     .sort((a, b) => b.value - a.value)
 
   let income = 0
@@ -256,7 +256,7 @@ export function buildSummary(c: Computed): PortfolioSummary {
     sinceInceptionReturn: lastNpu != null ? lastNpu / base - 1 : null,
     dayPnl: Object.values(last.pnl).reduce((s, x) => s + x, 0),
     allocation,
-    byMetal,
+    byAsset,
     cash: last.cash,
     grossExposure: last.grossExposure,
     netExposure,

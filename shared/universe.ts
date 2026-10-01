@@ -6,11 +6,6 @@
 export type AssetId = 'gold' | 'silver' | 'platinum' | 'palladium' | 'copper' | 'btc'
 export const ASSETS: readonly AssetId[] = ['gold', 'silver', 'platinum', 'palladium', 'copper', 'btc'] as const
 
-/** @deprecated Use `AssetId`. Kept while domains migrate. */
-export type Metal = AssetId
-/** @deprecated Use `ASSETS`. Kept while domains migrate. */
-export const METALS: readonly Metal[] = ASSETS
-
 export type AssetClass = 'precious' | 'industrial' | 'crypto'
 export const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
   precious: 'Precious metals',
@@ -48,8 +43,6 @@ export interface FuturesProduct {
   seasonalMonths?: number[]
   /** Cash-settled (no delivery / first notice): rolls key off last trade instead. */
   cashSettled: boolean
-  /** @deprecated Troy ounces per contract; use `contractSize` + the asset's `priceUnit`. */
-  ozPerContract: number
 }
 
 export interface PhysicalSpec {
@@ -120,17 +113,11 @@ export interface AssetSpec {
   basis?: CarryBasisSpec
   /** CSS custom property holding this asset's chart colour. */
   colorVar: string
-
-  /** @deprecated Use `id`. */
-  metal: AssetId
-  /** @deprecated Use `cot.market`. */
-  cotMarket: string
 }
 
 export const UNIVERSE: Record<AssetId, AssetSpec> = {
   gold: {
     id: 'gold',
-    metal: 'gold',
     label: 'Gold',
     short: 'Au',
     assetClass: 'precious',
@@ -140,20 +127,18 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     displayDecimals: 2,
     session: 'globex',
     futures: [
-      { root: 'GC', name: 'COMEX Gold', exchange: 'COMEX', yahoo: 'GC=F', contractSize: 100, pointValue: 100, tickSize: 0.1, activeMonths: [2, 4, 6, 8, 10, 12], cashSettled: false, ozPerContract: 100 },
-      { root: 'MGC', name: 'COMEX Micro Gold', exchange: 'COMEX', yahoo: 'MGC=F', contractSize: 10, pointValue: 10, tickSize: 0.1, activeMonths: [2, 4, 6, 8, 10, 12], cashSettled: false, ozPerContract: 10 },
+      { root: 'GC', name: 'COMEX Gold', exchange: 'COMEX', yahoo: 'GC=F', contractSize: 100, pointValue: 100, tickSize: 0.1, activeMonths: [2, 4, 6, 8, 10, 12], cashSettled: false },
+      { root: 'MGC', name: 'COMEX Micro Gold', exchange: 'COMEX', yahoo: 'MGC=F', contractSize: 10, pointValue: 10, tickSize: 0.1, activeMonths: [2, 4, 6, 8, 10, 12], cashSettled: false },
     ],
     etfs: ['GLD', 'IAU', 'GLDM', 'SGOL', 'PHYS'],
     miners: 'GDX',
     benchmarkEtf: 'GLD',
     physical: { unit: 'oz', kind: 'bullion', instrumentId: 'XAU-PHYS' },
     cot: { report: 'disagg', code: '088691', market: 'GOLD' },
-    cotMarket: 'GOLD',
-    colorVar: '--metal-gold',
+    colorVar: '--asset-gold',
   },
   silver: {
     id: 'silver',
-    metal: 'silver',
     label: 'Silver',
     short: 'Ag',
     assetClass: 'precious',
@@ -163,20 +148,18 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     displayDecimals: 3,
     session: 'globex',
     futures: [
-      { root: 'SI', name: 'COMEX Silver', exchange: 'COMEX', yahoo: 'SI=F', contractSize: 5000, pointValue: 5000, tickSize: 0.005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false, ozPerContract: 5000 },
-      { root: 'SIL', name: 'COMEX Micro Silver', exchange: 'COMEX', yahoo: 'SIL=F', contractSize: 1000, pointValue: 1000, tickSize: 0.005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false, ozPerContract: 1000 },
+      { root: 'SI', name: 'COMEX Silver', exchange: 'COMEX', yahoo: 'SI=F', contractSize: 5000, pointValue: 5000, tickSize: 0.005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false },
+      { root: 'SIL', name: 'COMEX Micro Silver', exchange: 'COMEX', yahoo: 'SIL=F', contractSize: 1000, pointValue: 1000, tickSize: 0.005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false },
     ],
     etfs: ['SLV', 'SIVR', 'PSLV'],
     miners: 'SILJ',
     benchmarkEtf: 'SLV',
     physical: { unit: 'oz', kind: 'bullion', instrumentId: 'XAG-PHYS' },
     cot: { report: 'disagg', code: '084691', market: 'SILVER' },
-    cotMarket: 'SILVER',
-    colorVar: '--metal-silver',
+    colorVar: '--asset-silver',
   },
   platinum: {
     id: 'platinum',
-    metal: 'platinum',
     label: 'Platinum',
     short: 'Pt',
     assetClass: 'precious',
@@ -187,19 +170,17 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     session: 'globex',
     futures: [
       // NYMEX platinum: 50 troy oz, $0.10 tick ($5); liquid cycle Jan/Apr/Jul/Oct.
-      { root: 'PL', name: 'NYMEX Platinum', exchange: 'NYMEX', yahoo: 'PL=F', contractSize: 50, pointValue: 50, tickSize: 0.1, activeMonths: [1, 4, 7, 10], cashSettled: false, ozPerContract: 50 },
+      { root: 'PL', name: 'NYMEX Platinum', exchange: 'NYMEX', yahoo: 'PL=F', contractSize: 50, pointValue: 50, tickSize: 0.1, activeMonths: [1, 4, 7, 10], cashSettled: false },
     ],
     etfs: ['PPLT'],
     // No dedicated PGM miners ETF exists (Sibanye-Stillwater is a single stock), so no miners proxy.
     benchmarkEtf: 'PPLT',
     physical: { unit: 'oz', kind: 'bullion', instrumentId: 'XPT-PHYS' },
     cot: { report: 'disagg', code: '076651', market: 'PLATINUM' },
-    cotMarket: 'PLATINUM',
     colorVar: '--asset-platinum',
   },
   palladium: {
     id: 'palladium',
-    metal: 'palladium',
     label: 'Palladium',
     short: 'Pd',
     assetClass: 'precious',
@@ -210,18 +191,16 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     session: 'globex',
     futures: [
       // NYMEX palladium: 100 troy oz, $0.50 tick ($50); liquid cycle Mar/Jun/Sep/Dec.
-      { root: 'PA', name: 'NYMEX Palladium', exchange: 'NYMEX', yahoo: 'PA=F', contractSize: 100, pointValue: 100, tickSize: 0.5, activeMonths: [3, 6, 9, 12], cashSettled: false, ozPerContract: 100 },
+      { root: 'PA', name: 'NYMEX Palladium', exchange: 'NYMEX', yahoo: 'PA=F', contractSize: 100, pointValue: 100, tickSize: 0.5, activeMonths: [3, 6, 9, 12], cashSettled: false },
     ],
     etfs: ['PALL'],
     benchmarkEtf: 'PALL',
     physical: { unit: 'oz', kind: 'bullion', instrumentId: 'XPD-PHYS' },
     cot: { report: 'disagg', code: '075651', market: 'PALLADIUM' },
-    cotMarket: 'PALLADIUM',
     colorVar: '--asset-palladium',
   },
   copper: {
     id: 'copper',
-    metal: 'copper',
     label: 'Copper',
     short: 'Cu',
     assetClass: 'industrial',
@@ -232,20 +211,18 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     session: 'globex',
     futures: [
       // COMEX copper: 25,000 lb, every month listed; liquidity sits in the quarterly cycle H/K/N/U/Z.
-      { root: 'HG', name: 'COMEX Copper', exchange: 'COMEX', yahoo: 'HG=F', contractSize: 25000, pointValue: 25000, tickSize: 0.0005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false, ozPerContract: 0 },
-      { root: 'MHG', name: 'COMEX Micro Copper', exchange: 'COMEX', yahoo: 'MHG=F', contractSize: 2500, pointValue: 2500, tickSize: 0.0005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false, ozPerContract: 0 },
+      { root: 'HG', name: 'COMEX Copper', exchange: 'COMEX', yahoo: 'HG=F', contractSize: 25000, pointValue: 25000, tickSize: 0.0005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false },
+      { root: 'MHG', name: 'COMEX Micro Copper', exchange: 'COMEX', yahoo: 'MHG=F', contractSize: 2500, pointValue: 2500, tickSize: 0.0005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false },
     ],
     etfs: ['CPER'],
     miners: 'COPX',
     benchmarkEtf: 'CPER',
     physical: null,
     cot: { report: 'disagg', code: '085692', market: 'COPPER' },
-    cotMarket: 'COPPER',
     colorVar: '--asset-copper',
   },
   btc: {
     id: 'btc',
-    metal: 'btc',
     label: 'Bitcoin',
     short: 'BTC',
     assetClass: 'crypto',
@@ -260,15 +237,14 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     session: '24x7',
     futures: [
       // CME Bitcoin: cash-settled to the CME CF BRR, every calendar month listed, expires the last Friday.
-      { root: 'BTC', name: 'CME Bitcoin', exchange: 'CME', yahoo: 'BTC=F', contractSize: 5, pointValue: 5, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], seasonalMonths: [3, 6, 9, 12], cashSettled: true, ozPerContract: 0 },
-      { root: 'MBT', name: 'CME Micro Bitcoin', exchange: 'CME', yahoo: 'MBT=F', contractSize: 0.1, pointValue: 0.1, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], seasonalMonths: [3, 6, 9, 12], cashSettled: true, ozPerContract: 0 },
+      { root: 'BTC', name: 'CME Bitcoin', exchange: 'CME', yahoo: 'BTC=F', contractSize: 5, pointValue: 5, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], seasonalMonths: [3, 6, 9, 12], cashSettled: true },
+      { root: 'MBT', name: 'CME Micro Bitcoin', exchange: 'CME', yahoo: 'MBT=F', contractSize: 0.1, pointValue: 0.1, tickSize: 5, activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], seasonalMonths: [3, 6, 9, 12], cashSettled: true },
     ],
     etfs: ['IBIT', 'FBTC'],
     benchmarkEtf: 'IBIT',
     physical: { unit: 'BTC', kind: 'custody', instrumentId: 'BTC-SPOT' },
     cot: { report: 'tff', code: '133741', market: 'BTC' },
     basis: { spot: 'BTC-USD', rate: TBILL_13W, rateLabel: '13-week T-bill', settlement: 'CME CF Bitcoin Reference Rate' },
-    cotMarket: 'BTC',
     colorVar: '--asset-bitcoin',
   },
 }
@@ -378,8 +354,6 @@ export function assetOfSymbol(symbol: string): AssetId | undefined {
   return m ? assetOfRoot(m[1]) : undefined
 }
 
-/** @deprecated Use `assetOfSymbol`. */
-export const metalOfSymbol = assetOfSymbol
 
 /** Market/macro reference symbols (Yahoo). */
 export const MACRO_SYMBOLS = {

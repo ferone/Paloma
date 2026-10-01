@@ -1,4 +1,5 @@
 import { getDb } from './client.js'
+import { upgradeArtifact } from '../../shared/artifacts.js'
 
 // Small shared repositories used by several domains.
 
@@ -22,7 +23,8 @@ export function readArtifact<T>(name: string): { data: T; generatedAt: string } 
   const row = getDb().prepare('SELECT data, generated_at FROM artifacts WHERE name = ?').get(name) as
     | { data: string; generated_at: string }
     | undefined
-  return row ? { data: JSON.parse(row.data) as T, generatedAt: sqliteToIso(row.generated_at) } : null
+  // upgradeArtifact: one-release shim that renames pre-cleanup metal/byMetal keys in stored payloads.
+  return row ? { data: upgradeArtifact(name, JSON.parse(row.data) as T), generatedAt: sqliteToIso(row.generated_at) } : null
 }
 
 export function writeArtifact(name: string, data: unknown): void {

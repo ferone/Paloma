@@ -269,7 +269,7 @@ export function publishArtifact(): MlPredictionsLite {
     modelRunId: preds.length ? Math.max(...preds.map((p) => p.runId)) : null,
     predictions: preds.map((p) => ({
       instrumentId: p.instrumentId,
-      metal: p.metal,
+      asset: p.metal,
       horizonDays: p.horizonDays,
       pUp: p.pUp,
       expectedMove: p.expectedMove,

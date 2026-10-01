@@ -204,12 +204,12 @@ export default function InvestorReportPage() {
                   </li>
                 ))}
             </ul>
-            {s.byMetal.length > 0 && (
+            {s.byAsset.length > 0 && (
               <p className="mt-3 text-2xs text-muted">
                 Exposure by asset:{' '}
-                {s.byMetal
+                {s.byAsset
                   .filter((m) => m.weight > 0)
-                  .map((m) => `${assetLabel(m.metal)} ${fmtPct(m.weight, 0)}`)
+                  .map((m) => `${assetLabel(m.asset)} ${fmtPct(m.weight, 0)}`)
                   .join(' · ')}
               </p>
             )}

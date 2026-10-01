@@ -21,11 +21,9 @@ export function fakeAsset(over: Omit<Partial<AssetSpec>, "id"> & { id?: string }
     benchmarkEtf: "FAKE",
     physical: null,
     cot: null,
-    colorVar: "--metal-gold",
-    cotMarket: "",
+    colorVar: "--asset-gold",
     ...over,
     id,
-    metal: id,
   };
 }
 
@@ -41,5 +39,4 @@ export const FAKE_CASH: FuturesProduct = {
   activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
   seasonalMonths: [3, 6, 9, 12],
   cashSettled: true,
-  ozPerContract: 0,
 };

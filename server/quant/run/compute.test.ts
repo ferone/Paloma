@@ -12,8 +12,8 @@ const ml: MlPredictionsLite = {
   asOf: "2024-06-28",
   modelRunId: 1,
   predictions: [
-    { instrumentId: "GC.cal.0-1", metal: "gold", horizonDays: 20, pConverge: 0.7, expectedMove: 120, validationStatus: "passed", asOf: "2024-06-28" },
-    { instrumentId: "SI.cal.0-1", metal: "silver", horizonDays: 20, pConverge: 0.9, validationStatus: "failed", asOf: "2024-06-28" },
+    { instrumentId: "GC.cal.0-1", asset: "gold", horizonDays: 20, pConverge: 0.7, expectedMove: 120, validationStatus: "passed", asOf: "2024-06-28" },
+    { instrumentId: "SI.cal.0-1", asset: "silver", horizonDays: 20, pConverge: 0.9, validationStatus: "failed", asOf: "2024-06-28" },
   ],
 };
 

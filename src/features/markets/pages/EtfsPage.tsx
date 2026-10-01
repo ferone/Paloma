@@ -9,7 +9,7 @@ import { useEtfs } from '../hooks'
 const ret = (v: number | null) => <span className={signColor(v)}>{fmtPctSigned(v, 1)}</span>
 
 export default function EtfsPage() {
-  const { metal } = useSettings()
+  const { asset: metal } = useSettings()
   const q = useEtfs(metal)
   const spec = UNIVERSE[metal]
 

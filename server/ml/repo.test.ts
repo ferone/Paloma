@@ -111,7 +111,7 @@ describe('ml repo: run ingestion', () => {
     const art = readArtifact<MlPredictionsLite>(ARTIFACTS.mlPredictions)!.data
     expect(art.modelRunId).toBe(s)
     expect(art.predictions.map((p) => p.instrumentId)).toEqual(['GC.out', 'SI.out'])
-    expect(art.predictions[0]).toMatchObject({ metal: 'gold', horizonDays: 20, pUp: 0.6, validationStatus: 'failed', asOf: '2026-10-01' })
+    expect(art.predictions[0]).toMatchObject({ asset: 'gold', horizonDays: 20, pUp: 0.6, validationStatus: 'failed', asOf: '2026-10-01' })
   })
 
   it('asks for a retrain when the model is missing or stale', () => {

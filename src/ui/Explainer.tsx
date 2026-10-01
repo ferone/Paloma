@@ -41,15 +41,28 @@ export function HelpTip({ term, ask, children }: { term: ReactNode; ask?: string
     <span className="group relative inline-flex items-center">
       <span className="cursor-help border-b border-dotted border-muted">{term}</span>
       {assistant && askTerm && (
-        <button
-          type="button"
-          onClick={() => assistant.open(askPrompt(askTerm))}
+        // A span, not a <button>: HelpTip often sits inside sortable table-header buttons.
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            assistant.open(askPrompt(askTerm))
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation()
+              e.preventDefault()
+              assistant.open(askPrompt(askTerm))
+            }
+          }}
           aria-label={`Ask the assistant about ${askTerm}`}
           title="Ask about this"
-          className="no-print ml-0.5 rounded p-px text-faint opacity-0 transition-opacity hover:text-brand focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+          className="no-print ml-0.5 cursor-pointer rounded p-px text-faint opacity-0 transition-opacity hover:text-brand focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
         >
           <RiQuestionAnswerLine size={11} aria-hidden />
-        </button>
+        </span>
       )}
       <span
         role="tooltip"

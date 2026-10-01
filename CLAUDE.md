@@ -29,7 +29,9 @@ npm run db:migrate   # apply pending SQLite migrations (the server also does thi
   - FRED: `FRED_API_KEY`
   - CFTC (optional): `CFTC_APP_TOKEN`
 
-  Keys are read only through `server/lib/env.ts` and reach the client only as booleans (`GET /api/status`).
+  Keys are read only through `server/lib/env.ts` getters (order: key saved in Settings → `.env` → empty), so a key changed in Settings applies without a restart. Saved keys are AES-GCM encrypted in the `secrets` table (`server/lib/secrets.ts`) with the machine key `data/secret.key`. The client only sees booleans (`GET /api/status`) and `••••last4` (`GET /api/settings/secrets`).
+- **Admin PIN:** configuration writes (`/api/settings/*`, `PUT /api/ai/settings`, `/api/marketdata/schedule`, `/api/portfolio/settings`) go through `requireAdmin` (`server/lib/admin.ts`, guards registered in `server/routes/index.ts`). The axios interceptor in `src/api/admin.ts` turns a 401 `admin_required` into the `<AdminGate>` PIN dialog and replays the request. New config-write endpoints must be guarded the same way.
+- **Local-only:** the API binds `HOST` (default `127.0.0.1`); the Vite proxy targets `127.0.0.1`. CORS admits localhost origins only.
 - **Local data:** `data/` (SQLite DB, downloads, ML models) is gitignored.
 - **Node version:** 20 works, but `yahoo-finance2` warns that it wants Node 22 or newer.
 

@@ -34,7 +34,7 @@ export function databentoClient(): DatabentoClient | null {
 
 function requireClient(): DatabentoClient {
   const c = databentoClient()
-  if (!c) throw new Error('Databento is not configured: set DATABENTO_API_KEY in .env')
+  if (!c) throw new Error('Databento is not configured: add the key in Settings → API keys')
   return c
 }
 

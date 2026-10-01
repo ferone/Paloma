@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import type { NotConfigured } from '@shared/api'
 
 interface EmptyStateProps {
@@ -22,16 +23,24 @@ export function EmptyState({ title, children, action, compact }: EmptyStateProps
 /** Rendered when a server response is `{ status: 'not_configured' }`. */
 export function NotConfiguredState({ info }: { info: NotConfigured }) {
   return (
-    <EmptyState title="Integration not configured">
+    <EmptyState
+      title="Integration not configured"
+      action={
+        <Link to="/settings" className="text-sm text-brand underline underline-offset-2">
+          Open Settings → API keys
+        </Link>
+      }
+    >
       <p>{info.message}</p>
       <p className="mt-2">
-        Set {info.missing.map((m, i) => (
+        Add{' '}
+        {info.missing.map((m, i) => (
           <span key={m}>
             {i > 0 && ', '}
             <code className="num rounded bg-surface-2 px-1 py-px text-foreground">{m}</code>
           </span>
         ))}{' '}
-        in <code className="num">.env</code> and restart the server.
+        in Settings. It takes effect immediately, with no restart.
       </p>
     </EmptyState>
   )

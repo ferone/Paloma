@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import type { ComponentProps, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 
 const control =
   'w-full rounded-md border border-border-strong bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-brand focus:outline-none disabled:opacity-60'
@@ -14,7 +14,7 @@ export function Field({ label, hint, error, children, className }: { label: Reac
   )
 }
 
-export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...rest }: ComponentProps<'input'>) {
   return <input className={clsx(control, rest.type === 'number' && 'num', className)} {...rest} />
 }
 

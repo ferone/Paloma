@@ -62,7 +62,7 @@ function JobsTable() {
               {elsewhere.label}
             </Link>
           )
-        if (needsDatabento(j.name)) return <Chip tone="neutral" title="Set DATABENTO_API_KEY in .env">Not configured</Chip>
+        if (needsDatabento(j.name)) return <Chip tone="neutral" title="Add the Databento key in Settings → API keys">Not configured</Chip>
         return (
           <Button
             size="sm"

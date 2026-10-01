@@ -12,7 +12,9 @@ import { router as mlRouter } from '../ml/router.js'
 import { router as jobsRouter } from '../jobs/router.js'
 import { router as overviewRouter } from '../overview/router.js'
 import { router as marketsRouter } from '../markets/router.js'
+import { router as settingsRouter, adminRouter } from '../settings/router.js'
 import { integrationStatus } from '../lib/env.js'
+import { requireAdmin } from '../lib/admin.js'
 
 // Single place where every API surface is mounted. Each domain owns its router
 // file; adding a domain = one import + one line here.
@@ -22,6 +24,15 @@ export function mountRoutes(app: Express): void {
   app.use('/api/batch', batchRouter)
   app.use('/api/historical', historicalRouter)
   app.use('/api/gold-price', goldPriceRouter)
+
+  // Configuration writes owned by other domains need the admin PIN. Registered
+  // before the domain routers so those routers (and their tests) stay unaware.
+  app.put('/api/ai/settings', requireAdmin)
+  app.put('/api/marketdata/schedule', requireAdmin)
+  app.put('/api/portfolio/settings', requireAdmin)
+
+  app.use('/api/settings', settingsRouter)
+  app.use('/api/admin', adminRouter)
 
   // Domains
   app.use('/api/portfolio', portfolioRouter)

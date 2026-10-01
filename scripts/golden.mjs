@@ -56,7 +56,7 @@ async function startServer(dbPath, port) {
   })
   for (let i = 0; i < 60; i++) {
     try {
-      const r = await fetch(`http://localhost:${port}/api/health`)
+      const r = await fetch(`http://127.0.0.1:${port}/api/health`)
       if (r.ok) return child
     } catch {
       // not up yet
@@ -68,7 +68,7 @@ async function startServer(dbPath, port) {
 }
 
 async function grab(port, path) {
-  const r = await fetch(`http://localhost:${port}${path}`)
+  const r = await fetch(`http://127.0.0.1:${port}${path}`)
   return { status: r.status, body: await r.json().catch(() => null) }
 }
 

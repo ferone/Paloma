@@ -1,6 +1,8 @@
 // Cross-cutting API contracts shared by server and client.
 // Domain-specific contracts live in shared/<domain>.ts (owned by each domain).
 
+export type { KeySource } from './settings.js'
+
 /** Every server response that can be partial or unconfigured uses this envelope. */
 export interface Provenance {
   source: string
@@ -22,6 +24,7 @@ export interface IntegrationStatus {
   databento: boolean
   openrouter: boolean
   fred: boolean
+  cftc: boolean
   openrouterModel: string | null
   dbPath: string
   dbReady: boolean

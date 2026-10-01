@@ -4,6 +4,7 @@ import clsx from 'clsx'
 import { RiMenuLine, RiCloseLine } from 'react-icons/ri'
 import { NAV } from './nav'
 import { TopBar } from './TopBar'
+import { AdminGate } from './AdminGate'
 
 export function AppShell() {
   const [open, setOpen] = useState(false)
@@ -86,6 +87,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <AdminGate />
     </div>
   )
 }

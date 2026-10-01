@@ -19,7 +19,9 @@ export default defineConfig({
     proxy: {
       '/api': {
         // API_PORT lets parallel checkouts run their own API server.
-        target: `http://localhost:${process.env.API_PORT || 3001}`,
+        // 127.0.0.1, not localhost: Windows may resolve localhost to ::1 while the
+        // API listens on IPv4 loopback only.
+        target: `http://127.0.0.1:${process.env.API_PORT || 3001}`,
         changeOrigin: true,
       },
     },

@@ -24,7 +24,8 @@ function weekdays(from: string, to: string): string[] {
 }
 
 const BASE: Record<string, number> = { 'GC=F': 2000, 'BTC=F': 60_000, IBIT: 35 }
-const bars = (symbol: string) => weekdays('2023-12-01', '2024-03-29').map((date, i) => ({ date, close: (BASE[symbol] ?? 50) * (1 + i * 0.001) }))
+// Ends Thu 28 Mar 2024: the 29th is Good Friday, a CME holiday, so it is not a NAV date.
+const bars = (symbol: string) => weekdays('2023-11-30', '2024-03-28').map((date, i) => ({ date, close: (BASE[symbol] ?? 50) * (1 + i * 0.001) }))
 const LAST_BTC = bars('BTC=F').at(-1)!.close
 
 function deferred() {
@@ -120,7 +121,7 @@ describe('portfolio marks after closes land', () => {
     setPriceSource({ history: async (s) => bars(s) })
     buy('BTC-SPOT', '2024-01-03', 2, 100_000)
     const c = await getComputed()
-    upsertDailyBars([{ symbol: 'SPY', date: '2024-03-29', close: 500, source: 'yahoo' }])
+    upsertDailyBars([{ symbol: 'SPY', date: '2024-03-28', close: 500, source: 'yahoo' }])
     emitPricesWritten(['SPY'])
     expect(await getComputed()).toBe(c)
     invalidate()

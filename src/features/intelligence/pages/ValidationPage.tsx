@@ -1,4 +1,4 @@
-import type { MlFold, MlGate, MlRunDetail } from '@shared/ml'
+import { familywiseFalsePassRate, ML_ALPHA_ADJUSTED, ML_GATE, ML_TEST_COUNT, type MlFold, type MlGate, type MlRunDetail } from '@shared/ml'
 import { fmtNum, fmtPct } from '../../../design/format'
 import { PALETTE } from '../../../design/tokens'
 import { Chip, DataTable, Explainer, HelpTip, Panel, Stat, type Column } from '../../../ui'
@@ -7,9 +7,48 @@ import { ValidationChip } from '../components/common'
 import { runProvenance } from '../components/provenance'
 import { RunScope } from '../components/RunScope'
 
+const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
+const countWord = (n: number) => WORDS[n] ?? String(n)
+/** p-values and thresholds below 0.01 get five decimals (0.00832 vs 0.00833), otherwise three. */
+const fmtP = (v: number | null | undefined) => (v != null && v < 0.01 ? fmtNum(v, 5) : fmtNum(v, 3))
+
+/** The permutation threshold a run was gated with (runs before the correction used the raw 0.05). */
+function gateAlpha(gate: MlGate): number {
+  return gate.multipleTesting?.alphaAdjusted ?? ML_GATE.pValue
+}
+
+function MultipleTestingNote({ gate, p }: { gate: MlGate; p: number | null }) {
+  const mt = gate.multipleTesting
+  if (!mt) {
+    return (
+      <p className="mt-3 text-2xs text-muted">
+        This run predates the multiple-testing correction and was gated at p &lt; {fmtNum(ML_GATE.pValue, 2)}. Retrain to apply the
+        corrected threshold ({fmtP(ML_ALPHA_ADJUSTED)}).
+      </p>
+    )
+  }
+  if (mt.tests <= 1) return null
+  const nominalOnly = p != null && p < mt.alpha && p >= mt.alphaAdjusted
+  return (
+    <div className="mt-3 space-y-2 text-2xs text-muted">
+      <p>
+        The p-value threshold is Bonferroni-corrected: {fmtNum(mt.alpha, 2)} / {mt.tests} markets ={' '}
+        <span className="num text-foreground">{fmtP(mt.alphaAdjusted)}</span>.
+      </p>
+      {nominalOnly && (
+        <p className="rounded-sm border border-border bg-surface-2 px-3 py-2 text-xs text-foreground">
+          Nominally significant (p = <span className="num">{fmtP(p)}</span> &lt; {fmtNum(mt.alpha, 2)}), but not after correcting for
+          testing {countWord(mt.tests)} markets, so this model is <strong>not validated</strong>. A result this strong turns up by luck
+          in one of {countWord(mt.tests)} markets far too often to act on.
+        </p>
+      )}
+    </div>
+  )
+}
+
 function GatePanel({ run, gate }: { run: MlRunDetail; gate: MlGate }) {
   const fmt = (id: string, v: number | null) =>
-    v == null ? '—' : id === 'hit' ? fmtPct(v, 1) : id === 'folds' ? String(v) : fmtNum(v, 3)
+    v == null ? '—' : id === 'hit' ? fmtPct(v, 1) : id === 'folds' ? String(v) : id === 'pValue' ? fmtP(v) : fmtNum(v, 3)
   const rows = gate.checks
   const columns: Column<(typeof rows)[number]>[] = [
     { key: 'label', header: 'Check', cell: (c) => c.label },
@@ -20,7 +59,7 @@ function GatePanel({ run, gate }: { run: MlRunDetail; gate: MlGate }) {
     {
       key: 'threshold', header: 'Needs', numeric: true,
       cell: (c) =>
-        c.id === 'baseline' ? '> baseline' : c.id === 'pValue' ? `< ${fmt('p', c.threshold)}` : `≥ ${fmt(c.id, c.threshold)}`,
+        c.id === 'baseline' ? '> baseline' : c.id === 'pValue' ? `< ${fmt('pValue', c.threshold)}` : `≥ ${fmt(c.id, c.threshold)}`,
     },
     { key: 'ok', header: 'Result', cell: (c) => <Chip tone={c.ok ? 'strong' : 'avoid'}>{c.ok ? 'Pass' : 'Fail'}</Chip> },
   ]
@@ -37,6 +76,7 @@ function GatePanel({ run, gate }: { run: MlRunDetail; gate: MlGate }) {
         </p>
       )}
       <DataTable dense columns={columns} rows={rows} rowKey={(c) => c.id} />
+      <MultipleTestingNote gate={gate} p={run.metrics!.permutation?.pValue ?? null} />
     </Panel>
   )
 }
@@ -48,6 +88,7 @@ export default function ValidationPage() {
         const m = run.metrics!
         const s = m.summary
         const perm = m.permutation
+        const alpha = gateAlpha(m.gate)
         const foldCols: Column<MlFold>[] = [
           { key: 'y', header: 'Test year', cell: (f) => <span className="num">{f.testYear}</span>, sortValue: (f) => f.testYear },
           { key: 'n', header: 'Train / test', numeric: true, cell: (f) => `${f.nTrain.toLocaleString('en-US')} / ${f.nTest}` },
@@ -94,15 +135,17 @@ export default function ValidationPage() {
             <Panel title="Permutation test" eyebrow={perm ? `Holdout ${perm.holdoutYear}` : undefined}>
               {perm ? (
                 <>
-                  <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
                     <Stat size="sm" label="Real AUC" value={fmtNum(perm.realAuc, 3)} />
                     <Stat size="sm" label="Null mean" value={fmtNum(perm.nullMean, 3)} />
                     <Stat size="sm" label="Null 95th pct" value={fmtNum(perm.null95, 3)} />
-                    <Stat size="sm" label="p-value" value={fmtNum(perm.pValue, 3)} hint={perm.pValue < 0.05 ? 'significant' : 'not significant'} />
+                    <Stat size="sm" label="Raw p-value" value={fmtP(perm.pValue)} hint={perm.pValue < alpha ? 'significant after correction' : 'not significant after correction'} />
+                    <Stat size="sm" label="Threshold" value={fmtP(alpha)} hint={m.gate.multipleTesting ? `0.05 / ${m.gate.multipleTesting.tests} markets` : 'uncorrected (older run)'} />
                   </div>
                   <PermutationHistogram nullAucs={perm.nullAucs} realAuc={perm.realAuc} null95={perm.null95} />
                   <p className="mt-2 text-2xs text-muted">
-                    {perm.nPerm} refits on shuffled labels · {perm.method}. Uses a lighter model for both real and shuffled fits.
+                    {perm.nPerm} refits on shuffled labels · {perm.method}. Uses a lighter model for both real and shuffled fits. The
+                    smallest p this test can report is 1 / ({perm.nPerm} + 1) = {fmtP(1 / (perm.nPerm + 1))}.
                   </p>
                 </>
               ) : (
@@ -121,9 +164,16 @@ export default function ValidationPage() {
               </p>
               <p>
                 The permutation test refits the model on training labels shuffled in 20-day blocks, which destroys any real relationship
-                but keeps the overlap between neighbouring labels. If the real model does not clearly beat these shuffled models
-                (p &lt; 0.05), its score in the holdout year could be luck. One year of 20-day labels holds only about a dozen independent
-                outcomes, so this test is strict by design.
+                but keeps the overlap between neighbouring labels. If the real model does not clearly beat these shuffled models, its score
+                in the holdout year could be luck. One year of 20-day labels holds only about a dozen independent outcomes, so this test is
+                strict by design.
+              </p>
+              <p>
+                <HelpTip term="Why the threshold is not 0.05">Bonferroni correction for multiple testing.</HelpTip> We test{' '}
+                {countWord(ML_TEST_COUNT)} markets, so a 1-in-20 fluke would be expected to pass about{' '}
+                {fmtPct(familywiseFalsePassRate(ML_TEST_COUNT), 0)} of the time across them, even if none of the models had any skill. To
+                keep that chance near 5%, each model must reach p &lt; 0.05 / {ML_TEST_COUNT} = {fmtP(ML_ALPHA_ADJUSTED)}. A model with p
+                between that and 0.05 is reported as failed. The raw p is still shown so you can see how close it came.
               </p>
             </Explainer>
           </div>

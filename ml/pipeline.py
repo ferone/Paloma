@@ -20,12 +20,20 @@ PERMUTATION TEST (most recent test year)
   block-permuted training labels (blocks of H rows keep the overlap structure,
   so the null is not artificially weak). p = (#null >= real + 1) / (N + 1).
 
+MULTIPLE TESTING (Bonferroni)
+  The server trains one model per market in the universe and tests each, so
+  the per-model threshold is alpha / m (m = --n-tests, the number of markets;
+  0.05 / 6 = 0.0083). Without it, with six markets and no real skill anywhere,
+  the chance that at least one passes by luck is 1 - 0.95^6 = 26%. The number
+  of permutations defaults to enough that the smallest attainable p,
+  1 / (N + 1), sits well below the adjusted threshold (N >= 4 / alpha_adj).
+
 GATE
-  passed iff p < 0.05 AND mean fold AUC >= 0.55 AND mean hit >= 0.52 AND the
-  model's mean AUC beats the logistic baseline; untested with < 3 test years.
+  passed iff p < 0.05 / m AND mean fold AUC >= 0.55 AND mean hit >= 0.52 AND
+  the model's mean AUC beats the baseline; untested with < 3 test years.
 
 USAGE
-  python ml/pipeline.py train --metal gold [--data-dir data/ml] [--n-perm 100]
+  python ml/pipeline.py train --asset gold [--data-dir data/ml] [--n-tests 6] [--n-perm N]
   python ml/pipeline.py infer --metal gold [--data-dir data/ml]
   python ml/pipeline.py version
 
@@ -65,9 +73,20 @@ SEED = 42
 MIN_TRAIN_YEARS = 5
 MIN_TEST_ROWS = 60
 MIN_TEST_YEARS = 3
-N_PERM = 100
+N_PERM_MIN = 100
 GATE = {"p": 0.05, "auc": 0.55, "hit": 0.52}
 CAL_BINS = 10
+
+
+def adjusted_alpha(n_tests: int) -> float:
+    """Bonferroni: the per-model threshold when `n_tests` markets are tested."""
+    return GATE["p"] / max(1, int(n_tests))
+
+
+def default_n_perm(n_tests: int) -> int:
+    """Enough permutations that the smallest attainable p, 1 / (N + 1), is at
+    most a quarter of the adjusted threshold (and never fewer than N_PERM_MIN)."""
+    return max(N_PERM_MIN, math.ceil(4 / adjusted_alpha(n_tests)))
 
 
 def progress(frac: float, msg: str) -> None:
@@ -216,7 +235,7 @@ def _perm_auc(Xtr, yp, Xte, yte, fast) -> float:
     return float(roc_auc_score(yte, c.predict_proba(Xte)[:, 1]))
 
 
-def permutation_test(data: pd.DataFrame, feats: list[str], n_perm: int = N_PERM, fast: bool = False) -> dict | None:
+def permutation_test(data: pd.DataFrame, feats: list[str], n_perm: int = N_PERM_MIN, fast: bool = False) -> dict | None:
     years = test_years(data)
     if not years:
         return None
@@ -244,42 +263,48 @@ def permutation_test(data: pd.DataFrame, feats: list[str], n_perm: int = N_PERM,
         "nullMean": r4(arr.mean()),
         "null95": r4(np.quantile(arr, 0.95)),
         "nPerm": int(n_perm),
-        "pValue": r4(p_value),
+        "pValue": round(p_value, 6),  # 6 dp: near the adjusted threshold 4 dp would round p onto it
         "method": f"block permutation of training labels (blocks of {H} rows)",
     }
 
 
 # ── gate ─────────────────────────────────────────────────────────────────────
 
-def gate(summary: dict, perm: dict | None) -> dict:
+def gate(summary: dict, perm: dict | None, n_tests: int = 1) -> dict:
     folds = summary["folds"]
     auc, hit, bauc = summary["auc"], summary["hit"], summary["baselineAuc"]
     p = perm["pValue"] if perm else None
+    alpha_adj = adjusted_alpha(n_tests)
+    mt = {"method": "bonferroni", "tests": max(1, int(n_tests)), "alpha": GATE["p"], "alphaAdjusted": round(alpha_adj, 6)}
+    p_label = f"Permutation p-value (Bonferroni, {mt['tests']} markets)" if mt["tests"] > 1 else "Permutation p-value"
     checks = [
         {"id": "folds", "label": "Out-of-sample test years", "value": folds, "threshold": MIN_TEST_YEARS, "ok": folds >= MIN_TEST_YEARS},
-        {"id": "pValue", "label": "Permutation p-value", "value": p, "threshold": GATE["p"], "ok": p is not None and p < GATE["p"]},
+        {"id": "pValue", "label": p_label, "value": p, "threshold": mt["alphaAdjusted"], "ok": p is not None and p < alpha_adj},
         {"id": "auc", "label": "Mean walk-forward AUC", "value": auc, "threshold": GATE["auc"], "ok": auc is not None and auc >= GATE["auc"]},
         {"id": "hit", "label": "Mean hit rate", "value": hit, "threshold": GATE["hit"], "ok": hit is not None and hit >= GATE["hit"]},
         {"id": "baseline", "label": "Beats logistic baseline (AUC)", "value": bauc, "threshold": None,
          "ok": auc is not None and bauc is not None and auc > bauc},
     ]
     if folds < MIN_TEST_YEARS:
-        return {"status": "untested", "reasons": [f"only {folds} test year(s) < {MIN_TEST_YEARS}"], "checks": checks}
+        return {"status": "untested", "reasons": [f"only {folds} test year(s) < {MIN_TEST_YEARS}"], "checks": checks, "multipleTesting": mt}
     if perm is None:
-        return {"status": "untested", "reasons": ["permutation test could not run"], "checks": checks}
+        return {"status": "untested", "reasons": ["permutation test could not run"], "checks": checks, "multipleTesting": mt}
     reasons = []
     for c in checks:
         if c["ok"]:
             continue
         if c["id"] == "pValue":
-            reasons.append(f"p {p:.3f} ≥ {GATE['p']:.2f}")
+            if mt["tests"] > 1:
+                reasons.append(f"p {p:.5f} ≥ {alpha_adj:.5f} (0.05 / {mt['tests']} markets, Bonferroni)")
+            else:
+                reasons.append(f"p {p:.3f} ≥ {GATE['p']:.2f}")
         elif c["id"] == "auc":
             reasons.append(f"AUC {auc:.3f} < {GATE['auc']:.2f}" if auc is not None else "AUC undefined")
         elif c["id"] == "hit":
             reasons.append(f"hit {hit:.1%} < {GATE['hit']:.0%}" if hit is not None else "hit rate undefined")
         elif c["id"] == "baseline":
             reasons.append(f"AUC {auc:.3f} ≤ baseline {bauc:.3f}" if auc is not None and bauc is not None else "baseline comparison undefined")
-    return {"status": "passed" if not reasons else "failed", "reasons": reasons, "checks": checks}
+    return {"status": "passed" if not reasons else "failed", "reasons": reasons, "checks": checks, "multipleTesting": mt}
 
 
 # ── calibration, importance, bands ──────────────────────────────────────────
@@ -358,8 +383,10 @@ def model_path(metal: str, data_dir: Path) -> Path:
 
 # ── commands ─────────────────────────────────────────────────────────────────
 
-def do_train(metal: str, data_dir: Path, n_perm: int = N_PERM, fast: bool = False) -> dict:
+def do_train(metal: str, data_dir: Path, n_perm: int | None = None, fast: bool = False, n_tests: int = 1) -> dict:
     t0 = time.time()
+    if n_perm is None:
+        n_perm = default_n_perm(n_tests)
     progress(0.02, f"Loading {metal} feature matrix")
     df, meta = load_matrix(metal, data_dir)
     feats, availability = select_features(df, meta)
@@ -375,7 +402,7 @@ def do_train(metal: str, data_dir: Path, n_perm: int = N_PERM, fast: bool = Fals
     summary = summarize(folds, oos)
     progress(0.56, f"Permutation test ({n_perm} block shuffles)")
     perm = permutation_test(data, feats, n_perm, fast)
-    g = gate(summary, perm)
+    g = gate(summary, perm, n_tests)
     progress(0.82, "Permutation importance on the latest fold")
     imp = importance(last, feats, fast)
     cal = calibration_bins(oos["p"].to_numpy(), oos["y"].to_numpy()) if len(oos) else []
@@ -409,7 +436,7 @@ def do_train(metal: str, data_dir: Path, n_perm: int = N_PERM, fast: bool = Fals
     progress(1.0, f"{metal}: {g['status'].upper()} (AUC {summary['auc']}, p {perm['pValue'] if perm else None})")
     return {
         "kind": "train", "metal": metal, "horizon": H, "trainedAt": trained_at,
-        "params": {"horizon": H, "nPerm": n_perm, "minTrainYears": MIN_TRAIN_YEARS,
+        "params": {"horizon": H, "nPerm": n_perm, "nTests": max(1, int(n_tests)), "minTrainYears": MIN_TRAIN_YEARS,
                    "model": "GradientBoostingClassifier (150 trees, depth 3, lr 0.05) + sigmoid calibration (cv=3); GradientBoostingRegressor for the move",
                    "baseline": "StandardScaler + LogisticRegression (L2, C=0.1)"},
         "featuresUsed": feats, "availability": availability, "metrics": metrics,
@@ -448,7 +475,8 @@ def main(argv: list[str] | None = None) -> int:
     # only names files (features_<id>.csv, model_<id>.joblib), so keep it path-safe.
     ap.add_argument("--metal", "--asset", dest="metal", type=asset_id)
     ap.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
-    ap.add_argument("--n-perm", type=int, default=N_PERM)
+    ap.add_argument("--n-perm", type=int, default=None, help="default: enough to resolve the adjusted alpha")
+    ap.add_argument("--n-tests", type=int, default=1, help="markets tested (Bonferroni family size)")
     ap.add_argument("--fast", action="store_true", help="smaller models (tests only)")
     a = ap.parse_args(argv)
     if a.command == "version":
@@ -459,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--metal/--asset is required")
     data_dir = Path(a.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    result = do_train(a.metal, data_dir, a.n_perm, a.fast) if a.command == "train" else do_infer(a.metal, data_dir)
+    result = do_train(a.metal, data_dir, a.n_perm, a.fast, a.n_tests) if a.command == "train" else do_infer(a.metal, data_dir)
     out = data_dir / f"{a.command}_{a.metal}.json"
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"RESULT {out}", flush=True)

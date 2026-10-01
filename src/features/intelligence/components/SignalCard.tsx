@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { ML_GATE, type MlPrediction } from '@shared/ml'
+import { ML_ALPHA_ADJUSTED, ML_GATE, ML_TEST_COUNT, type MlPrediction } from '@shared/ml'
 import { UNIVERSE, type AssetId } from '@shared/universe'
 import { PALETTE, signColor } from '../../../design/tokens'
 import { fmtDate, fmtNum, fmtPct, fmtPctSigned } from '../../../design/format'
@@ -98,8 +98,8 @@ export function SignalCard({ metal, prediction }: { metal: AssetId; prediction: 
 
       <p className="mt-4 text-2xs leading-relaxed text-faint">
         A statistical estimate from price, cross-asset and seasonal features — not advice. It passes only if walk-forward AUC ≥{' '}
-        {fmtNum(ML_GATE.auc, 2)}, hit rate ≥ {fmtPct(ML_GATE.hit, 0)}, permutation p &lt; {fmtNum(ML_GATE.pValue, 2)} and it beats a
-        logistic baseline. Past validation does not guarantee future accuracy.
+        {fmtNum(ML_GATE.auc, 2)}, hit rate ≥ {fmtPct(ML_GATE.hit, 0)}, permutation p &lt; {fmtNum(ML_ALPHA_ADJUSTED, 4)} ({fmtNum(ML_GATE.pValue, 2)} / {ML_TEST_COUNT} markets
+        tested, Bonferroni) and it beats a simpler baseline. Past validation does not guarantee future accuracy.
       </p>
     </Panel>
   )

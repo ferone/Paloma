@@ -7,6 +7,11 @@ export const ML_HORIZON = 20
 
 /** Gate thresholds (see `MlGate`). */
 export const ML_GATE = {
+  /**
+   * Family-wise significance level across ALL trained markets. The per-model
+   * permutation p must be below the Bonferroni-adjusted level
+   * `ML_ALPHA_ADJUSTED` (= pValue / ML_TEST_COUNT), not below this.
+   */
   pValue: 0.05,
   auc: 0.55,
   hit: 0.52,
@@ -15,6 +20,20 @@ export const ML_GATE = {
   /** Minimum calendar years of training history before a year can be a test year. */
   minTrainYears: 5,
 } as const
+
+/**
+ * Number of hypotheses tested by the ML gate: one per trained market, i.e.
+ * every asset in the universe (server/ml trains them all). Bonferroni divides
+ * the family-wise α by this so that the chance of ANY market passing by luck
+ * stays at about α, not 1 − (1 − α)^m (≈ 26% for six markets).
+ */
+export const ML_TEST_COUNT = ASSETS.length
+
+/** Per-model permutation-p threshold after the Bonferroni correction. */
+export const ML_ALPHA_ADJUSTED = ML_GATE.pValue / ML_TEST_COUNT
+
+/** Chance that at least one of `m` independent null models passes at level `alpha`. */
+export const familywiseFalsePassRate = (m: number = ML_TEST_COUNT, alpha: number = ML_GATE.pValue): number => 1 - (1 - alpha) ** m
 
 export type ValidationStatus = 'passed' | 'failed' | 'untested'
 
@@ -162,6 +181,22 @@ export interface MlGate {
   /** Human-readable reasons, e.g. "AUC 0.53 < 0.55". Empty when passed. */
   reasons: string[]
   checks: { id: 'pValue' | 'auc' | 'hit' | 'baseline' | 'folds'; label: string; value: number | null; threshold: number | null; ok: boolean }[]
+  /**
+   * Multiple-testing correction applied to the permutation p (the pValue
+   * check's threshold is `alphaAdjusted`). Absent on runs trained before the
+   * correction existed, which were gated at the raw 0.05.
+   */
+  multipleTesting?: MlMultipleTesting
+}
+
+export interface MlMultipleTesting {
+  method: 'bonferroni'
+  /** Markets tested (hypotheses in the family). */
+  tests: number
+  /** Family-wise α. */
+  alpha: number
+  /** α / tests: the per-model threshold the gate uses. */
+  alphaAdjusted: number
 }
 
 export interface MlSummaryMetrics {
@@ -225,6 +260,8 @@ export interface MlRunSummary {
 export interface MlRunParams {
   horizon: number
   nPerm: number
+  /** Bonferroni family size the run was gated with (absent on older runs). */
+  nTests?: number
   minTrainYears: number
   model: string
   baseline: string

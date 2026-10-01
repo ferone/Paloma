@@ -78,6 +78,23 @@ def test_gate_logic():
     assert pl.gate(_summary(), None)["status"] == "untested"
 
 
+def test_gate_bonferroni_over_markets():
+    # p = 0.0099 passes alone but not when six markets are tested (0.05 / 6 = 0.0083).
+    perm = {"pValue": 0.0099}
+    assert pl.gate(_summary(), perm, n_tests=1)["status"] == "passed"
+    g = pl.gate(_summary(), perm, n_tests=6)
+    assert g["status"] == "failed"
+    assert g["multipleTesting"] == {"method": "bonferroni", "tests": 6, "alpha": 0.05, "alphaAdjusted": 0.008333}
+    check = next(c for c in g["checks"] if c["id"] == "pValue")
+    assert check["threshold"] == 0.008333 and not check["ok"]
+    assert any("Bonferroni" in r for r in g["reasons"])
+    assert pl.gate(_summary(), {"pValue": 0.002}, n_tests=6)["status"] == "passed"
+    # the permutation count can resolve the adjusted threshold: 1 / (N + 1) <= alpha_adj / 4
+    n = pl.default_n_perm(6)
+    assert 1 / (n + 1) <= pl.adjusted_alpha(6) / 4
+    assert pl.default_n_perm(1) == pl.N_PERM_MIN
+
+
 def test_calibration_bins_and_wilson():
     p = np.array([0.05, 0.15, 0.55, 0.56, 0.95])
     y = np.array([0, 0, 1, 0, 1])

@@ -3,6 +3,8 @@
 // errors, and extraction of web citations returned by `:online` models.
 // chat() NEVER throws: it resolves to null (and reports why via onError).
 
+import { createSseParser } from '../../shared/assistant.js'
+
 export const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 export const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models'
 
@@ -137,6 +139,149 @@ export async function chat(messages: ChatMessage[], opts: ChatOpts): Promise<Cha
   }
   report(lastError)
   return null
+}
+
+// ── Streaming ──────────────────────────────────────────────────────────────
+
+export type StreamEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'done'; model: string; tokens: number | null; costUsd: number | null; finishReason: string | null }
+  | { type: 'error'; message: string; aborted?: boolean }
+
+export interface StreamOpts extends Omit<ChatOpts, 'onError'> {
+  /** Aborts the upstream request (e.g. the browser disconnected). */
+  signal?: AbortSignal
+}
+
+interface StreamChunk {
+  model?: string
+  choices?: { delta?: { content?: string | null }; finish_reason?: string | null }[]
+  usage?: { total_tokens?: number; cost?: number }
+  error?: { message?: string }
+}
+
+/**
+ * Streaming chat completion (stream: true, usage included in the final chunk).
+ * Yields content deltas, then exactly one `done` or `error`. NEVER throws.
+ * Retries (429/5xx/network) happen only before the first byte of the body.
+ */
+export async function* chatStream(messages: ChatMessage[], opts: StreamOpts): AsyncGenerator<StreamEvent> {
+  const f = opts.fetchImpl ?? fetch
+  if (!opts.apiKey) {
+    yield { type: 'error', message: 'OPENROUTER_API_KEY is not set' }
+    return
+  }
+  const online = /:online$/i.test(opts.model)
+  const payload = {
+    model: online ? opts.model.replace(/:online$/i, '') : opts.model,
+    messages,
+    temperature: opts.temperature ?? 0.2,
+    max_tokens: opts.maxTokens ?? 1500,
+    stream: true,
+    usage: { include: true },
+    ...(online ? { plugins: [{ id: 'web', max_results: opts.webResults ?? 3 }] } : {}),
+  }
+  const aborted = () => opts.signal?.aborted === true
+  const attempts = 1 + (opts.retries ?? 1)
+  let res: Response | null = null
+  let lastError = 'unknown error'
+  for (let attempt = 0; attempt < attempts && !res; attempt++) {
+    if (attempt > 0) await sleep((opts.backoffMs ?? 1500) * 2 ** (attempt - 1))
+    if (aborted()) {
+      yield { type: 'error', message: 'aborted', aborted: true }
+      return
+    }
+    try {
+      const timeout = AbortSignal.timeout(opts.timeoutMs ?? 120_000)
+      const r = await f(OPENROUTER_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${opts.apiKey}`,
+          'HTTP-Referer': 'http://localhost/gold-investment-dashboard',
+          'X-Title': 'Real Assets Dashboard',
+        },
+        body: JSON.stringify(payload),
+        signal: opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout,
+      })
+      if (!r.ok || !r.body) {
+        const body = (await r.text().catch(() => '')).slice(0, 300)
+        lastError = `OpenRouter HTTP ${r.status}${body ? `: ${body}` : ''}`
+        if (r.status === 429 || r.status >= 500) continue
+        break
+      }
+      res = r
+    } catch (err) {
+      if (aborted()) {
+        yield { type: 'error', message: 'aborted', aborted: true }
+        return
+      }
+      lastError = err instanceof Error ? `${err.name === 'TimeoutError' ? 'timeout: ' : ''}${err.message}` : String(err)
+    }
+  }
+  if (!res?.body) {
+    yield { type: 'error', message: lastError }
+    return
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  const parser = createSseParser()
+  let model = opts.model
+  let tokens: number | null = null
+  let costUsd: number | null = null
+  let finishReason: string | null = null
+  let sawText = false
+  let finished = false
+  const handle = (data: string): StreamEvent | 'end' | null => {
+    if (data.trim() === '[DONE]') return 'end'
+    let chunk: StreamChunk
+    try {
+      chunk = JSON.parse(data) as StreamChunk
+    } catch {
+      return null
+    }
+    if (chunk.error) return { type: 'error', message: `OpenRouter: ${chunk.error.message ?? 'stream error'}` }
+    if (chunk.model) model = chunk.model
+    if (chunk.usage) {
+      if (typeof chunk.usage.total_tokens === 'number') tokens = chunk.usage.total_tokens
+      if (typeof chunk.usage.cost === 'number') costUsd = chunk.usage.cost
+    }
+    const c = chunk.choices?.[0]
+    if (c?.finish_reason) finishReason = c.finish_reason
+    const text = c?.delta?.content
+    if (typeof text === 'string' && text !== '') {
+      sawText = true
+      return { type: 'delta', text }
+    }
+    return null
+  }
+  try {
+    while (!finished) {
+      const { value, done } = await reader.read()
+      const events = done ? parser.flush() : parser.feed(decoder.decode(value, { stream: true }))
+      for (const ev of events) {
+        const out = handle(ev.data)
+        if (out === 'end') finished = true
+        else if (out?.type === 'error') {
+          yield out
+          return
+        } else if (out) yield out
+      }
+      if (done) break
+    }
+  } catch (err) {
+    if (aborted()) yield { type: 'error', message: 'aborted', aborted: true }
+    else yield { type: 'error', message: err instanceof Error ? err.message : String(err) }
+    return
+  } finally {
+    reader.cancel().catch(() => {})
+  }
+  if (!sawText) {
+    yield { type: 'error', message: 'OpenRouter returned an empty completion' }
+    return
+  }
+  yield { type: 'done', model, tokens, costUsd, finishReason }
 }
 
 /** Parse a fenced or bare JSON object out of an LLM reply (tolerant). Null on failure. PURE. */

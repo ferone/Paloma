@@ -50,8 +50,10 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-icons": "^5.5.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.13.0",
     "recharts": "^3.7.0",
+    "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.1.18",
     "yahoo-finance2": "^3.13.0",
     "zod": "^4.6.5"

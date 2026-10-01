@@ -8,6 +8,7 @@ import { Button, Chip, Field, Input, PageHeader, Panel } from '../../ui'
 import { ModelPicker } from '../macro/ai/ModelPicker'
 import { ApiKeysPanel } from './ApiKeysPanel'
 import { SchedulerPanel } from './SchedulerPanel'
+import { TickerSettingsPanel } from './TickerSettingsPanel'
 import { useAdminStatus, useGeneralSettings, useLock, useSaveGeneral, useSecrets } from './api'
 
 export default function SettingsPage() {
@@ -37,6 +38,7 @@ export default function SettingsPage() {
           </Panel>
         </div>
         <SchedulerPanel />
+        <TickerSettingsPanel />
         <AdminPanel />
         <StoragePanel />
       </div>

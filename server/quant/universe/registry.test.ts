@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { futuresRoots } from "../../../shared/universe.js";
 import { REGISTRY, allSymbols, allRoots, getInstrument } from "./registry.js";
 import { SPECS } from "./specs.js";
 
@@ -41,6 +42,7 @@ describe("registry — gold and silver, symmetric", () => {
   it("allSymbols has no duplicates; roots are the four COMEX products", () => {
     const symbols = allSymbols();
     expect(new Set(symbols).size).toBe(symbols.length);
-    expect(allRoots().sort()).toEqual(["BTC", "GC", "MBT", "MGC", "SI", "SIL"]);
+    expect(allRoots().sort()).toEqual([...futuresRoots()].sort());
+    expect(allRoots()).toEqual(expect.arrayContaining(["GC", "MGC", "SI", "SIL"]));
   });
 });

@@ -127,7 +127,8 @@ async function capture(label) {
 }
 
 // Fields that legitimately differ between runs (clock time, run ids).
-const VOLATILE = new Set(['generatedAt', 'timestamp', 'computedAt', 'startedAt', 'finishedAt', 'durationMs', 'runId', 'id', 'createdAt', 'ageDays'])
+// observations: counts over trailing windows measured from today (shift when the date rolls).
+const VOLATILE = new Set(['generatedAt', 'timestamp', 'computedAt', 'startedAt', 'finishedAt', 'durationMs', 'runId', 'id', 'createdAt', 'ageDays', 'observations'])
 // Renames the refactor is allowed to make: old key -> new key.
 const RENAMES = {
   ounces: 'exposureUnits',

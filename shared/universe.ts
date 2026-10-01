@@ -3,8 +3,8 @@
 // instruments, units, sessions and data sources from here. Adding an asset is
 // a data change: extend `AssetId`, add a `UNIVERSE` entry, done.
 
-export type AssetId = 'gold' | 'silver' | 'btc'
-export const ASSETS: readonly AssetId[] = ['gold', 'silver', 'btc'] as const
+export type AssetId = 'gold' | 'silver' | 'copper' | 'btc'
+export const ASSETS: readonly AssetId[] = ['gold', 'silver', 'copper', 'btc'] as const
 
 /** @deprecated Use `AssetId`. Kept while domains migrate. */
 export type Metal = AssetId
@@ -174,6 +174,30 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     cotMarket: 'SILVER',
     colorVar: '--metal-silver',
   },
+  copper: {
+    id: 'copper',
+    metal: 'copper',
+    label: 'Copper',
+    short: 'Cu',
+    assetClass: 'industrial',
+    spot: 'HG=F',
+    priceUnit: 'lb',
+    unitLabel: '$/lb',
+    displayDecimals: 4,
+    session: 'globex',
+    futures: [
+      // COMEX copper: 25,000 lb, every month listed; liquidity sits in the quarterly cycle H/K/N/U/Z.
+      { root: 'HG', name: 'COMEX Copper', exchange: 'COMEX', yahoo: 'HG=F', contractSize: 25000, pointValue: 25000, tickSize: 0.0005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false, ozPerContract: 0 },
+      { root: 'MHG', name: 'COMEX Micro Copper', exchange: 'COMEX', yahoo: 'MHG=F', contractSize: 2500, pointValue: 2500, tickSize: 0.0005, activeMonths: [3, 5, 7, 9, 12], cashSettled: false, ozPerContract: 0 },
+    ],
+    etfs: ['CPER'],
+    miners: 'COPX',
+    benchmarkEtf: 'CPER',
+    physical: null,
+    cot: { report: 'disagg', code: '085692', market: 'COPPER' },
+    cotMarket: 'COPPER',
+    colorVar: '--asset-copper',
+  },
   btc: {
     id: 'btc',
     metal: 'btc',
@@ -259,6 +283,8 @@ export interface RelativeValuePair {
 
 export const RELATIVE_VALUE_PAIRS: RelativeValuePair[] = [
   { id: 'GS', key: 'gold-silver', label: 'Gold / silver', numerator: 'gold', denominator: 'silver' },
+  // Copper over gold: the classic growth-vs-fear gauge (cyclical demand vs haven demand).
+  { id: 'CG', key: 'copper-gold', label: 'Copper / gold', numerator: 'copper', denominator: 'gold' },
   // Bitcoin priced in ounces of gold: the "digital vs physical store of value" gauge.
   { id: 'BG', key: 'btc-gold', label: 'Bitcoin / gold', numerator: 'btc', denominator: 'gold' },
 ]

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ASSETS, UNIVERSE } from '../../shared/universe.js'
 import { FEATURES, FEATURE_IDS, ML_INSTRUMENT, featureApplies, featuresFor, isOptionalFor, type FeatureSpec } from '../../shared/ml.js'
 import { buildCurveSeries } from './curve.js'
 import {
@@ -184,7 +185,8 @@ describe('per-asset feature catalogue', () => {
   })
 
   it('derives the ML instrument from the front futures root', () => {
-    expect(ML_INSTRUMENT).toEqual({ gold: 'GC.out', silver: 'SI.out', btc: 'BTC.out' })
+    expect(ML_INSTRUMENT).toMatchObject({ gold: 'GC.out', silver: 'SI.out' })
+    expect(ML_INSTRUMENT).toEqual(Object.fromEntries(ASSETS.map((a) => [a, `${UNIVERSE[a].futures[0].root}.out`])))
   })
 })
 

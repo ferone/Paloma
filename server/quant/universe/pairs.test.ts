@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { RELATIVE_VALUE_PAIRS } from "../../../shared/universe.js";
 import type { AssetId, AssetSpec, RelativeValuePair } from "../../../shared/universe.js";
 import { belongsToAsset, dollarNeutralHedge, isPairProduct, pairByKey, pairInstruments, pairLegs, pairsForAsset, resolvedPairs } from "./pairs.js";
 import { FAKE_CASH, fakeAsset } from "../testing/fakeAssets.js";
@@ -66,7 +67,8 @@ describe("the configured gold/silver pair", () => {
   it("lookups: by key, by asset, product membership", () => {
     expect(pairByKey("gold-silver")?.id).toBe("GS");
     expect(pairByKey("nope")).toBeUndefined();
-    expect(pairsForAsset("gold").map((p) => p.id)).toEqual(["GS", "BG"]);
+    expect(pairsForAsset("gold").map((p) => p.id)).toEqual(RELATIVE_VALUE_PAIRS.filter((p) => p.numerator === "gold" || p.denominator === "gold").map((p) => p.id));
+    expect(pairsForAsset("gold").map((p) => p.id)).toContain("GS");
     expect(pairsForAsset("silver").map((p) => p.id)).toEqual(["GS"]);
     expect(isPairProduct("GS")).toBe(true);
     expect(isPairProduct("GC")).toBe(false);

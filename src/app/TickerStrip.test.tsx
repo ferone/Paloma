@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SettingsProvider } from '../store/settings-context'
-import { TICKER_STORAGE_KEY } from './tickerConfig'
+import { TICKER_STORAGE_KEY, defaultTickerKeys } from './tickerConfig'
 import { TickerStrip } from './TickerStrip'
 
 const PRICES: Record<string, number> = { 'GC=F': 4000, 'SI=F': 50 }
@@ -42,7 +42,7 @@ describe('TickerStrip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose tickers' }))
     const ratio = screen.getByRole('checkbox', { name: /Au\/Ag/ })
     fireEvent.click(ratio)
-    expect(JSON.parse(localStorage.getItem(TICKER_STORAGE_KEY)!)).toEqual(['asset:gold', 'asset:silver', 'asset:btc', 'pair:BG'])
+    expect(JSON.parse(localStorage.getItem(TICKER_STORAGE_KEY)!)).toEqual(defaultTickerKeys().filter((k) => k !== 'pair:GS'))
     expect(screen.queryByText('80.0')).toBeNull()
   })
 })

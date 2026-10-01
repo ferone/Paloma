@@ -61,7 +61,7 @@ export function SignalCard({ metal, prediction }: { metal: AssetId; prediction: 
 
       <div className="label">
         <HelpTip term="P(up over 20 trading days)">
-          The model&rsquo;s calibrated probability that the front-month close is higher 20 trading days after {fmtDate(prediction.date)}.
+          The model&rsquo;s probability that the front-month close is higher 20 trading days after {fmtDate(prediction.date)}.
         </HelpTip>
       </div>
       <div className={clsx('num mt-1 leading-none', validated ? 'text-[2.5rem] text-foreground' : 'text-[1.75rem] text-muted')}>

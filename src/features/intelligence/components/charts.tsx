@@ -19,7 +19,7 @@ function Frame({ label, height, children }: { label: string; height: number; chi
   )
 }
 
-/** AUC per test year (bars) vs the logistic baseline (ticks), with 0.50 / 0.55 reference lines. */
+/** AUC per test year (bars) vs the fold's baseline (ticks: logistic, or the naive base rate when logistic was chosen), with 0.50 / 0.55 reference lines. */
 export function AucByYear({ folds }: { folds: MlFold[] }) {
   const H = 220
   const pad = { l: 36, r: 8, t: 10, b: 24 }

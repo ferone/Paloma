@@ -37,7 +37,7 @@ export default function SignalPage() {
           yields, speculator COT positioning and the futures curve once those feeds are loaded.
         </p>
         <p>
-          The probability is <strong>calibrated</strong>: across past out-of-sample predictions, readings near 60% should have come true
+          The probability should be <strong>calibrated</strong>: across past out-of-sample predictions, readings near 60% should have come true
           about 60% of the time. The Calibration tab checks this. The band under the number is what actually happened historically when
           the model gave a similar reading.
         </p>

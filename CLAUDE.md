@@ -42,7 +42,7 @@ npm run data:backfill -- roots=GC,SI schemas=ohlcv-1d start=2010-06-06 windowMon
 npm run data:yahoo          # Yahoo daily history (universe fronts/spots/ETFs/miners, DXY/10Y/VIX/SPY, listed futures months)
 npm run macro:refresh       # FRED (keyless CSV unless FRED_API_KEY) + CFTC COT
 npm run quant:recompute     # quant engine over contract_bars (~35 s)
-npm run ml:train            # walk-forward + permutation gate (~3 min/metal); ml:infer for daily scoring
+npm run ml:train            # nested family selection + walk-forward + 480-shift permutation gate (~7 min/asset); ml:infer for daily scoring
 DB_PATH=data/demo.db npm run portfolio:seed-demo   # demo ledger in a SEPARATE db; never seed the real one
 ```
 - **Databento:**

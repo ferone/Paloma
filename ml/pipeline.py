@@ -5,9 +5,17 @@ pooled many spread instruments; here each asset has one long outright series,
 so the model is per asset and the validation is an expanding-window
 walk-forward by calendar year.
 
-  * y_up  -> GradientBoostingClassifier, Platt-calibrated (sigmoid, cv=3)
+  * y_up  -> one of two families, chosen per asset by NESTED selection:
+             HistGradientBoostingClassifier (uncalibrated, see make_clf), or
+             standardized, L2-regularized LogisticRegression (C=0.1)
   * y_ret -> GradientBoostingRegressor (expected 20d log move)
-  * baseline -> standardized, L2-regularized LogisticRegression (C=0.1)
+  * baseline -> the next simpler model: logistic when gradient boosting is
+             chosen, the naive base-rate forecast when logistic is chosen
+
+MODEL-FAMILY SELECTION (nested, see select_family)
+  Inside every training window the family is chosen by an inner walk-forward
+  over that window's last 3 years; the outer test year never influences the
+  choice, so the walk-forward scores the selection procedure itself.
 
 VALIDATION
   Expanding window, one test year at a time, with at least MIN_TRAIN_YEARS of
@@ -15,10 +23,15 @@ VALIDATION
   year are PURGED: their forward labels overlap the test year, so keeping them
   would leak test-period returns into training.
 
-PERMUTATION TEST (most recent test year)
-  The real out-of-sample AUC is compared against a null built by refitting on
-  block-permuted training labels (blocks of H rows keep the overlap structure,
-  so the null is not artificially weak). p = (#null >= real + 1) / (N + 1).
+PERMUTATION TEST (whole walk-forward)
+  The statistic is the reported walk-forward AUC itself: the mean over all test
+  years of the per-year out-of-sample AUC of the full procedure (fit_fold:
+  family selection + fit), on the same fold splits. Each null run circularly
+  shifts the whole label series against the features by >= 1 year (keeps the
+  20-day overlap AND slow regimes; block-permuting 20-row blocks proved too
+  narrow a null) and repeats the whole procedure, selection
+  included. One-sided: p = (1 + #{null >= real}) / (1 + N); an AUC below 0.5
+  gets p > 0.5.
 
 MULTIPLE TESTING (Bonferroni)
   The server trains one model per market in the universe and tests each, so
@@ -58,8 +71,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import sklearn
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingClassifier
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, mean_squared_error, roc_auc_score
@@ -96,10 +108,18 @@ def progress(frac: float, msg: str) -> None:
 # ── models ───────────────────────────────────────────────────────────────────
 
 def make_clf(fast: bool = False):
-    gb = GradientBoostingClassifier(
-        n_estimators=60 if fast else 150, max_depth=3, learning_rate=0.05, subsample=0.8, random_state=SEED
+    """Gradient-boosted trees (histogram variant: same model class, ~30x faster,
+    which is what makes the full-procedure permutation test affordable).
+
+    NOT Platt-calibrated: a sigmoid fitted on cross-validated scores can get a
+    NEGATIVE slope when the in-sample signal is weak, which silently inverts the
+    ranking (it turned a fold AUC of 0.447 into 0.553). The reported AUC, the
+    gate and the permutation test must all describe the same scores, so the
+    model's own log-loss probabilities are used; the reliability of those
+    probabilities is shown out of sample in the calibration bins."""
+    return HistGradientBoostingClassifier(
+        max_iter=60 if fast else 150, max_depth=3, learning_rate=0.05, early_stopping=False, random_state=SEED
     )
-    return CalibratedClassifierCV(gb, method="sigmoid", cv=3)
 
 
 def make_reg(fast: bool = False):
@@ -112,13 +132,18 @@ def make_baseline():
     return make_pipeline(StandardScaler(), LogisticRegression(C=0.1, max_iter=2000))
 
 
-def make_perm_clf(fast: bool = False):
-    # Lighter uncalibrated model for the permutation loop; used for BOTH the real
-    # and the shuffled fits so the comparison stays fair. (Calibration is a
-    # monotone map, so it would not change AUC.)
-    return GradientBoostingClassifier(
-        n_estimators=40 if fast else 80, max_depth=3, learning_rate=0.08, subsample=0.8, random_state=SEED
-    )
+# Model families the pipeline chooses between, per asset and per training window.
+FAMILIES = ("gb", "logit")
+FAMILY_LABEL = {
+    "gb": "gradient boosting",
+    "logit": "logistic regression (L2, C=0.1)",
+}
+
+
+def make_family(family: str, fast: bool = False):
+    """The SAME estimator is used for inner selection, the walk-forward, the
+    permutation test and the saved model - no lighter stand-ins."""
+    return make_baseline() if family == "logit" else make_clf(fast)
 
 
 # ── walk-forward ─────────────────────────────────────────────────────────────
@@ -160,20 +185,104 @@ def r4(x):
     return None if x is None or (isinstance(x, float) and math.isnan(x)) else round(float(x), 4)
 
 
-def walk_forward(data: pd.DataFrame, feats: list[str], fast: bool = False, on_fold=None):
-    """Returns (folds, oos frame, last-fold artefacts for importance)."""
-    folds, oos_parts = [], []
-    last = None
-    years = test_years(data)
-    for k, ty in enumerate(years):
+# ── model-family selection (nested, training data only) ─────────────────────
+#
+# Which family generalizes better differs by asset (copper: the logistic model
+# beat gradient boosting out of sample). Choosing the family by looking at the
+# walk-forward test years would make those years part of the fit, so the choice
+# is made INSIDE each training window by an inner walk-forward over its last
+# INNER_YEARS calendar years (same purge), and the outer test year only ever
+# scores the family chosen without it. The selection is therefore part of the
+# procedure being validated - and the permutation test re-runs it on every
+# shuffled label set (see permutation_test).
+
+INNER_YEARS = 3
+MIN_INNER_TRAIN = 250
+
+
+def inner_years(train: pd.DataFrame) -> list[int]:
+    """The last INNER_YEARS full-enough calendar years of a training window."""
+    years = [y for y in sorted(int(v) for v in train["year"].unique()) if (train["year"] == y).sum() >= MIN_TEST_ROWS]
+    return years[1:][-INNER_YEARS:]  # never the first year: it has no history to train on
+
+
+def select_family(train: pd.DataFrame, feats: list[str], fast: bool = False,
+                  y: np.ndarray | None = None) -> tuple[str, dict]:
+    """Pick the family with the best mean inner-walk-forward AUC on `train`
+    (labels `y`, default train["y_up"]). Ties - and windows too short for any
+    inner fold - go to the simpler logistic model. Returns (family, scores)."""
+    t = train if y is None else train.assign(y_up=y)
+    scores: dict[str, list[float]] = {f: [] for f in FAMILIES}
+    for iy in inner_years(t):
+        itr, ite, _ = purged_split(t, iy)
+        ytr, yte = itr["y_up"].to_numpy(), ite["y_up"].to_numpy()
+        if len(itr) < MIN_INNER_TRAIN or len(np.unique(ytr)) < 2 or len(np.unique(yte)) < 2:
+            continue
+        for fam in FAMILIES:
+            m = make_family(fam, fast).fit(itr[feats], ytr)
+            scores[fam].append(float(roc_auc_score(yte, m.predict_proba(ite[feats])[:, 1])))
+    mean = {f: (float(np.mean(v)) if v else None) for f, v in scores.items()}
+    if mean["gb"] is None or mean["logit"] is None:
+        return "logit", {f: r4(v) for f, v in mean.items()}
+    return ("gb" if mean["gb"] > mean["logit"] else "logit"), {f: r4(v) for f, v in mean.items()}
+
+
+def fold_plan(data: pd.DataFrame) -> list[tuple[int, pd.DataFrame, pd.DataFrame, int]]:
+    """The outer walk-forward folds (test year, purged train, test, rows purged).
+    Computed once from the real data and reused unchanged by the permutation
+    test, so real and shuffled runs are scored on identical splits."""
+    plan = []
+    for ty in test_years(data):
         train, test, purged = purged_split(data, ty)
         if train["y_up"].nunique() < 2 or len(train) < 250:
             continue
+        plan.append((ty, train, test, purged))
+    return plan
+
+
+def fit_fold(train: pd.DataFrame, test: pd.DataFrame, feats: list[str], ytr: np.ndarray, fast: bool = False):
+    """THE per-fold procedure: choose the family on the training window (labels
+    `ytr`), fit it, predict the test year. Used by walk_forward (real labels)
+    and by every permutation run (shuffled labels) - one code path, so the
+    reported AUC and the permutation statistic are the same quantity."""
+    family, inner = select_family(train, feats, fast, y=ytr)
+    clf = make_family(family, fast).fit(train[feats], ytr)
+    return family, inner, clf, clf.predict_proba(test[feats])[:, 1]
+
+
+def mean_fold_auc(aucs: list[float | None]) -> float | None:
+    xs = [a for a in aucs if a is not None]
+    return float(np.mean(xs)) if xs else None
+
+
+def oos_mean_auc(oos: pd.DataFrame) -> float | None:
+    """Mean over test years of the per-year AUC (unrounded): the walk-forward
+    AUC the gate checks and the permutation test's statistic."""
+    return mean_fold_auc([safe_auc(g["y"].to_numpy().astype(int), g["p"].to_numpy()) for _, g in oos.groupby("testYear", sort=True)])
+
+
+def walk_forward(data: pd.DataFrame, feats: list[str], fast: bool = False, on_fold=None):
+    """Returns (folds, oos frame, last-fold artefacts for importance).
+
+    Per fold: choose the family on the training window only (select_family),
+    fit it, score the test year. The comparator ("baseline") is the next
+    simpler model: the logistic regression when the chosen family is gradient
+    boosting, and the naive base-rate forecast (the training window's up-share,
+    a constant: AUC 0.5, hit = always calling the majority side) when the
+    chosen family is itself the logistic regression."""
+    folds, oos_parts = [], []
+    last = None
+    plan = fold_plan(data)
+    years = test_years(data)
+    for k, (ty, train, test, purged) in enumerate(plan):
         Xtr, ytr, Xte, yte = train[feats], train["y_up"].to_numpy(), test[feats], test["y_up"].to_numpy()
-        clf = make_clf(fast).fit(Xtr, ytr)
-        p = clf.predict_proba(Xte)[:, 1]
-        base = make_baseline().fit(Xtr, ytr)
-        pb = base.predict_proba(Xte)[:, 1]
+        family, inner, clf, p = fit_fold(train, test, feats, ytr, fast)
+        if family == "gb":
+            pb = make_baseline().fit(Xtr, ytr).predict_proba(Xte)[:, 1]
+            baseline_kind = "logistic"
+        else:
+            pb = np.full(len(yte), float(ytr.mean()))
+            baseline_kind = "naive"
         reg = make_reg(fast).fit(Xtr, train["y_ret"])
         rp = reg.predict(Xte)
         yret = test["y_ret"].to_numpy()
@@ -182,6 +291,9 @@ def walk_forward(data: pd.DataFrame, feats: list[str], fast: bool = False, on_fo
             "nTrain": int(len(train)),
             "nTest": int(len(test)),
             "purged": int(purged),
+            "family": family,
+            "innerAuc": inner,
+            "baselineKind": baseline_kind,
             "auc": r4(safe_auc(yte, p)),
             "hit": r4(((p > 0.5).astype(int) == yte).mean()),
             "brier": r4(brier_score_loss(yte, p)),
@@ -191,11 +303,11 @@ def walk_forward(data: pd.DataFrame, feats: list[str], fast: bool = False, on_fo
             "rmse": r4(math.sqrt(mean_squared_error(yret, rp))),
             "ic": r4(spearman(rp, yret)),
         })
-        oos_parts.append(pd.DataFrame({"date": test["date"].to_numpy(), "p": p, "pb": pb, "y": yte, "ret": yret, "retPred": rp}))
+        oos_parts.append(pd.DataFrame({"date": test["date"].to_numpy(), "testYear": int(ty), "p": p, "pb": pb, "y": yte, "ret": yret, "retPred": rp}))
         last = {"clf": clf, "Xte": Xte, "yte": yte, "year": int(ty)}
         if on_fold:
-            on_fold(k + 1, len(years), ty)
-    oos = pd.concat(oos_parts, ignore_index=True) if oos_parts else pd.DataFrame(columns=["date", "p", "pb", "y", "ret", "retPred"])
+            on_fold(k + 1, len(plan) or len(years), ty)
+    oos = pd.concat(oos_parts, ignore_index=True) if oos_parts else pd.DataFrame(columns=["date", "testYear", "p", "pb", "y", "ret", "retPred"])
     return folds, oos, last
 
 
@@ -205,9 +317,13 @@ def summarize(folds: list[dict], oos: pd.DataFrame) -> dict:
         return r4(np.mean(xs)) if xs else None
 
     pooled = safe_auc(oos["y"].to_numpy().astype(int), oos["p"].to_numpy()) if len(oos) else None
+    kinds = sorted({f.get("baselineKind", "logistic") for f in folds})
     return {
         "folds": len(folds),
-        "auc": avg("auc"),
+        "familyCounts": {fam: sum(1 for f in folds if f.get("family") == fam) for fam in FAMILIES},
+        "baselineKind": kinds[0] if len(kinds) == 1 else ("mixed" if kinds else None),
+        # the permutation statistic: mean of the unrounded per-year AUCs
+        "auc": r4(oos_mean_auc(oos)) if len(oos) else avg("auc"),
         "hit": avg("hit"),
         "brier": avg("brier"),
         "baseRate": avg("baseRate"),
@@ -230,45 +346,102 @@ def block_permute(y: np.ndarray, block: int, rng: np.random.Generator) -> np.nda
     return np.concatenate([y[starts[i]: starts[i] + block] for i in order])
 
 
-def _perm_auc(Xtr, yp, Xte, yte, fast) -> float:
-    c = make_perm_clf(fast).fit(Xtr, yp)
-    return float(roc_auc_score(yte, c.predict_proba(Xte)[:, 1]))
+MIN_SHIFT = 252  # rows: a null shift is at least a year (far beyond the 20-day horizon)
+
+
+def circular_shifts(n: int, n_perm: int, rng: np.random.Generator, min_shift: int = MIN_SHIFT) -> np.ndarray:
+    """Distinct circular offsets in [min_shift, n - min_shift] (both directions
+    at least a year away from the true alignment). Fewer candidates than
+    n_perm -> every candidate once."""
+    lo, hi = min_shift, n - min_shift
+    if hi < lo:
+        return np.array([], dtype=int)
+    cand = np.arange(lo, hi + 1)
+    return np.sort(rng.choice(cand, size=min(n_perm, len(cand)), replace=False))
+
+
+def wf_statistic(data: pd.DataFrame, feats: list[str], plan, y: np.ndarray, fast: bool = False) -> tuple[float | None, list[str]]:
+    """Mean walk-forward AUC of the full procedure (family selection + fit, via
+    fit_fold) on labels `y` (aligned with `data`), over the fixed `plan`.
+    Returns (statistic, family chosen per fold)."""
+    ys = pd.Series(y, index=data.index)
+    aucs, fams = [], []
+    for _, train, test, _ in plan:
+        family, _, _, p = fit_fold(train, test, feats, ys.loc[train.index].to_numpy(), fast)
+        aucs.append(safe_auc(ys.loc[test.index].to_numpy().astype(int), p))
+        fams.append(family)
+    return mean_fold_auc(aucs), fams
+
+
+def permutation_p(real: float, null: np.ndarray) -> float:
+    """One-sided (larger AUC = more skill): p = (1 + #{null >= real}) / (1 + N).
+    An observed AUC below the null's centre (0.5) therefore gets p > 0.5."""
+    return float((np.sum(null >= real) + 1) / (len(null) + 1))
 
 
 def permutation_test(data: pd.DataFrame, feats: list[str], n_perm: int = N_PERM_MIN, fast: bool = False) -> dict | None:
-    years = test_years(data)
-    if not years:
+    """The statistic is EXACTLY the walk-forward AUC the report and gate use:
+    the mean over all outer test years of the per-year AUC of the full
+    procedure (inner family selection included), on the same fold splits.
+
+    NULL: the whole label series is CIRCULARLY SHIFTED against the features by
+    a random offset of at least a year (MIN_SHIFT) in either direction. That
+    keeps the label series' entire autocorrelation - the 20-day overlap AND the
+    slow multi-month regimes and yearly up-shares - and only breaks its
+    alignment with the features. (An earlier version permuted 20-row blocks:
+    that keeps the overlap but scrambles regimes longer than a block, which
+    made the null too narrow and the p-values anti-conservative; see the
+    calibration check in test_pipeline / data notes.) Each null run repeats
+    the whole procedure, selection included, so p is valid under selection."""
+    plan = fold_plan(data)
+    if not plan:
         return None
-    ty = years[-1]
-    train, test, _ = purged_split(data, ty)
-    ytr, yte = train["y_up"].to_numpy(), test["y_up"].to_numpy()
-    if len(np.unique(ytr)) < 2 or len(np.unique(yte)) < 2:
+    y = data["y_up"].to_numpy()
+    real, real_fams = wf_statistic(data, feats, plan, y, fast)
+    if real is None:
         return None
-    Xtr, Xte = train[feats], test[feats]
-    real = _perm_auc(Xtr, ytr, Xte, yte, fast)
     rng = np.random.default_rng(SEED)
-    perms = [block_permute(ytr, H, rng) for _ in range(n_perm)]
+    shifts = circular_shifts(len(y), n_perm, rng)
+    if not len(shifts):
+        return None
+    n_perm = len(shifts)
+    perms = [np.roll(y, int(s)) for s in shifts]
     try:
-        from joblib import Parallel, delayed
-        null = Parallel(n_jobs=-1)(delayed(_perm_auc)(Xtr, yp, Xte, yte, fast) for yp in perms)
+        from joblib import Parallel, delayed, parallel_config
+        # one thread per worker: the tree models are multi-threaded themselves
+        with parallel_config(backend="loky", inner_max_num_threads=1):
+            runs = Parallel(n_jobs=-1)(delayed(wf_statistic)(data, feats, plan, yp, fast) for yp in perms)
     except Exception as e:  # pragma: no cover - platform quirk fallback
         print(f"  [perm] parallel unavailable ({e}); sequential fallback", flush=True)
-        null = [_perm_auc(Xtr, yp, Xte, yte, fast) for yp in perms]
-    arr = np.array(null)
-    p_value = float((np.sum(arr >= real) + 1) / (n_perm + 1))
+        runs = [wf_statistic(data, feats, plan, yp, fast) for yp in perms]
+    arr = np.array([a if a is not None else 0.5 for a, _ in runs])
+    p_value = permutation_p(real, arr)
+    null_fams = [f for _, fs in runs for f in fs]
     return {
-        "holdoutYear": int(ty),
+        "statistic": "mean walk-forward AUC over all test years (full procedure incl. family selection)",
+        "testYears": [int(t) for t, *_ in plan],
+        "holdoutYear": int(plan[-1][0]),
+        "foldFamilies": real_fams,
+        "nullFamilyShare": {fam: r4(sum(1 for f in null_fams if f == fam) / max(1, len(null_fams))) for fam in FAMILIES},
         "realAuc": r4(real),
         "nullAucs": [r4(x) for x in arr.tolist()],
         "nullMean": r4(arr.mean()),
         "null95": r4(np.quantile(arr, 0.95)),
         "nPerm": int(n_perm),
         "pValue": round(p_value, 6),  # 6 dp: near the adjusted threshold 4 dp would round p onto it
-        "method": f"block permutation of training labels (blocks of {H} rows)",
+        "method": f"circular shift of the whole label series against the features (offsets of {MIN_SHIFT}+ rows either way; keeps all label autocorrelation); each run repeats the full walk-forward incl. model-family selection",
+        "shifts": [int(s) for s in shifts],
     }
 
 
 # ── gate ─────────────────────────────────────────────────────────────────────
+
+BASELINE_LABEL = {
+    "logistic": "Beats logistic baseline (AUC)",
+    "naive": "Beats naive base-rate baseline (AUC)",
+    "mixed": "Beats the simpler baseline per fold (AUC)",
+}
+
 
 def gate(summary: dict, perm: dict | None, n_tests: int = 1) -> dict:
     folds = summary["folds"]
@@ -282,7 +455,7 @@ def gate(summary: dict, perm: dict | None, n_tests: int = 1) -> dict:
         {"id": "pValue", "label": p_label, "value": p, "threshold": mt["alphaAdjusted"], "ok": p is not None and p < alpha_adj},
         {"id": "auc", "label": "Mean walk-forward AUC", "value": auc, "threshold": GATE["auc"], "ok": auc is not None and auc >= GATE["auc"]},
         {"id": "hit", "label": "Mean hit rate", "value": hit, "threshold": GATE["hit"], "ok": hit is not None and hit >= GATE["hit"]},
-        {"id": "baseline", "label": "Beats logistic baseline (AUC)", "value": bauc, "threshold": None,
+        {"id": "baseline", "label": BASELINE_LABEL.get(summary.get("baselineKind") or "logistic", BASELINE_LABEL["mixed"]), "value": bauc, "threshold": None,
          "ok": auc is not None and bauc is not None and auc > bauc},
     ]
     if folds < MIN_TEST_YEARS:
@@ -409,14 +582,24 @@ def do_train(metal: str, data_dir: Path, n_perm: int | None = None, fast: bool =
     resid = (oos["ret"] - oos["retPred"]).to_numpy() if len(oos) else np.array([])
     rq = {"q10": r4(np.quantile(resid, 0.1)), "q90": r4(np.quantile(resid, 0.9))} if len(resid) >= 50 else None
 
-    progress(0.9, "Fitting final models on all labeled rows")
+    progress(0.88, "Choosing the model family on all labeled rows (inner walk-forward)")
     X, y = data[feats], data["y_up"].to_numpy()
-    clf = make_clf(fast).fit(X, y)
+    family, inner = select_family(data, feats, fast)
+    selection = {
+        "family": family,
+        "label": FAMILY_LABEL[family],
+        "innerAuc": inner,
+        "innerYears": inner_years(data),
+        "foldFamilies": summary["familyCounts"],
+        "method": f"per training window, the family with the higher mean AUC over an inner walk-forward of its last {INNER_YEARS} years (purged); ties go to logistic",
+    }
+    progress(0.9, f"Fitting final models on all labeled rows ({FAMILY_LABEL[family]})")
+    clf = make_family(family, fast).fit(X, y)
     reg = make_reg(fast).fit(X, data["y_ret"])
     baseline = make_baseline().fit(X, y)
     trained_at = datetime.now(timezone.utc).isoformat()
     bundle = {
-        "metal": metal, "features": feats, "H": H, "clf": clf, "reg": reg, "baseline": baseline,
+        "metal": metal, "features": feats, "H": H, "clf": clf, "family": family, "reg": reg, "baseline": baseline,
         "calibration": cal, "residualQuantiles": rq, "gate": g, "trainedAt": trained_at,
         "labelThrough": data["date"].max().strftime("%Y-%m-%d"),
     }
@@ -425,7 +608,7 @@ def do_train(metal: str, data_dir: Path, n_perm: int | None = None, fast: bool =
     prediction = predict_latest(bundle, df)
 
     metrics = {
-        "summary": summary, "folds": folds, "permutation": perm, "gate": g, "residualQuantiles": rq,
+        "summary": summary, "folds": folds, "permutation": perm, "gate": g, "selection": selection, "residualQuantiles": rq,
         "nRows": int(len(data)),
         "dataFrom": data["date"].min().strftime("%Y-%m-%d"),
         "dataThrough": df["date"].max().strftime("%Y-%m-%d"),
@@ -433,12 +616,17 @@ def do_train(metal: str, data_dir: Path, n_perm: int | None = None, fast: bool =
         "durationSec": round(time.time() - t0, 1),
         "sklearnVersion": sklearn.__version__,
     }
-    progress(1.0, f"{metal}: {g['status'].upper()} (AUC {summary['auc']}, p {perm['pValue'] if perm else None})")
+    progress(1.0, f"{metal}: {g['status'].upper()} ({family}, AUC {summary['auc']}, p {perm['pValue'] if perm else None})")
+    model_desc = {
+        "gb": "HistGradientBoostingClassifier (150 iterations, depth 3, lr 0.05; uncalibrated log-loss probabilities)",
+        "logit": "StandardScaler + LogisticRegression (L2, C=0.1)",
+    }[family]
     return {
         "kind": "train", "metal": metal, "horizon": H, "trainedAt": trained_at,
         "params": {"horizon": H, "nPerm": n_perm, "nTests": max(1, int(n_tests)), "minTrainYears": MIN_TRAIN_YEARS,
-                   "model": "GradientBoostingClassifier (150 trees, depth 3, lr 0.05) + sigmoid calibration (cv=3); GradientBoostingRegressor for the move",
-                   "baseline": "StandardScaler + LogisticRegression (L2, C=0.1)"},
+                   "family": family,
+                   "model": f"{model_desc}, chosen by nested selection between gradient boosting and logistic regression; GradientBoostingRegressor for the move",
+                   "baseline": "logistic regression when gradient boosting is chosen; naive base-rate (training up-share) when logistic is chosen"},
         "featuresUsed": feats, "availability": availability, "metrics": metrics,
         "importance": imp, "calibration": cal, "modelPath": str(mp), "prediction": prediction,
     }

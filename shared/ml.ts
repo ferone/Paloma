@@ -145,12 +145,43 @@ export interface FeatureAvailability {
   firstDate: string | null
 }
 
+/** Direction-model families the pipeline selects between (nested, per training window). */
+export type MlFamily = 'gb' | 'logit'
+export const ML_FAMILY_LABEL: Record<MlFamily, string> = {
+  gb: 'Gradient boosting',
+  logit: 'Logistic regression',
+}
+/** The comparator of the "beats baseline" check: the next simpler model. */
+export type MlBaselineKind = 'logistic' | 'naive'
+export const ML_BASELINE_LABEL: Record<MlBaselineKind | 'mixed', string> = {
+  logistic: 'logistic regression',
+  naive: 'naive base rate',
+  mixed: 'next simpler model per fold',
+}
+
+export interface MlSelection {
+  /** Family of the saved model, chosen on all labeled rows by the same inner walk-forward. */
+  family: MlFamily
+  label: string
+  innerAuc: Partial<Record<MlFamily, number | null>>
+  innerYears: number[]
+  /** How often each family was chosen across the outer walk-forward folds. */
+  foldFamilies: Partial<Record<MlFamily, number>>
+  method: string
+}
+
 export interface MlFold {
   testYear: number
   nTrain: number
   nTest: number
   /** Rows purged from the end of the training window (label overlap). */
   purged: number
+  /** Model family chosen on this fold's training window only (absent on older runs = gradient boosting). */
+  family?: MlFamily
+  /** Mean inner walk-forward AUC per family that drove the choice. */
+  innerAuc?: Partial<Record<MlFamily, number | null>>
+  /** What `baselineAuc` measures: the logistic model, or the naive base rate when logistic itself was chosen. */
+  baselineKind?: MlBaselineKind
   auc: number | null
   hit: number
   brier: number
@@ -165,7 +196,15 @@ export interface MlFold {
 }
 
 export interface MlPermutation {
+  /** Latest test year. Older runs tested only this year; newer runs test them all (`testYears`). */
   holdoutYear: number
+  /** What realAuc / nullAucs measure. Absent on older runs (holdout-year AUC of a lighter model). */
+  statistic?: string
+  /** Test years the statistic averages over (newer runs: every walk-forward fold). */
+  testYears?: number[]
+  /** Family chosen per fold on the real labels. */
+  foldFamilies?: MlFamily[]
+  /** Newer runs: equals summary.auc (mean walk-forward AUC of the full procedure). */
   realAuc: number
   nullAucs: number[]
   nullMean: number
@@ -174,6 +213,8 @@ export interface MlPermutation {
   pValue: number
   /** How labels were shuffled (block permutation preserves overlap). */
   method: string
+  /** Share of null fold fits that selected each family. */
+  nullFamilyShare?: Partial<Record<MlFamily, number>>
 }
 
 export interface MlGate {
@@ -201,6 +242,10 @@ export interface MlMultipleTesting {
 
 export interface MlSummaryMetrics {
   folds: number
+  /** Folds per chosen family (absent on older runs). */
+  familyCounts?: Partial<Record<MlFamily, number>>
+  /** Comparator behind `baselineAuc`; 'mixed' when folds chose different families. */
+  baselineKind?: MlBaselineKind | 'mixed' | null
   auc: number | null
   hit: number | null
   brier: number | null
@@ -232,6 +277,8 @@ export interface MlMetrics {
   folds: MlFold[]
   permutation: MlPermutation | null
   gate: MlGate
+  /** Model-family selection (absent on runs before selection existed: gradient boosting only). */
+  selection?: MlSelection
   /** Out-of-sample residual quantiles of the 20d log return (for the move band). */
   residualQuantiles: { q10: number; q90: number } | null
   nRows: number
@@ -262,6 +309,8 @@ export interface MlRunParams {
   nPerm: number
   /** Bonferroni family size the run was gated with (absent on older runs). */
   nTests?: number
+  /** Family of the saved model (absent on older runs = gradient boosting). */
+  family?: MlFamily
   minTrainYears: number
   model: string
   baseline: string

@@ -1,4 +1,15 @@
-import { familywiseFalsePassRate, ML_ALPHA_ADJUSTED, ML_GATE, ML_TEST_COUNT, type MlFold, type MlGate, type MlRunDetail } from '@shared/ml'
+import {
+  familywiseFalsePassRate,
+  ML_ALPHA_ADJUSTED,
+  ML_BASELINE_LABEL,
+  ML_FAMILY_LABEL,
+  ML_GATE,
+  ML_TEST_COUNT,
+  type MlFamily,
+  type MlFold,
+  type MlGate,
+  type MlRunDetail,
+} from '@shared/ml'
 import { fmtNum, fmtPct } from '../../../design/format'
 import { PALETTE } from '../../../design/tokens'
 import { Chip, DataTable, Explainer, HelpTip, Panel, Stat, type Column } from '../../../ui'
@@ -43,6 +54,39 @@ function MultipleTestingNote({ gate, p }: { gate: MlGate; p: number | null }) {
         </p>
       )}
     </div>
+  )
+}
+
+function FamilyPanel({ run }: { run: MlRunDetail }) {
+  const sel = run.metrics!.selection
+  if (!sel) {
+    return (
+      <Panel title="Model family" density="dense">
+        <p className="text-2xs text-muted">
+          Gradient boosting only: this run predates per-asset model-family selection. Retrain to let the pipeline choose between
+          gradient boosting and logistic regression.
+        </p>
+      </Panel>
+    )
+  }
+  const fams = Object.keys(ML_FAMILY_LABEL) as MlFamily[]
+  const folds = fams.filter((f) => (sel.foldFamilies[f] ?? 0) > 0).map((f) => `${ML_FAMILY_LABEL[f].toLowerCase()} ${sel.foldFamilies[f]}`)
+  const kind = run.metrics!.summary.baselineKind ?? 'logistic'
+  return (
+    <Panel eyebrow="Chosen on training data only" title="Model family" density="dense">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Stat size="sm" label="Saved model" value={ML_FAMILY_LABEL[sel.family]} />
+        {fams.map((f) => (
+          <Stat key={f} size="sm" label={`Inner AUC · ${ML_FAMILY_LABEL[f].toLowerCase()}`} value={fmtNum(sel.innerAuc[f] ?? null, 3)} hint={`test years ${sel.innerYears.join(', ')}`} />
+        ))}
+        <Stat size="sm" label="Baseline" value={ML_BASELINE_LABEL[kind]} hint="the next simpler model" />
+      </div>
+      <p className="mt-3 text-2xs text-muted">
+        Each walk-forward fold picks its family from an inner walk-forward over the last three years of its own training window, so the
+        test years never influence the choice. Folds chose: {folds.join(' · ') || '—'}. The permutation test repeats this choice on
+        every shuffled label set.
+      </p>
+    </Panel>
   )
 }
 
@@ -93,7 +137,11 @@ export default function ValidationPage() {
           { key: 'y', header: 'Test year', cell: (f) => <span className="num">{f.testYear}</span>, sortValue: (f) => f.testYear },
           { key: 'n', header: 'Train / test', numeric: true, cell: (f) => `${f.nTrain.toLocaleString('en-US')} / ${f.nTest}` },
           { key: 'auc', header: 'AUC', numeric: true, sortValue: (f) => f.auc, cell: (f) => <span className={f.auc != null && f.auc >= 0.55 ? 'text-pos-text' : f.auc != null && f.auc < 0.5 ? 'text-neg-text' : ''}>{fmtNum(f.auc, 3)}</span> },
-          { key: 'bauc', header: 'Baseline AUC', numeric: true, sortValue: (f) => f.baselineAuc, cell: (f) => fmtNum(f.baselineAuc, 3) },
+          { key: 'fam', header: 'Family', cell: (f) => <span className="text-2xs">{ML_FAMILY_LABEL[f.family ?? 'gb']}</span>, sortValue: (f) => f.family ?? 'gb' },
+          {
+            key: 'bauc', header: 'Baseline AUC', numeric: true, sortValue: (f) => f.baselineAuc,
+            cell: (f) => <span title={ML_BASELINE_LABEL[f.baselineKind ?? 'logistic']}>{fmtNum(f.baselineAuc, 3)}{f.baselineKind === 'naive' ? ' · naive' : ''}</span>,
+          },
           { key: 'hit', header: 'Hit', numeric: true, sortValue: (f) => f.hit, cell: (f) => fmtPct(f.hit, 1) },
           { key: 'base', header: 'Up share', numeric: true, cell: (f) => fmtPct(f.baseRate, 1) },
           { key: 'brier', header: 'Brier', numeric: true, cell: (f) => fmtNum(f.brier, 3) },
@@ -103,11 +151,13 @@ export default function ValidationPage() {
           <div className="space-y-6">
             <GatePanel run={run} gate={m.gate} />
 
+            <FamilyPanel run={run} />
+
             <Panel title="Walk-forward summary" density="dense">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-7">
                 <Stat size="sm" label="Mean AUC" value={fmtNum(s.auc, 3)} />
                 <Stat size="sm" label="Pooled AUC" value={fmtNum(s.pooledAuc, 3)} hint="all test years together" />
-                <Stat size="sm" label="Baseline AUC" value={fmtNum(s.baselineAuc, 3)} hint="logistic regression" />
+                <Stat size="sm" label="Baseline AUC" value={fmtNum(s.baselineAuc, 3)} hint={ML_BASELINE_LABEL[s.baselineKind ?? 'logistic']} />
                 <Stat size="sm" label="Hit rate" value={fmtPct(s.hit, 1)} />
                 <Stat size="sm" label="Always-up hit" value={fmtPct(s.baseRate, 1)} hint="share of up 20d windows" />
                 <Stat size="sm" label="Brier" value={fmtNum(s.brier, 3)} hint="lower is better; 0.25 = coin flip" />
@@ -125,14 +175,17 @@ export default function ValidationPage() {
                 <span><span className="mr-1 inline-block h-2 w-3 rounded-sm align-middle" style={{ background: PALETTE.pos }} />≥ 0.55</span>
                 <span><span className="mr-1 inline-block h-2 w-3 rounded-sm align-middle" style={{ background: PALETTE.faint }} />0.50–0.55</span>
                 <span><span className="mr-1 inline-block h-2 w-3 rounded-sm align-middle" style={{ background: PALETTE.neg }} />&lt; 0.50 (worse than chance)</span>
-                <span><span className="mr-1 inline-block h-0.5 w-3 align-middle" style={{ background: PALETTE.foreground }} />logistic baseline</span>
+                <span><span className="mr-1 inline-block h-0.5 w-3 align-middle" style={{ background: PALETTE.foreground }} />baseline (next simpler model)</span>
               </p>
               <div className="mt-4">
                 <DataTable dense columns={foldCols} rows={m.folds} rowKey={(f) => String(f.testYear)} initialSort={{ key: 'y', dir: 'desc' }} />
               </div>
             </Panel>
 
-            <Panel title="Permutation test" eyebrow={perm ? `Holdout ${perm.holdoutYear}` : undefined}>
+            <Panel
+              title="Permutation test"
+              eyebrow={perm ? (perm.testYears ? `All ${perm.testYears.length} test years` : `Holdout ${perm.holdoutYear}`) : undefined}
+            >
               {perm ? (
                 <>
                   <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
@@ -144,8 +197,11 @@ export default function ValidationPage() {
                   </div>
                   <PermutationHistogram nullAucs={perm.nullAucs} realAuc={perm.realAuc} null95={perm.null95} />
                   <p className="mt-2 text-2xs text-muted">
-                    {perm.nPerm} refits on shuffled labels · {perm.method}. Uses a lighter model for both real and shuffled fits. The
-                    smallest p this test can report is 1 / ({perm.nPerm} + 1) = {fmtP(1 / (perm.nPerm + 1))}.
+                    {perm.nPerm} reruns on shifted labels · {perm.method}.{' '}
+                    {perm.statistic
+                      ? 'The real AUC is the walk-forward mean AUC above: the same models, folds and family selection, so p, the AUC check and the chart describe one number.'
+                      : 'Older run: the statistic is the holdout-year AUC of a lighter model, not the walk-forward mean. Retrain for the full-procedure test.'}{' '}
+                    The smallest p this test can report is 1 / ({perm.nPerm} + 1) = {fmtP(1 / (perm.nPerm + 1))}.
                   </p>
                 </>
               ) : (
@@ -163,10 +219,19 @@ export default function ValidationPage() {
                 bull year, saying "up" every day scores high without any skill.
               </p>
               <p>
-                The permutation test refits the model on training labels shuffled in 20-day blocks, which destroys any real relationship
-                but keeps the overlap between neighbouring labels. If the real model does not clearly beat these shuffled models, its score
-                in the holdout year could be luck. One year of 20-day labels holds only about a dozen independent outcomes, so this test is
-                strict by design.
+                The permutation test reruns the entire walk-forward, family choice included, with the label series slid against the
+                features by at least a year (a circular shift). That breaks any real relationship but keeps everything else about the
+                labels: the overlap of neighbouring 20-day windows, multi-month trends and each year&rsquo;s up-share. Shuffling labels in
+                short blocks instead was tested and rejected: on targets with no signal it called 10% of them significant at 0.05, twice
+                the intended rate. If the real walk-forward AUC does not clearly beat the shifted reruns, it could be luck. The test is
+                one-sided: an AUC below 0.50 gets a p-value above 0.5.
+              </p>
+              <p>
+                <HelpTip term="Model family">Gradient boosting or logistic regression.</HelpTip> is chosen per asset, inside each
+                training window, never by peeking at the years it is tested on. Because the choice is part of the procedure, the
+                walk-forward scores and the permutation test both include it. The "beats baseline" check compares the chosen model with
+                the next simpler one: the logistic model when gradient boosting wins, the naive base rate (always forecasting the
+                training up-share, AUC 0.50) when logistic regression wins.
               </p>
               <p>
                 <HelpTip term="Why the threshold is not 0.05">Bonferroni correction for multiple testing.</HelpTip> We test{' '}

@@ -1,6 +1,7 @@
 // Daily closes for valuation. Reads prices_daily (source 'yahoo') and tops it
 // up from Yahoo when coverage is missing or stale. Network failures degrade to
 // whatever is cached; the caller reports which symbols are stale.
+import { getDb } from '../db/client.js'
 import { readDailyBars, upsertDailyBars } from '../db/repo.js'
 import { getHistorical } from '../services/yahoo-finance.service.js'
 import { MemoryPriceBook } from './engine/ledger.js'
@@ -35,8 +36,70 @@ export function setPriceSource(s: PriceSource): void {
 }
 
 const SOURCE = 'yahoo'
+/** After a successful fetch a symbol is not re-fetched for this long (its cache is as current as Yahoo allows). */
 const REFETCH_MS = 60 * 60_000
-const lastAttempt = new Map<string, number>()
+/** After a failed fetch (network, throttling) the next valuation retries sooner. */
+const RETRY_FAILED_MS = 2 * 60_000
+/** Completed fetch attempts: when they finished and whether they failed. */
+const lastAttempt = new Map<string, { at: number; failed: boolean }>()
+/**
+ * Fetches in flight, per symbol. A concurrent loadPrices for the same symbol
+ * (e.g. a second NAV recompute started by a second ledger write while the
+ * first is still downloading) waits for that fetch and then reads the cache,
+ * instead of treating the symbol as "recently tried" and valuing it on an
+ * empty cache.
+ */
+const inflightFetch = new Map<string, Promise<string | null>>()
+
+/** Test helper: forget fetch attempts. */
+export function resetPriceFetchState(): void {
+  lastAttempt.clear()
+  inflightFetch.clear()
+}
+
+function recentlyTried(sym: string): boolean {
+  const a = lastAttempt.get(sym)
+  return !!a && Date.now() - a.at < (a.failed ? RETRY_FAILED_MS : REFETCH_MS)
+}
+
+/**
+ * Fetch `sym` from `from` into prices_daily, sharing one in-flight request per
+ * symbol. Resolves to an error message, or null on success.
+ */
+function fetchInto(sym: string, from: string): Promise<string | null> {
+  const running = inflightFetch.get(sym)
+  if (running) return running
+  const p = (async () => {
+    let error: string | null = null
+    try {
+      const fetched = await source.history(sym, from)
+      if (fetched.length) upsertDailyBars(fetched.map((b) => ({ symbol: sym, date: b.date, close: b.close, source: SOURCE })))
+    } catch (err) {
+      error = `${sym}: ${err instanceof Error ? err.message : String(err)}`
+    } finally {
+      // Recorded when the attempt FINISHES: an in-flight fetch is joined, never mistaken for a completed one.
+      lastAttempt.set(sym, { at: Date.now(), failed: error !== null })
+      inflightFetch.delete(sym)
+    }
+    return error
+  })()
+  inflightFetch.set(sym, p)
+  return p
+}
+
+/**
+ * Cheap fingerprint of the cached closes of `symbols` (row count + latest
+ * date). It changes whenever any writer (this module, the marketdata Yahoo
+ * job, the data:yahoo CLI in another process) lands new bars for them.
+ */
+export function priceStamp(symbols: string[]): string {
+  const uniq = [...new Set(symbols)]
+  if (!uniq.length) return ''
+  const r = getDb()
+    .prepare(`SELECT COUNT(*) AS n, MAX(date) AS d FROM prices_daily WHERE source = ? AND symbol IN (${uniq.map(() => '?').join(',')})`)
+    .get(SOURCE, ...uniq) as { n: number; d: string | null }
+  return `${r.n}:${r.d ?? ''}`
+}
 
 export function isoDaysAgo(iso: string, days: number): string {
   return new Date(Date.parse(`${iso}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10)
@@ -75,18 +138,10 @@ export async function loadPrices(symbols: string[], from: string, opts: { force?
       const last = bars.at(-1)?.date
       const missingHead = !first || first > isoDaysAgo(from, -5)
       const missingTail = !last || last < target
-      const recentlyTried = Date.now() - (lastAttempt.get(sym) ?? 0) < REFETCH_MS
-      if ((missingHead || missingTail) && (opts.force || !recentlyTried)) {
-        lastAttempt.set(sym, Date.now())
-        try {
-          const fetched = await source.history(sym, missingHead ? need : isoDaysAgo(last!, 7))
-          if (fetched.length) {
-            upsertDailyBars(fetched.map((b) => ({ symbol: sym, date: b.date, close: b.close, source: SOURCE })))
-            bars = readDailyBars(sym, { source: SOURCE })
-          }
-        } catch (err) {
-          errors.push(`${sym}: ${err instanceof Error ? err.message : String(err)}`)
-        }
+      if (inflightFetch.has(sym) || ((missingHead || missingTail) && (opts.force || !recentlyTried(sym)))) {
+        const error = await fetchInto(sym, missingHead ? need : isoDaysAgo(last!, 7))
+        if (error) errors.push(error)
+        bars = readDailyBars(sym, { source: SOURCE })
       }
       const lastNow = bars.at(-1)?.date ?? null
       lastDates[sym] = lastNow

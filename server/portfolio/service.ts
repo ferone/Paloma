@@ -8,10 +8,10 @@ import { ARTIFACTS, type PortfolioSummaryLite } from '../../shared/artifacts.js'
 import { ASSETS, UNIVERSE, type AssetId } from '../../shared/universe.js'
 import type { Account, Instrument, PhysicalItem, PortfolioSettings, Transaction } from '../../shared/portfolio.js'
 import { runLedger, type EngineRun } from './engine/ledger.js'
-import { loadPrices, type LoadedPrices } from './prices.js'
+import { loadPrices, priceStamp, type LoadedPrices } from './prices.js'
 import { getPortfolioSettings, instrumentMap, listAccounts, listPhysical, listTransactions, replaceDerived } from './repo.js'
 import { buildSummary } from './views.js'
-import { fallbackMarks } from './fallback.js'
+import { onPricesWritten } from '../jobs/events.js'
 
 export interface Computed {
   txns: Transaction[]
@@ -21,6 +21,9 @@ export interface Computed {
   settings: PortfolioSettings
   run: EngineRun
   prices: LoadedPrices
+  /** Every symbol whose closes fed this run, and their cache fingerprint once loaded. */
+  priceSymbols: string[]
+  priceStamp: string
   /** First valuation date (setting or first transaction). */
   inception: string | null
   computedAt: string
@@ -28,7 +31,7 @@ export interface Computed {
 
 const MAX_AGE_MS = 15 * 60_000
 let version = 0
-let cache: { v: number; at: number; c: Computed; maxAge: number } | null = null
+let cache: { v: number; at: number; c: Computed } | null = null
 let inflight: { v: number; p: Promise<Computed> } | null = null
 let lastStamp = -1
 
@@ -60,7 +63,20 @@ async function compute(force: boolean): Promise<Computed> {
   const dates = valuationDates(heldSymbols.length ? heldSymbols : [UNIVERSE[ASSETS[0]].spot], prices.book, inception)
   const run = runLedger(txns, instruments, prices.book, dates, settings)
 
-  const c: Computed = { txns, instruments, accounts, physical, settings, run, prices, inception, computedAt: new Date().toISOString() }
+  const priceSymbols = [...new Set(symbols)]
+  const c: Computed = {
+    txns,
+    instruments,
+    accounts,
+    physical,
+    settings,
+    run,
+    prices,
+    priceSymbols,
+    priceStamp: priceStamp(priceSymbols),
+    inception,
+    computedAt: new Date().toISOString(),
+  }
 
   replaceDerived(
     run.units,
@@ -117,10 +133,10 @@ export function toLite(s: PortfolioSummaryLite): PortfolioSummaryLite {
   return { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byMetal }
 }
 
-/** A result with fallback marks is re-computed after this long instead of MAX_AGE_MS. */
-const FALLBACK_MAX_AGE_MS = 60_000
-
-/** Latest computation (cached ≤ 15 min unless the ledger changed). `force` refetches prices. */
+/**
+ * Latest computation, cached ≤ 15 min unless the ledger changed or new closes
+ * landed for a symbol it used. `force` refetches prices.
+ */
 export function getComputed(opts: { force?: boolean } = {}): Promise<Computed> {
   const force = !!opts.force
   // Another process (e.g. the demo seed CLI) may have written to the ledger.
@@ -129,12 +145,14 @@ export function getComputed(opts: { force?: boolean } = {}): Promise<Computed> {
     lastStamp = stamp
     version++
   }
-  if (!force && cache && cache.v === version && Date.now() - cache.at < cache.maxAge) return Promise.resolve(cache.c)
+  // ...or landed closes (data:yahoo CLI, macro/ML refreshes): the cached marks are out of date.
+  if (cache && cache.v === version && priceStamp(cache.c.priceSymbols) !== cache.c.priceStamp) version++
+  if (!force && cache && cache.v === version && Date.now() - cache.at < MAX_AGE_MS) return Promise.resolve(cache.c)
   if (!force && inflight && inflight.v === version) return inflight.p
   const v = version
   const p = compute(force)
     .then((c) => {
-      if (v === version) cache = { v, at: Date.now(), c, maxAge: fallbackMarks(c).length ? FALLBACK_MAX_AGE_MS : MAX_AGE_MS }
+      if (v === version) cache = { v, at: Date.now(), c }
       return c
     })
     .finally(() => {
@@ -150,6 +168,19 @@ export function invalidate(): void {
   cache = null
   getComputed().catch((err) => console.error('[portfolio] recompute failed', err))
 }
+
+/**
+ * In-process price ingestion (the marketdata Yahoo job) landed closes: if any
+ * fed the cached NAV, recompute now so both the API and the published
+ * portfolio:summary artifact (Overview, AI context) pick them up.
+ */
+export function onPricesLanded(symbols: string[]): void {
+  const used = cache?.c.priceSymbols
+  if (used && !symbols.some((s) => used.includes(s))) return
+  if (!cache && !inflight) return // nothing computed yet: the first request reads the fresh cache
+  invalidate()
+}
+onPricesWritten(onPricesLanded)
 
 /** Test helper: forget cached state (e.g. after swapping the DB). */
 export function resetCache(): void {

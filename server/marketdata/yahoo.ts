@@ -3,6 +3,7 @@ import { upsertDailyBars, type DailyBar } from '../db/repo.js'
 import { upsertContracts, type ContractBar } from '../db/shared-repo.js'
 import { getHistorical } from '../services/yahoo-finance.service.js'
 import type { JobContext } from '../jobs/registry.js'
+import { emitPricesWritten } from '../jobs/events.js'
 import { canonicalSymbol, contractRow } from './contracts.js'
 import { latestPriceDate, upsertYahooContractBars } from './repo.js'
 
@@ -106,6 +107,7 @@ export async function ingestYahoo(ctx: JobContext, opts: { fetcher?: Fetcher; to
   let rows = 0
   let contractRows = 0
   const failures: string[] = []
+  const written: string[] = []
 
   for (const symbol of symbols) {
     try {
@@ -122,6 +124,7 @@ export async function ingestYahoo(ctx: JobContext, opts: { fetcher?: Fetcher; to
         source: 'yahoo',
       }))
       rows += upsertDailyBars(out)
+      if (out.length) written.push(symbol)
     } catch (err) {
       failures.push(`${symbol}: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -154,6 +157,8 @@ export async function ingestYahoo(ctx: JobContext, opts: { fetcher?: Fetcher; to
     ctx.progress(++done / total, `Yahoo ${ysym}`)
   }
 
+  // Readers of prices_daily that cache derived results (portfolio NAV) refresh now, not at their TTL.
+  emitPricesWritten(written)
   if (failures.length) ctx.log(`Failed: ${failures.join('; ')}`)
   if (failures.length === symbols.length) throw new Error(`Yahoo refresh failed for every symbol (${failures[0]})`)
   return `Yahoo: ${rows} daily rows across ${symbols.length - failures.length}/${symbols.length} symbols; ${contractRows} contract rows (Databento rows untouched)`

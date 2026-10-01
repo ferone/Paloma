@@ -9,6 +9,8 @@ import { useAttribution, usePerformance, useRisk, useSummary } from '../api'
 import { RecordFirstTransaction } from '../components/common'
 import { MonthlyHeatmap } from '../components/MonthlyHeatmap'
 import { TimeChart } from '../components/TimeChart'
+import { useAssistantContext } from '../../assistant/context'
+import { performanceSummary } from '../../assistant/summaries'
 
 type Range = 'ITD' | '5Y' | '3Y' | '1Y' | 'YTD'
 const RANGES: Range[] = ['ITD', '5Y', '3Y', '1Y', 'YTD']
@@ -28,6 +30,7 @@ export default function PerformancePage() {
   const perf = usePerformance(benchmark, from)
   const risk = useRisk()
   const attribution = useAttribution(from)
+  useAssistantContext(() => performanceSummary(perf.data, risk.data), [perf.data, risk.data])
 
   if (summary.data?.empty) return <Panel provenance={summary.data.provenance}><RecordFirstTransaction title="No performance history yet" /></Panel>
   if (perf.isLoading || summary.isLoading) return <Panel><PanelSkeleton rows={10} /></Panel>

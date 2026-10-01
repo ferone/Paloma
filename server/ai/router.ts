@@ -6,6 +6,7 @@ import { env } from '../lib/env.js'
 import { deleteReport, failOrphans, getReport, listReports } from './repo.js'
 import { aiStatus, getAiSettings, listModels, putAiSettings } from './settings.js'
 import { BadRequest, NOT_CONFIGURED, parseRequest, startReport } from './service.js'
+import { assistantRouter } from './assistant/router.js'
 
 // /api/ai — AI analyst: status, settings, model catalogue, reports.
 export const router = Router()
@@ -16,6 +17,9 @@ function clearOrphansOnce() {
   orphansCleared = true
   failOrphans()
 }
+
+// Site-wide assistant (chat stream, usage, settings).
+router.use('/assistant', assistantRouter)
 
 router.get('/health', (_req, res) => {
   res.json({ domain: 'ai', status: 'ok' })

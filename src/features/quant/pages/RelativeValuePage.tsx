@@ -15,6 +15,8 @@ import { OosPanel } from '../components/InstrumentPanels'
 import { RangeControl, useRange } from '../components/Range'
 import { useQuantContext } from '../QuantLayout'
 import { pairsForAsset, type ClientPair } from '../pairs'
+import { useAssistantContext } from '../../assistant/context'
+import { relativeValueSummary } from '../../assistant/summaries'
 
 /** Every relative-value pair the asset in focus takes part in (from `RELATIVE_VALUE_PAIRS`). */
 export default function RelativeValuePage() {
@@ -86,6 +88,7 @@ function sizeText(size: number, unit: string): string {
 
 function RelativeValue({ rv, cp }: { rv: RelativeValueDetail; cp: ClientPair }) {
   const { mode } = useQuantContext()
+  useAssistantContext(() => relativeValueSummary(rv, cp.pair.label, mode), [rv, cp.pair.label, mode])
   const { pair, numLabel, denLabel, numFut, denFut } = cp
   const n = numLabel.toLowerCase()
   const d = denLabel.toLowerCase()

@@ -12,6 +12,8 @@ import { OuExplainer, VerdictExplainer, ZScoreExplainer } from '../components/gl
 import { KIND_LABEL, fmtValue } from '../format'
 import { useQuantContext } from '../QuantLayout'
 import { pairNames } from '../pairs'
+import { useAssistantContext } from '../../assistant/context'
+import { scannerSummary } from '../../assistant/summaries'
 
 type KindFilter = 'all' | 'spreads' | 'seasonal' | 'outright' | 'rv'
 
@@ -86,6 +88,7 @@ export default function ScannerPage() {
 
 function Scanner({ data }: { data: OpportunitiesResponse }) {
   const navigate = useNavigate()
+  useAssistantContext(() => scannerSummary(data), [data])
   const [filter, setFilter] = useState<KindFilter>('all')
   const [actionable, setActionable] = useState(false)
   const rows = useMemo(() => data.rows.filter((o) => matches(o, filter) && (!actionable || o.verdict.action !== 'AVOID')), [data, filter, actionable])

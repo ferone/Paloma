@@ -12,6 +12,8 @@ import { TradeTicket } from '../components/TradeTicket'
 import { WhyVerdict } from '../components/WhyVerdict'
 import { KIND_LABEL, fmtValue } from '../format'
 import { useQuantContext } from '../QuantLayout'
+import { useAssistantContext } from '../../assistant/context'
+import { instrumentSummary } from '../../assistant/summaries'
 
 export default function InstrumentPage() {
   const { id } = useParams()
@@ -25,6 +27,7 @@ export default function InstrumentPage() {
 
 function Instrument({ d }: { d: InstrumentDetail }) {
   const { mode } = useQuantContext()
+  useAssistantContext(() => instrumentSummary(d, mode), [d, mode])
   const last = d.series[d.series.length - 1]
   return (
     <div className="space-y-4">

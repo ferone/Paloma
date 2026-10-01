@@ -5,12 +5,15 @@ import { Chip, DataTable, EmptyState, ErrorNote, Explainer, Panel, PanelSkeleton
 import { fmtCompact, fmtNum, fmtPct, fmtPctSigned, fmtUsdCompact } from '../../../design/format'
 import { signColor } from '../../../design/tokens'
 import { useEtfs } from '../hooks'
+import { useAssistantContext } from '../../assistant/context'
+import { etfSummary } from '../../assistant/summaries'
 
 const ret = (v: number | null) => <span className={signColor(v)}>{fmtPctSigned(v, 1)}</span>
 
 export default function EtfsPage() {
   const { metal } = useSettings()
   const q = useEtfs(metal)
+  useAssistantContext(() => (q.data ? etfSummary(q.data) : null), [q.data])
   const spec = UNIVERSE[metal]
 
   if (q.isLoading) return <Panel><PanelSkeleton rows={7} /></Panel>

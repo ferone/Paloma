@@ -63,7 +63,7 @@ export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
       ) : (
         <div className="h-52">
           <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
-            <AreaChart data={series} margin={{ left: 0, right: 4, top: 4, bottom: 0 }}>
+            <AreaChart data={series} margin={{ left: 0, right: 22, top: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={color} stopOpacity={0.25} />
@@ -72,7 +72,7 @@ export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
               </defs>
               <CartesianGrid {...s.grid} />
               <XAxis dataKey="date" tick={s.tick} axisLine={s.axisLine} tickLine={false} tickFormatter={dateTick(true)} minTickGap={40} />
-              <YAxis tick={s.tick} axisLine={false} tickLine={false} width={46} domain={['auto', 'auto']} tickFormatter={(v: number) => fmtRatio(v, 0)} />
+              <YAxis tick={s.tick} axisLine={false} tickLine={false} width={yAxisWidth(lo, hi)} domain={['auto', 'auto']} tickFormatter={(v: number) => fmtRatio(v, 0)} />
               {avg != null && <ReferenceLine y={avg} stroke={t.faint} strokeDasharray="3 3" />}
               <Tooltip
                 {...s.tooltip}
@@ -86,4 +86,10 @@ export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
       )}
     </Panel>
   )
+}
+
+/** Y-axis width that fits the longest tick label (small ratios like 0.00135 need more room). */
+function yAxisWidth(lo: number | null | undefined, hi: number | null | undefined): number {
+  const longest = Math.max(fmtRatio(lo ?? 0, 0).length, fmtRatio(hi ?? 0, 0).length)
+  return Math.min(68, Math.max(36, longest * 7 + 10))
 }

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { ChangeKind, SeriesUnit, SeriesPoint, Stance } from '@shared/macro'
-import { fmtNum, fmtPctSigned, fmtSigned, fmtUsd } from '../../design/format'
+import { fmtNum, fmtPctSigned, fmtSigned, fmtUsd, fmtRatio } from '../../design/format'
 import { ASSET_COLOR, cssVar } from '../../design/tokens'
 import { ASSETS, type AssetId } from '@shared/universe'
 import { useTheme } from '../../app/theme'
@@ -16,7 +16,7 @@ export function fmtLevel(v: number | null | undefined, unit: SeriesUnit): string
     case 'usd_bn':
       return `$${fmtNum(v / 1000, 2)}T`
     case 'ratio':
-      return fmtNum(v, 1)
+      return fmtRatio(v)
     default:
       return fmtNum(v, 2)
   }

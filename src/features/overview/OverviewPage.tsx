@@ -8,7 +8,7 @@ import type { PortfolioSummaryLite, QuantOpportunityLite, MlPredictionLite, Macr
 import { api } from '../../api/client'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import { Chip, EmptyState, ErrorNote, PageHeader, Panel, PanelSkeleton, Stat, type ChipTone } from '../../ui'
-import { fmtAge, fmtNum, fmtPct, fmtPctSigned, fmtSigned, fmtUsd, fmtUsdCompact, fmtUsdSigned } from '../../design/format'
+import { fmtAge, fmtNum, fmtPct, fmtPctSigned, fmtSigned, fmtUsd, fmtUsdCompact, fmtUsdSigned, fmtRatio } from '../../design/format'
 import { PALETTE, signColor, TIER } from '../../design/tokens'
 
 const SLEEVE_LABEL: Record<Sleeve, string> = {
@@ -169,7 +169,7 @@ function MarketStrip({ data }: { data: OverviewResponse }) {
           return (
             <div key={pair.id} className="px-4 py-3">
               <dt className="label">{pair.label}</dt>
-              <dd className="num mt-1 text-base text-foreground">{fmtNum(ratio, 2)}</dd>
+              <dd className="num mt-1 text-base text-foreground">{fmtRatio(ratio, 2)}</dd>
               <dd className="text-2xs text-muted">{caption}</dd>
             </div>
           )

@@ -12,6 +12,10 @@ export default defineConfig({
     },
   },
   server: {
+    // Windows' native watcher drops rapid back-to-back writes and atomic
+    // replaces (temp file + rename), leaving Vite serving stale modules.
+    // Polling costs a little CPU but never misses a change.
+    watch: process.platform === 'win32' ? { usePolling: true, interval: 300 } : undefined,
     proxy: {
       '/api': {
         // API_PORT lets parallel checkouts run their own API server.

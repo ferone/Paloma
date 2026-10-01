@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { RelativeValueDetail } from '@shared/quant'
 import { UNIVERSE, basisInstrumentId } from '@shared/universe'
 import { ASSET_COLOR, PALETTE, signColor } from '../../../design/tokens'
-import { fmtNum, fmtPct, fmtSigned, fmtUsd } from '../../../design/format'
+import { fmtNum, fmtPct, fmtRatio, fmtSigned, fmtUsd } from '../../../design/format'
 import { SpreadChart } from '../../../charts'
 import { EmptyState, Panel, Segmented, Stat } from '../../../ui'
 import { useInstrument, useRelativeValue } from '../api'
@@ -103,7 +103,7 @@ function RelativeValue({ rv, cp }: { rv: RelativeValueDetail; cp: ClientPair }) 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat size="md" label={`${pair.label} ratio`} value={fmtNum(r.latest, 2)} hint={`${denUnit} of ${d} per ${numUnit} of ${n}`} />
+        <Stat size="md" label={`${pair.label} ratio`} value={fmtRatio(r.latest, 2)} hint={`${denUnit} of ${d} per ${numUnit} of ${n}`} />
         <Stat size="md" label="z (60d)" value={<span className={signColor(r.z === null ? null : -r.z)}>{fmtSigned(r.z, 2)}</span>} hint={r.z !== null ? (r.z > 0 ? `${d} cheap vs ${n}` : `${d} rich vs ${n}`) : undefined} />
         <Stat size="md" label="z (252d)" value={fmtSigned(r.zLong, 2)} />
         <Stat size="md" label="Percentile" value={fmtPct(r.percentile, 0)} hint="of the full stored history" />
@@ -113,7 +113,7 @@ function RelativeValue({ rv, cp }: { rv: RelativeValueDetail; cp: ClientPair }) 
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Panel density="dense" title={`${numLabel}/${d} ratio`} eyebrow={`${r.bandWindow}-day mean with ±1σ / ±2σ bands`} actions={<RangeControl value={ratioRange.range} onChange={ratioRange.setRange} />} provenance={prov}>
-          <SpreadChart points={ratioPts} window={r.bandWindow} color={ASSET_COLOR[pair.numerator]} yFormat={(v) => fmtNum(v, 1)} label={`${numFut.root} ÷ ${denFut.root}`} height={300} />
+          <SpreadChart points={ratioPts} window={r.bandWindow} color={ASSET_COLOR[pair.numerator]} yFormat={(v) => fmtRatio(v)} label={`${numFut.root} ÷ ${denFut.root}`} height={300} />
         </Panel>
         <div className="space-y-4">
           <Panel density="dense" title="Ratio verdict" eyebrow={`${mode} mode`} actions={<ActionChip verdict={r.verdicts[mode]} />} provenance={{ source: 'Engine decision layer', asOf: rv.asOf }}>

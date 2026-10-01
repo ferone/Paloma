@@ -52,6 +52,22 @@ export function fmtPctSigned(fraction: number | null | undefined, digits = 2): s
   return `${fmtSigned(fraction * 100, digits)}%`
 }
 
+/**
+ * Cross-asset price ratio. Ratios span orders of magnitude (gold/silver ≈ 69,
+ * bitcoin/gold ≈ 20, copper/gold ≈ 0.0016), so precision follows magnitude:
+ * `largeDecimals` decimals at ≥ 10, two between 1 and 10, three significant
+ * digits below 1 — never a misleading "0.0".
+ */
+export function fmtRatio(n: number | null | undefined, largeDecimals = 1): string {
+  if (!ok(n)) return DASH
+  const a = Math.abs(n)
+  if (a >= 10) return fmtNum(n, largeDecimals)
+  if (a >= 1) return fmtNum(n, 2)
+  if (a === 0) return '0'
+  const decimals = Math.min(10, 2 - Math.floor(Math.log10(a)))
+  return fmtNum(n, decimals)
+}
+
 export function fmtOz(n: number | null | undefined, digits = 3): string {
   if (!ok(n)) return DASH
   return `${fmtNum(n, digits)} oz`

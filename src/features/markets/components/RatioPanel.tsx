@@ -3,7 +3,7 @@ import { useId, useMemo } from 'react'
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { UNIVERSE, type PriceUnit, type RelativeValuePair } from '@shared/universe'
 import { ErrorNote, HelpTip, Panel, Skeleton, Stat } from '../../../ui'
-import { fmtDate, fmtNum, fmtPct } from '../../../design/format'
+import { fmtDate, fmtPct, fmtRatio } from '../../../design/format'
 import { useHistory, useQuote } from '../hooks'
 import { percentileRank, ratioSeries } from '../lib/series'
 import { useChartTheme } from '../charts/chartTheme'
@@ -51,10 +51,10 @@ export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
       provenance={{ source: `Yahoo Finance · ${num.spot} ÷ ${den.spot}, weekly closes (5Y); live value from the reference quotes`, asOf: series.at(-1)?.date ?? null }}
     >
       <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3">
-        <Stat label="Now" value={fmtNum(current, 1)} size="md" />
-        <Stat label="5Y average" value={fmtNum(avg, 1)} size="sm" />
+        <Stat label="Now" value={fmtRatio(current)} size="md" />
+        <Stat label="5Y average" value={fmtRatio(avg)} size="sm" />
         <Stat label="5Y percentile" value={fmtPct(pct, 0)} size="sm" hint="Share of weeks below today" />
-        <Stat label="5Y range" value={`${fmtNum(lo, 1)}–${fmtNum(hi, 1)}`} size="sm" />
+        <Stat label="5Y range" value={`${fmtRatio(lo)}–${fmtRatio(hi)}`} size="sm" />
       </div>
       {loading ? (
         <Skeleton className="h-52 w-full" />
@@ -72,12 +72,12 @@ export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
               </defs>
               <CartesianGrid {...s.grid} />
               <XAxis dataKey="date" tick={s.tick} axisLine={s.axisLine} tickLine={false} tickFormatter={dateTick(true)} minTickGap={40} />
-              <YAxis tick={s.tick} axisLine={false} tickLine={false} width={32} domain={['auto', 'auto']} tickFormatter={(v: number) => fmtNum(v, 0)} />
+              <YAxis tick={s.tick} axisLine={false} tickLine={false} width={46} domain={['auto', 'auto']} tickFormatter={(v: number) => fmtRatio(v, 0)} />
               {avg != null && <ReferenceLine y={avg} stroke={t.faint} strokeDasharray="3 3" />}
               <Tooltip
                 {...s.tooltip}
                 labelFormatter={(d) => fmtDate(String(d))}
-                formatter={(v) => [fmtNum(Number(v), 1), 'Ratio']}
+                formatter={(v) => [fmtRatio(Number(v)), 'Ratio']}
               />
               <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} fill={`url(#${gid})`} isAnimationActive={false} />
             </AreaChart>

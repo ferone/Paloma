@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import { RiEqualizerLine } from 'react-icons/ri'
 import { UNIVERSE } from '@shared/universe'
 import { useQuoteMap } from '../features/markets/hooks'
-import { fmtNum, fmtPctSigned } from '../design/format'
+import { fmtNum, fmtPctSigned, fmtRatio } from '../design/format'
 import { signColor } from '../design/tokens'
 import { defaultTickerKeys, readTickerConfig, tickerCatalog, tickerItems, tickerSymbols, toggleTickerKey, writeTickerConfig, type TickerItem, type TickerKey } from './tickerConfig'
 
@@ -38,7 +38,7 @@ export function TickerStrip() {
           return (
             <div key={item.key} className="flex items-baseline gap-1.5 whitespace-nowrap" title={item.title}>
               <dt className="text-muted">{item.label}</dt>
-              <dd className="num text-foreground">{fmtNum(ratio, 1)}</dd>
+              <dd className="num text-foreground">{fmtRatio(ratio)}</dd>
             </div>
           )
         })}

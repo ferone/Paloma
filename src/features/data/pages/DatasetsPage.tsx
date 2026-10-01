@@ -4,6 +4,7 @@ import { fmtAge, fmtDate, fmtNum } from '../../../design/format'
 import { Chip, DataTable, EmptyState, ErrorNote, Explainer, Panel, PanelSkeleton, Stat, type Column } from '../../../ui'
 import { useFreshness } from '../api'
 import { DATASET_LABEL, datasetLabel, sourceLabel } from '../labels'
+import { OpenInterestNote } from '../OpenInterestNote'
 
 function StatusChip({ row }: { row: FreshnessRow }) {
   if (!row.rows) return <Chip tone="neutral">Empty</Chip>
@@ -119,6 +120,9 @@ export default function DatasetsPage() {
           <p className="mt-3 text-2xs text-muted">
             Not created yet by their domains: {absent.map((r) => datasetLabel(r.dataset)).join(', ')}.
           </p>
+        )}
+        {withData.some((r) => r.dataset === 'contract_bars' && r.source === 'databento') && (
+          <OpenInterestNote rows={q.data!.openInterest} className="mt-3 border-t border-border pt-3" />
         )}
       </Panel>
 

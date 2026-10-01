@@ -16,6 +16,7 @@ import { getScheduleStatus, runScheduledJobs, scheduleSchema, setScheduleConfig 
 import { assertWithinBudget, estimate, OverBudgetError } from './databento/cost.js'
 import { ExportNotFoundError, buildExportQuery, exportFilename, streamExport } from './export.js'
 import { freshness } from './freshness.js'
+import { openInterestCoverage } from './open-interest.js'
 import { JOB_DATABENTO_BACKFILL, backfillSchema, databentoClient, registerMarketdataJobs } from './jobs.js'
 import { contractBarsRange, contractSummaries, dailySeries, databentoSpend, priceSymbols, recentJobRuns } from './repo.js'
 
@@ -57,6 +58,7 @@ router.get('/databento/status', (_req, res) => {
     historyStart: DATABENTO_HISTORY_START,
     spend: databentoSpend(),
     backfill: jobStatus(JOB_DATABENTO_BACKFILL) ?? null,
+    openInterest: openInterestCoverage(),
   })
 })
 

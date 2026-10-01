@@ -4,6 +4,7 @@ import { DATABENTO_ROOTS, DATABENTO_SCHEMAS, type CostEstimate, type DatabentoRo
 import { fmtAge, fmtDate, fmtUsd } from '../../../design/format'
 import { Button, Chip, DataTable, ErrorNote, Explainer, Field, Input, NotConfiguredState, Panel, PanelSkeleton, Stat, isNotConfigured, type Column } from '../../../ui'
 import { JobProgress } from '../JobProgress'
+import { OpenInterestNote } from '../OpenInterestNote'
 import { errorMessage, useBackfill, useDatabentoStatus, useEstimate, type BackfillOutcome } from '../api'
 
 const SCHEMA_LABEL: Record<DatabentoSchema, { label: string; detail: string }> = {
@@ -234,6 +235,9 @@ export default function DatabentoPage() {
         </Panel>
 
         <div className="space-y-4">
+          <Panel title="Open interest" eyebrow="statistics schema" density="dense" provenance={{ source: 'contract_bars (databento)', note: 'collected going forward' }}>
+            <OpenInterestNote rows={s.openInterest} />
+          </Panel>
           <Panel title="Backfill job" density="dense">
             {s.backfill && s.backfill.state !== 'idle' ? (
               <JobProgress job={s.backfill} label="Databento backfill" />
@@ -252,7 +256,10 @@ export default function DatabentoPage() {
               <code className="num">GCZ6</code> are mapped to <code className="num">GCZ26</code> using the record date. Reference full-history cost
               (2010 → today): GC bars ≈ $1.55, GC open interest ≈ $0.99, SI bars ≈ $1.13, MGC bars ≈ $0.54.
             </p>
-            <p>The daily incremental job resumes from the last stored date and is capped at $1.</p>
+            <p>
+              The daily incremental job resumes from the last stored date for bars and open interest of every root, and is capped at $1 in total (or the
+              budget, if lower). Open interest was never backfilled; it accrues from the first incremental run onward.
+            </p>
           </Explainer>
         </div>
       </div>

@@ -9,6 +9,7 @@ import { upsertContracts, upsertContractBars, type ContractBar, type ContractRow
 import type { JobContext } from '../../jobs/registry.js'
 import { contractRow } from '../contracts.js'
 import { refreshFrontMonth } from '../continuous.js'
+import { incrementalResumeDate, latestOpenInterestDate } from '../open-interest.js'
 import { latestContractDate, recordDatabentoPull, updateOpenInterest } from '../repo.js'
 import type { DatabentoClient } from './client.js'
 import { OverBudgetError, assertWithinBudget, costLimit, estimate, todayUtc } from './cost.js'
@@ -186,7 +187,11 @@ async function applyChunk(
   return { records: records.length, rows: n }
 }
 
-/** Incremental request per root: resume from the latest stored Databento date. */
+/**
+ * Incremental request per root: resume from the latest stored Databento date
+ * (or a slightly older latest open interest, see incrementalResumeDate). Both
+ * schemas are pulled from there, so open interest accrues going forward.
+ */
 export function incrementalRequests(roots: readonly DatabentoRoot[], today = todayUtc()): { root: DatabentoRoot; start: string }[] {
-  return roots.map((root) => ({ root, start: resumeStart(latestContractDate(root, 'databento'), today) }))
+  return roots.map((root) => ({ root, start: resumeStart(incrementalResumeDate(latestContractDate(root, 'databento'), latestOpenInterestDate(root)), today) }))
 }

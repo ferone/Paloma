@@ -4,7 +4,7 @@ import { DATABENTO_ROOTS } from '@shared/marketdata'
 export const DATASET_LABEL: Record<string, { label: string; detail: string }> = {
   prices_daily: { label: 'Daily prices', detail: 'Futures fronts, ETFs, miners, macro references; Databento continuous front months' },
   contracts: { label: 'Futures contracts', detail: `${DATABENTO_ROOTS.join(' · ')} contract months with last-trade and first-notice dates` },
-  contract_bars: { label: 'Contract bars', detail: 'Daily OHLCV and open interest per contract month' },
+  contract_bars: { label: 'Contract bars', detail: 'Daily OHLCV per contract month; open interest only from when the daily job began collecting it' },
   macro_series: { label: 'Macro series', detail: 'FRED and derived series (real yields, dollar, ratios)' },
   cot_reports: { label: 'CFTC positioning', detail: 'Commitments of Traders (disaggregated, or TFF for financial futures), weekly' },
   pf_transactions: { label: 'Transactions', detail: 'Portfolio ledger' },

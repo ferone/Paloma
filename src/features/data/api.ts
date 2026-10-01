@@ -9,6 +9,7 @@ import type {
   DatabentoSpend,
   EstimateRequest,
   FreshnessResponse,
+  OpenInterestCoverage,
   JobRunRow,
   OverBudgetBody,
   ScheduleConfig,
@@ -39,6 +40,8 @@ export interface DatabentoStatus {
   historyStart: string
   spend: DatabentoSpend
   backfill: JobStatus | null
+  /** Open interest collected per root (going forward; never backfilled). */
+  openInterest?: OpenInterestCoverage[]
 }
 
 /** Human message from an axios error body ({ message } / { error }) or the Error itself. */

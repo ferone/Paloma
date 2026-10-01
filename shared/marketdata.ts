@@ -111,6 +111,26 @@ export interface FreshnessRow {
 export interface FreshnessResponse {
   generatedAt: string
   rows: FreshnessRow[]
+  /** Open-interest collection per Databento root (OI is collected going forward, not backfilled). */
+  openInterest?: OpenInterestCoverage[]
+}
+
+/**
+ * How much open-interest history a root really has. The statistics schema was
+ * never backfilled; the daily incremental job collects it going forward.
+ */
+export interface OpenInterestCoverage {
+  root: string
+  /** First date of the current continuous collection (null = nothing collected). */
+  since: string | null
+  /** Latest date with open interest. */
+  last: string | null
+  /** Trading days with open interest in the current collection. */
+  days: number
+  /** The latest open interest is within a week of the root's latest Databento bar. */
+  current: boolean
+  /** An older, disconnected sample before `since` (e.g. a one-month test pull). */
+  earlierSample: { from: string; to: string } | null
 }
 
 // ── Series / contracts ─────────────────────────────────────────────────────

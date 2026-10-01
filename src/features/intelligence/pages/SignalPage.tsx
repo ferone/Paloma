@@ -4,10 +4,13 @@ import { ErrorNote, Explainer, Panel, PanelSkeleton } from '../../../ui'
 import { useMlPredictions } from '../api'
 import { JobControls } from '../components/JobControls'
 import { SignalCard } from '../components/SignalCard'
+import { useAssistantContext } from '../../assistant/context'
+import { mlSignalSummary } from '../../assistant/summaries'
 
 export default function SignalPage() {
   const { asset } = useSettings()
   const preds = useMlPredictions()
+  useAssistantContext(() => mlSignalSummary(preds.data, asset), [preds.data, asset])
   // Selected asset first; every asset is shown so they can be compared.
   const order = [asset, ...ASSETS.filter((m) => m !== asset)]
 

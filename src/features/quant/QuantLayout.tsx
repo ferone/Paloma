@@ -6,6 +6,7 @@ import { useSettings } from '../../store/settings-context'
 import { fmtAge, fmtDate } from '../../design/format'
 import { Button, PageHeader, RouteTabs, Segmented } from '../../ui'
 import { useQuantStatus, useRecompute } from './api'
+import { useAssistantContext } from '../assistant/context'
 
 export interface QuantOutletContext {
   /** Asset in focus (the global switch in the top bar). */
@@ -39,6 +40,11 @@ export function QuantLayout() {
       // non-persistent is fine
     }
   }, [mode])
+  useAssistantContext(
+    () => ({ label: 'Quant Lab', summary: 'Asset in focus: ' + UNIVERSE[asset].label + '. Verdict mode selected: ' + mode + ' (the verdicts on screen follow this mode).' }),
+    [asset, mode],
+    'layout',
+  )
   const status = useQuantStatus()
   const recompute = useRecompute()
   const running = status.data?.job?.state === 'running' || recompute.isPending

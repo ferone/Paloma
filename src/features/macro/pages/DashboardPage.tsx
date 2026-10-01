@@ -8,11 +8,14 @@ import { fmtDate, fmtNum, fmtSigned } from '../../../design/format'
 import { useMacroDashboard, useMacroRefresh, useMacroSeries } from '../api'
 import { STANCE_LABEL, STANCE_TONE, alignToDates, changeCorrelation, fmtChange, fmtLevel, isoYearsAgo, thin } from '../lib'
 import { AssetPriceChart, DriverChart } from '../components/PairChart'
+import { useAssistantContext } from '../../assistant/context'
+import { macroSummary } from '../../assistant/summaries'
 
 export default function DashboardPage() {
   const { asset } = useSettings()
   const dash = useMacroDashboard(asset)
   const refresh = useMacroRefresh()
+  useAssistantContext(() => (dash.data ? macroSummary(dash.data) : null), [dash.data])
 
   if (dash.isLoading) return <PanelSkeleton rows={8} />
   if (dash.error) return <ErrorNote error={dash.error} onRetry={() => dash.refetch()} />

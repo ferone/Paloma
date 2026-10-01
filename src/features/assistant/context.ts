@@ -99,3 +99,9 @@ export function useAssistantContext(build: () => PageContextValue | null, deps: 
 }
 
 export const askPrompt = (term: string) => `Explain ${term} in the context of what I'm looking at.`
+
+/** Publishes a context from places where hooks can't run directly (render props). Renders nothing. */
+export function AssistantContextSource({ value }: { value: PageContextValue | null }): null {
+  useAssistantContext(() => value, [value?.label, value?.summary])
+  return null
+}

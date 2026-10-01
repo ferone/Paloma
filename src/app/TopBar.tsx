@@ -5,6 +5,7 @@ import { useSettings } from '../store/settings-context'
 import { useTheme } from './theme'
 import { AssetPicker } from './AssetPicker'
 import { TickerStrip } from './TickerStrip'
+import { AssistantToggle } from '../features/assistant/AssistantProvider'
 
 export function TopBar({ menuButton }: { menuButton: ReactNode }) {
   const { theme, toggleTheme } = useTheme()
@@ -31,6 +32,7 @@ export function TopBar({ menuButton }: { menuButton: ReactNode }) {
           <RiRefreshLine size={16} className={autoRefresh ? 'motion-safe:animate-[spin_6s_linear_infinite]' : ''} />
           <span className="sr-only">Toggle live refresh</span>
         </button>
+        <AssistantToggle />
         <button
           type="button"
           onClick={toggleTheme}

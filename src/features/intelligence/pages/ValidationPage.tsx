@@ -6,6 +6,8 @@ import { AucByYear, PermutationHistogram } from '../components/charts'
 import { ValidationChip } from '../components/common'
 import { runProvenance } from '../components/provenance'
 import { RunScope } from '../components/RunScope'
+import { AssistantContextSource } from '../../assistant/context'
+import { mlValidationSummary } from '../../assistant/summaries'
 
 function GatePanel({ run, gate }: { run: MlRunDetail; gate: MlGate }) {
   const fmt = (id: string, v: number | null) =>
@@ -60,6 +62,7 @@ export default function ValidationPage() {
         ]
         return (
           <div className="space-y-6">
+            <AssistantContextSource value={mlValidationSummary(run)} />
             <GatePanel run={run} gate={m.gate} />
 
             <Panel title="Walk-forward summary" density="dense">

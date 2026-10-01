@@ -7,6 +7,7 @@ import { requestAdminToken, setAdminToken } from '../../api/admin'
 import { Button, Chip, Field, Input, PageHeader, Panel } from '../../ui'
 import { ModelPicker } from '../macro/ai/ModelPicker'
 import { ApiKeysPanel } from './ApiKeysPanel'
+import { AssistantSettingsPanel } from '../assistant/AssistantSettingsPanel'
 import { useAdminStatus, useGeneralSettings, useLock, useSaveGeneral, useSecrets } from './api'
 
 export default function SettingsPage() {
@@ -35,6 +36,7 @@ export default function SettingsPage() {
             </Link>
           </Panel>
         </div>
+        <AssistantSettingsPanel />
         <AdminPanel />
         <StoragePanel />
       </div>

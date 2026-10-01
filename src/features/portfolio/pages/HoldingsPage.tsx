@@ -11,10 +11,13 @@ import { AllocationBar } from '../components/AllocationBar'
 import { ASSET_BUCKET_COLOR, SLEEVE_COLOR } from '../components/colors'
 import { RecordFirstTransaction, Warnings } from '../components/common'
 import { assetLabel, fmtQty, qtyDigits } from '../components/units'
+import { useAssistantContext } from '../../assistant/context'
+import { holdingsSummary } from '../../assistant/summaries'
 
 export default function HoldingsPage() {
   const summary = useSummary()
   const holdings = useHoldings()
+  useAssistantContext(() => holdingsSummary(summary.data, holdings.data), [summary.data, holdings.data])
 
   if (summary.isLoading || holdings.isLoading) return <Panel><PanelSkeleton rows={8} /></Panel>
   if (summary.error || holdings.error) return <ErrorNote error={summary.error ?? holdings.error} onRetry={() => { summary.refetch(); holdings.refetch() }} />

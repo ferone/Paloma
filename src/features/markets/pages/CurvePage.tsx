@@ -23,6 +23,8 @@ import { signColor, CHART_INITIAL_SIZE } from '../../../design/tokens'
 import { useCurve, useCurveHistory } from '../hooks'
 import { useChartTheme } from '../charts/chartTheme'
 import { dateTick, rechartsStyle } from '../charts/recharts'
+import { useAssistantContext } from '../../assistant/context'
+import { curveSummary } from '../../assistant/summaries'
 
 const SHAPE: Record<CurveShape, { label: string; tone: ChipTone }> = {
   contango: { label: 'Contango', tone: 'watch' },
@@ -82,6 +84,7 @@ export default function CurvePage() {
 }
 
 function CurveSummary({ curve: c }: { curve: CurveResponse }) {
+  useAssistantContext(() => curveSummary(c), [c])
   const ref = c.contracts.find((x) => x.isReference)
   const shape = SHAPE[c.shape]
   return (

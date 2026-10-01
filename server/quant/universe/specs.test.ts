@@ -64,7 +64,6 @@ describe("buildSpecs — the next assets are a data change", () => {
     yahoo: `${p.root}=F`,
     activeMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
     cashSettled: false,
-    ozPerContract: 0,
     ...p,
   });
   const assets: AssetSpec[] = [

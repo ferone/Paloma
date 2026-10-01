@@ -45,12 +45,12 @@ export function parseRequest(body: unknown): ReportRequest {
     let opp: QuantOpportunityLite | undefined = input.opportunity
     if (!opp) {
       const snap = readArtifact<QuantSnapshotLite>(ARTIFACTS.quantSnapshot)?.data
-      const pool = snap?.opportunities.filter((o) => o.metal === metal) ?? []
+      const pool = snap?.opportunities.filter((o) => o.asset === metal) ?? []
       opp = input.opportunityId ? pool.find((o) => o.id === input.opportunityId) : [...pool].sort((a, b) => b.qtRank - a.qtRank)[0]
     }
     if (!opp || typeof opp.id !== 'string' || typeof opp.label !== 'string')
       throw new BadRequest('trade_brief needs an opportunity: post input.opportunity, or run the quant engine so a snapshot exists')
-    return { kind, metal: isAssetId(opp.metal) ? opp.metal : metal, input: { opportunity: opp } }
+    return { kind, metal: isAssetId(opp.asset) ? opp.asset : metal, input: { opportunity: opp } }
   }
   return { kind, metal }
 }

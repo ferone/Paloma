@@ -122,12 +122,12 @@ function FundPanel({ portfolio, generatedAt }: { portfolio: PortfolioSummaryLite
                 </li>
               ))}
           </ul>
-          {portfolio.byMetal.length > 0 && (
+          {portfolio.byAsset.length > 0 && (
             <p className="mt-3 text-2xs text-muted">
               By asset:{' '}
-              {portfolio.byMetal
+              {portfolio.byAsset
                 .filter((m) => m.value !== 0)
-                .map((m) => `${assetLabel(m.metal)} ${fmtPct(m.weight, 0)}`)
+                .map((m) => `${assetLabel(m.asset)} ${fmtPct(m.weight, 0)}`)
                 .join(' · ')}
             </p>
           )}
@@ -264,7 +264,7 @@ function MlPanel({ predictions, generatedAt }: { predictions: MlPredictionLite[]
             return (
               <li key={p.instrumentId}>
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm text-foreground">{assetLabel(p.metal)}</span>
+                  <span className="text-sm text-foreground">{assetLabel(p.asset)}</span>
                   <span className={clsx('num text-sm', validated ? 'text-foreground' : 'text-muted')}>P(up) {fmtPct(pUp, 0)}</span>
                 </div>
                 <div className="relative mt-1.5 h-1.5 rounded-full bg-surface-2">

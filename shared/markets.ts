@@ -3,9 +3,6 @@
 import type { Provenance } from './api.js'
 import type { AssetId } from './universe.js'
 
-/** @deprecated Kept for the `metal` field name; the value is any `AssetId`. */
-type Metal = AssetId
-
 /** Legacy live quote shape (GET /api/quotes/:symbol, /api/batch). Percent fields are in percent units. */
 export interface Quote {
   symbol: string
@@ -67,7 +64,7 @@ export interface CurveContract {
 }
 
 export interface CurveResponse {
-  metal: Metal
+  metal: AssetId
   /** Main futures root; null when the asset has no listed futures (contracts is then empty). */
   root: string | null
   /** Exchange of the root (COMEX, NYMEX, CME). */
@@ -94,7 +91,7 @@ export interface CurveHistoryPoint {
 }
 
 export interface CurveHistoryResponse {
-  metal: Metal
+  metal: AssetId
   points: CurveHistoryPoint[]
   provenance: Provenance
 }
@@ -127,7 +124,7 @@ export interface EtfRow {
 }
 
 export interface EtfsResponse {
-  metal: Metal
+  metal: AssetId
   spotSymbol: string
   spotReturns: EtfRow['returns']
   rows: EtfRow[]
@@ -174,7 +171,7 @@ export interface ModeledSplit {
 }
 
 export interface LiquiditySnapshot {
-  metal: Metal
+  metal: AssetId
   totalDollarVolume: number
   instruments: InstrumentLiquidity[]
   /** Daily contracts traded, summed over the listed active months, last ~30 sessions. */
@@ -202,7 +199,7 @@ export interface LiquiditySpike {
 }
 
 export interface LiquidityHistoryResponse {
-  metal: Metal
+  metal: AssetId
   range: string
   /** Bar size: 5Y is weekly and ALL monthly, so "per bar" figures are not daily there. */
   interval: '1d' | '1wk' | '1mo'

@@ -529,7 +529,7 @@ export function analyzeContinuous(inst: Instrument, series: SeriesPoint[], ctx: 
   if (kind === "inter" && pairLegsOf)
     caveats.push(`1 ${pairLegsOf.numFut.root} vs 1 ${pairLegsOf.denFut.root} is not dollar-neutral; size with the vol-parity ratio on the Relative Value page.`);
   if (mirror) caveats.push("Micro contract: a sizing mirror of the full-size curve, not an independent signal.");
-  caveats.push("Exchange holidays are not modelled in the roll calendar.");
+  caveats.push("Roll dates use the rule-based CME holiday calendar; ad-hoc exchange closures are not modelled.");
 
   const detail: InstrumentDetail = {
     id: inst.id,

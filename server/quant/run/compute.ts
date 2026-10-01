@@ -265,7 +265,7 @@ export function computeQuant(input: MarketInput): QuantResult {
     dataThrough,
     opportunities: liteRows.map((o) => ({
       id: o.id,
-      metal: o.metal,
+      asset: o.metal,
       label: o.label,
       side: o.verdict.direction ?? (o.z !== null && o.z > 0 ? "short" : "long"),
       tier: o.tier,
@@ -297,7 +297,7 @@ function basisLite(d: InstrumentDetail): QuantBasisLite {
   const b = d.basis!.latest;
   return {
     id: d.id,
-    metal: d.metal,
+    asset: d.metal,
     asOf: d.asOf,
     contract: b.contract,
     daysToExpiry: b.daysToExpiry,

@@ -6,6 +6,7 @@ import { writeArtifact } from '../db/repo.js'
 import { registerJob } from '../jobs/registry.js'
 import { ARTIFACTS, type PortfolioSummaryLite } from '../../shared/artifacts.js'
 import { ASSETS, UNIVERSE, type AssetId } from '../../shared/universe.js'
+import { isBusinessDay } from '../../shared/calendar/cme.js'
 import type { Account, Instrument, PhysicalItem, PortfolioSettings, Transaction } from '../../shared/portfolio.js'
 import { runLedger, type EngineRun } from './engine/ledger.js'
 import { loadPrices, priceStamp, type LoadedPrices } from './prices.js'
@@ -109,14 +110,10 @@ export function referenceSymbols(instruments: Map<string, Instrument>, used: Set
   return ASSETS.filter((a) => assets.has(a)).map((a) => UNIVERSE[a].spot)
 }
 
-function isWeekday(iso: string): boolean {
-  const d = new Date(`${iso}T00:00:00Z`).getUTCDay()
-  return d !== 0 && d !== 6
-}
-
 /**
  * Valuation calendar: the fund NAV is struck on fund business days only, i.e.
- * every weekday on which any held instrument printed a close. Assets that
+ * every exchange business day (weekdays minus CME/US exchange holidays,
+ * shared/calendar/cme.ts) on which any held instrument printed a close. Assets that
  * trade 24x7 (session '24x7', e.g. BTC) are marked at their close on those
  * business days (carry-forward lookup), so a weekend move lands in Monday's
  * NAV rather than creating Saturday/Sunday NAV points.
@@ -124,13 +121,13 @@ function isWeekday(iso: string): boolean {
 export function valuationDates(symbols: string[], book: { dates(symbol: string): string[] }, inception: string | null): string[] {
   const dates = new Set<string>()
   if (!inception) return []
-  for (const s of symbols) for (const d of book.dates(s)) if (d >= inception && isWeekday(d)) dates.add(d)
+  for (const s of symbols) for (const d of book.dates(s)) if (d >= inception && isBusinessDay(d)) dates.add(d)
   return [...dates]
 }
 
 export function toLite(s: PortfolioSummaryLite): PortfolioSummaryLite {
-  const { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byMetal } = s
-  return { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byMetal }
+  const { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byAsset } = s
+  return { asOf, nav, navPerUnit, unitsOutstanding, dayReturn, mtdReturn, ytdReturn, sinceInceptionReturn, dayPnl, allocation, byAsset }
 }
 
 /**

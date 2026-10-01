@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { parseAssetId, type AssetId, type Metal } from '@shared/universe'
+import { parseAssetId, type AssetId } from '@shared/universe'
 
 interface SettingsContextType {
   autoRefresh: boolean
@@ -7,10 +7,6 @@ interface SettingsContextType {
   /** Asset in focus for asset-parameterized views (Markets, Quant Lab, Macro, Intelligence). */
   asset: AssetId
   setAsset: (a: AssetId) => void
-  /** @deprecated Use `asset`. Same value, kept while pages migrate. */
-  metal: Metal
-  /** @deprecated Use `setAsset`. */
-  setMetal: (m: Metal) => void
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null)
@@ -45,8 +41,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         toggleAutoRefresh: () => setAutoRefresh((p) => !p),
         asset,
         setAsset,
-        metal: asset,
-        setMetal: setAsset,
       }}
     >
       {children}

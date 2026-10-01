@@ -78,6 +78,95 @@ def test_gate_logic():
     assert pl.gate(_summary(), None)["status"] == "untested"
 
 
+def test_family_selection_uses_training_data_only():
+    data = _data(n_years=10, start="2010-01-01", signal=3.0, seed=2)
+    ty = pl.test_years(data)[-1]
+    train, test, _ = pl.purged_split(data, ty)
+    # inner years come from the training window and never include the test year
+    iy = pl.inner_years(train)
+    assert len(iy) == pl.INNER_YEARS and max(iy) < ty
+    fam, scores = pl.select_family(train, ["f0", "f1", "f2", "f3"], fast=True)
+    assert fam in pl.FAMILIES and set(scores) == set(pl.FAMILIES)
+    # scrambling the TEST year's labels cannot change the choice made for it
+    scrambled = data.copy()
+    mask = scrambled["year"] == ty
+    scrambled.loc[mask, "y_up"] = 1 - scrambled.loc[mask, "y_up"]
+    train2, _, _ = pl.purged_split(scrambled, ty)
+    assert pl.select_family(train2, ["f0", "f1", "f2", "f3"], fast=True) == (fam, scores)
+    # a linear planted signal: the linear family wins the inner comparison
+    assert fam == "logit"
+
+
+def test_walk_forward_baseline_matches_family():
+    data = _data(n_years=9, start="2010-01-01", signal=3.0, seed=2)
+    folds, _, _ = pl.walk_forward(data, ["f0", "f1", "f2", "f3"], fast=True)
+    assert folds
+    for f in folds:
+        assert f["family"] in pl.FAMILIES
+        if f["family"] == "logit":
+            # naive base-rate comparator: a constant forecast ranks nothing
+            assert f["baselineKind"] == "naive" and f["baselineAuc"] == 0.5
+        else:
+            assert f["baselineKind"] == "logistic"
+    s = pl.summarize(folds, pd.DataFrame({"y": [], "p": []}))
+    assert sum(s["familyCounts"].values()) == len(folds)
+    g = pl.gate({**_summary(), "baselineKind": "naive"}, {"pValue": 0.001}, n_tests=6)
+    assert next(c for c in g["checks"] if c["id"] == "baseline")["label"].startswith("Beats naive")
+
+
+FEATS = ["f0", "f1", "f2", "f3"]
+
+
+def test_permutation_statistic_is_the_reported_walk_forward_auc():
+    data = _data(n_years=9, start="2010-01-01", signal=3.0, seed=2)
+    folds, oos, _ = pl.walk_forward(data, FEATS, fast=True)
+    summary = pl.summarize(folds, oos)
+    perm = pl.permutation_test(data, FEATS, n_perm=8, fast=True)
+    # same quantity, same splits, same family choices
+    assert perm["realAuc"] == summary["auc"]
+    assert perm["testYears"] == [f["testYear"] for f in folds]
+    assert perm["foldFamilies"] == [f["family"] for f in folds]
+    k = sum(1 for x in perm["nullAucs"] if x >= perm["realAuc"])
+    assert perm["pValue"] == round((1 + k) / (1 + perm["nPerm"]), 6)
+
+
+def test_permutation_p_is_one_sided():
+    null = np.random.default_rng(0).normal(0.5, 0.02, 200)
+    assert pl.permutation_p(0.45, null) > 0.5
+    assert pl.permutation_p(0.60, null) == 1 / 201
+
+
+def test_anti_predictive_model_gets_large_p():
+    # The planted relation flips sign after the training history: every model
+    # learns "f0 up -> up" and is then wrong in every test year (AUC < 0.5).
+    data = _data(n_years=9, start="2010-01-01", signal=4.0, seed=5)
+    flip = data["year"] >= 2010 + pl.MIN_TRAIN_YEARS
+    data.loc[flip, "y_up"] = 1 - data.loc[flip, "y_up"]
+    folds, oos, _ = pl.walk_forward(data, FEATS, fast=True)
+    summary = pl.summarize(folds, oos)
+    assert summary["auc"] < 0.5
+    perm = pl.permutation_test(data, FEATS, n_perm=20, fast=True)
+    assert perm["realAuc"] == summary["auc"]
+    assert perm["pValue"] > 0.5
+
+
+def test_gate_bonferroni_over_markets():
+    # p = 0.0099 passes alone but not when six markets are tested (0.05 / 6 = 0.0083).
+    perm = {"pValue": 0.0099}
+    assert pl.gate(_summary(), perm, n_tests=1)["status"] == "passed"
+    g = pl.gate(_summary(), perm, n_tests=6)
+    assert g["status"] == "failed"
+    assert g["multipleTesting"] == {"method": "bonferroni", "tests": 6, "alpha": 0.05, "alphaAdjusted": 0.008333}
+    check = next(c for c in g["checks"] if c["id"] == "pValue")
+    assert check["threshold"] == 0.008333 and not check["ok"]
+    assert any("Bonferroni" in r for r in g["reasons"])
+    assert pl.gate(_summary(), {"pValue": 0.002}, n_tests=6)["status"] == "passed"
+    # the permutation count can resolve the adjusted threshold: 1 / (N + 1) <= alpha_adj / 4
+    n = pl.default_n_perm(6)
+    assert 1 / (n + 1) <= pl.adjusted_alpha(6) / 4
+    assert pl.default_n_perm(1) == pl.N_PERM_MIN
+
+
 def test_calibration_bins_and_wilson():
     p = np.array([0.05, 0.15, 0.55, 0.56, 0.95])
     y = np.array([0, 0, 1, 0, 1])

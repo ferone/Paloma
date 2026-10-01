@@ -26,7 +26,7 @@ const SIGNAL_TONE: Record<Signal, ChipTone> = { strong_buy: 'strong', buy: 'stro
 const LEVELS: Signal[] = ['strong_sell', 'sell', 'neutral', 'buy', 'strong_buy']
 
 export default function TechnicalsPage() {
-  const { metal } = useSettings()
+  const { asset: metal } = useSettings()
   const { symbol: param } = useParams<{ symbol: string }>()
   const navigate = useNavigate()
   const symbols = assetInstruments(metal)

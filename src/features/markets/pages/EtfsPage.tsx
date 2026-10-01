@@ -11,7 +11,7 @@ import { etfSummary } from '../../assistant/summaries'
 const ret = (v: number | null) => <span className={signColor(v)}>{fmtPctSigned(v, 1)}</span>
 
 export default function EtfsPage() {
-  const { metal } = useSettings()
+  const { asset: metal } = useSettings()
   const q = useEtfs(metal)
   useAssistantContext(() => (q.data ? etfSummary(q.data) : null), [q.data])
   const spec = UNIVERSE[metal]

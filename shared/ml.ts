@@ -7,6 +7,11 @@ export const ML_HORIZON = 20
 
 /** Gate thresholds (see `MlGate`). */
 export const ML_GATE = {
+  /**
+   * Family-wise significance level across ALL trained markets. The per-model
+   * permutation p must be below the Bonferroni-adjusted level
+   * `ML_ALPHA_ADJUSTED` (= pValue / ML_TEST_COUNT), not below this.
+   */
   pValue: 0.05,
   auc: 0.55,
   hit: 0.52,
@@ -15,6 +20,20 @@ export const ML_GATE = {
   /** Minimum calendar years of training history before a year can be a test year. */
   minTrainYears: 5,
 } as const
+
+/**
+ * Number of hypotheses tested by the ML gate: one per trained market, i.e.
+ * every asset in the universe (server/ml trains them all). Bonferroni divides
+ * the family-wise α by this so that the chance of ANY market passing by luck
+ * stays at about α, not 1 − (1 − α)^m (≈ 26% for six markets).
+ */
+export const ML_TEST_COUNT = ASSETS.length
+
+/** Per-model permutation-p threshold after the Bonferroni correction. */
+export const ML_ALPHA_ADJUSTED = ML_GATE.pValue / ML_TEST_COUNT
+
+/** Chance that at least one of `m` independent null models passes at level `alpha`. */
+export const familywiseFalsePassRate = (m: number = ML_TEST_COUNT, alpha: number = ML_GATE.pValue): number => 1 - (1 - alpha) ** m
 
 export type ValidationStatus = 'passed' | 'failed' | 'untested'
 
@@ -126,12 +145,43 @@ export interface FeatureAvailability {
   firstDate: string | null
 }
 
+/** Direction-model families the pipeline selects between (nested, per training window). */
+export type MlFamily = 'gb' | 'logit'
+export const ML_FAMILY_LABEL: Record<MlFamily, string> = {
+  gb: 'Gradient boosting',
+  logit: 'Logistic regression',
+}
+/** The comparator of the "beats baseline" check: the next simpler model. */
+export type MlBaselineKind = 'logistic' | 'naive'
+export const ML_BASELINE_LABEL: Record<MlBaselineKind | 'mixed', string> = {
+  logistic: 'logistic regression',
+  naive: 'naive base rate',
+  mixed: 'next simpler model per fold',
+}
+
+export interface MlSelection {
+  /** Family of the saved model, chosen on all labeled rows by the same inner walk-forward. */
+  family: MlFamily
+  label: string
+  innerAuc: Partial<Record<MlFamily, number | null>>
+  innerYears: number[]
+  /** How often each family was chosen across the outer walk-forward folds. */
+  foldFamilies: Partial<Record<MlFamily, number>>
+  method: string
+}
+
 export interface MlFold {
   testYear: number
   nTrain: number
   nTest: number
   /** Rows purged from the end of the training window (label overlap). */
   purged: number
+  /** Model family chosen on this fold's training window only (absent on older runs = gradient boosting). */
+  family?: MlFamily
+  /** Mean inner walk-forward AUC per family that drove the choice. */
+  innerAuc?: Partial<Record<MlFamily, number | null>>
+  /** What `baselineAuc` measures: the logistic model, or the naive base rate when logistic itself was chosen. */
+  baselineKind?: MlBaselineKind
   auc: number | null
   hit: number
   brier: number
@@ -146,7 +196,15 @@ export interface MlFold {
 }
 
 export interface MlPermutation {
+  /** Latest test year. Older runs tested only this year; newer runs test them all (`testYears`). */
   holdoutYear: number
+  /** What realAuc / nullAucs measure. Absent on older runs (holdout-year AUC of a lighter model). */
+  statistic?: string
+  /** Test years the statistic averages over (newer runs: every walk-forward fold). */
+  testYears?: number[]
+  /** Family chosen per fold on the real labels. */
+  foldFamilies?: MlFamily[]
+  /** Newer runs: equals summary.auc (mean walk-forward AUC of the full procedure). */
   realAuc: number
   nullAucs: number[]
   nullMean: number
@@ -155,6 +213,8 @@ export interface MlPermutation {
   pValue: number
   /** How labels were shuffled (block permutation preserves overlap). */
   method: string
+  /** Share of null fold fits that selected each family. */
+  nullFamilyShare?: Partial<Record<MlFamily, number>>
 }
 
 export interface MlGate {
@@ -162,10 +222,30 @@ export interface MlGate {
   /** Human-readable reasons, e.g. "AUC 0.53 < 0.55". Empty when passed. */
   reasons: string[]
   checks: { id: 'pValue' | 'auc' | 'hit' | 'baseline' | 'folds'; label: string; value: number | null; threshold: number | null; ok: boolean }[]
+  /**
+   * Multiple-testing correction applied to the permutation p (the pValue
+   * check's threshold is `alphaAdjusted`). Absent on runs trained before the
+   * correction existed, which were gated at the raw 0.05.
+   */
+  multipleTesting?: MlMultipleTesting
+}
+
+export interface MlMultipleTesting {
+  method: 'bonferroni'
+  /** Markets tested (hypotheses in the family). */
+  tests: number
+  /** Family-wise α. */
+  alpha: number
+  /** α / tests: the per-model threshold the gate uses. */
+  alphaAdjusted: number
 }
 
 export interface MlSummaryMetrics {
   folds: number
+  /** Folds per chosen family (absent on older runs). */
+  familyCounts?: Partial<Record<MlFamily, number>>
+  /** Comparator behind `baselineAuc`; 'mixed' when folds chose different families. */
+  baselineKind?: MlBaselineKind | 'mixed' | null
   auc: number | null
   hit: number | null
   brier: number | null
@@ -197,6 +277,8 @@ export interface MlMetrics {
   folds: MlFold[]
   permutation: MlPermutation | null
   gate: MlGate
+  /** Model-family selection (absent on runs before selection existed: gradient boosting only). */
+  selection?: MlSelection
   /** Out-of-sample residual quantiles of the 20d log return (for the move band). */
   residualQuantiles: { q10: number; q90: number } | null
   nRows: number
@@ -225,6 +307,10 @@ export interface MlRunSummary {
 export interface MlRunParams {
   horizon: number
   nPerm: number
+  /** Bonferroni family size the run was gated with (absent on older runs). */
+  nTests?: number
+  /** Family of the saved model (absent on older runs = gradient boosting). */
+  family?: MlFamily
   minTrainYears: number
   model: string
   baseline: string

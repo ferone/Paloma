@@ -35,7 +35,7 @@ const SHAPE: Record<CurveShape, { label: string; tone: ChipTone }> = {
 }
 
 export default function CurvePage() {
-  const { metal } = useSettings()
+  const { asset: metal } = useSettings()
   const spec = UNIVERSE[metal]
   const product = spec.futures[0]
   const q = useCurve(metal)
@@ -245,7 +245,7 @@ function ContractsTable({ curve: c }: { curve: CurveResponse }) {
 }
 
 function CarryHistory() {
-  const { metal } = useSettings()
+  const { asset: metal } = useSettings()
   const q = useCurveHistory(metal)
   const t = useChartTheme()
   const s = rechartsStyle(t)

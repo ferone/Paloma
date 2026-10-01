@@ -18,7 +18,7 @@ export function RouteTabs({ items }: { items: TabItem[] }) {
           end={t.end}
           className={({ isActive }) =>
             clsx(
-              '-mb-px whitespace-nowrap border-b-2 pb-2.5 text-sm transition-colors',
+              '-mb-px whitespace-nowrap border-b-2 pb-2.5 text-sm transition-colors pointer-coarse:pt-2 pointer-coarse:pb-3',
               isActive ? 'border-brand text-foreground' : 'border-transparent text-muted hover:text-foreground',
             )
           }

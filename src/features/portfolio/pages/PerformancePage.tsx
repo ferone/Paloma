@@ -40,7 +40,7 @@ export default function PerformancePage() {
   const r = risk.data
 
   const controls = (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
       <Segmented<Range> ariaLabel="Period" value={range} onChange={setRange} options={RANGES} />
       <Segmented<BenchmarkId> ariaLabel="Benchmark" value={benchmark} onChange={setBenchmark} options={BENCHMARKS.map((b) => ({ value: b.id, label: b.label }))} />
     </div>
@@ -156,7 +156,8 @@ function StatsTable({ fund, bench, benchLabel }: { fund: PerformanceStats; bench
     ['Positive days', (x) => fmtPct(x.positiveDays, 0)],
   ]
   return (
-    <table className="w-full text-sm">
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
       <caption className="sr-only">Performance statistics</caption>
       <thead>
         <tr className="border-b border-border">
@@ -174,7 +175,8 @@ function StatsTable({ fund, bench, benchLabel }: { fund: PerformanceStats; bench
           </tr>
         ))}
       </tbody>
-    </table>
+      </table>
+    </div>
   )
 }
 
@@ -192,7 +194,8 @@ function RiskPanel({ risk, loading, error, var95, assetBeta }: { risk?: RiskResp
             <Stat size="sm" label="Gross leverage" value={risk.grossLeverage != null ? `${fmtNum(risk.grossLeverage, 2)}×` : '—'} hint={`Gross ${fmtUsd(risk.grossExposure, 0)}`} />
             <Stat size="sm" label={`Beta to ${assetBeta ? UNIVERSE[assetBeta.asset].label.toLowerCase() : 'the asset'}`} value={fmtNum(assetBeta?.beta?.beta)} hint={`ρ ${fmtNum(assetBeta?.beta?.correlation)}`} />
           </dl>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <caption className="sr-only">Value at risk</caption>
             <thead>
               <tr className="border-b border-border">
@@ -221,8 +224,10 @@ function RiskPanel({ risk, loading, error, var95, assetBeta }: { risk?: RiskResp
                 </tr>
               ))}
             </tbody>
-          </table>
-          <table className="w-full text-sm">
+            </table>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <caption className="sr-only">Beta and correlation</caption>
             <thead>
               <tr className="border-b border-border">
@@ -240,7 +245,8 @@ function RiskPanel({ risk, loading, error, var95, assetBeta }: { risk?: RiskResp
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       )}
     </Panel>
@@ -250,7 +256,8 @@ function RiskPanel({ risk, loading, error, var95, assetBeta }: { risk?: RiskResp
 function AttributionTable({ title, rows }: { title: string; rows: AttributionRow[] }) {
   const max = useMemo(() => Math.max(...rows.map((r) => Math.abs(r.contribution)), 1e-9), [rows])
   return (
-    <table className="w-full text-sm">
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
       <caption className="label mb-2 text-left">{title}</caption>
       <thead className="sr-only">
         <tr>
@@ -284,6 +291,7 @@ function AttributionTable({ title, rows }: { title: string; rows: AttributionRow
           </tr>
         ))}
       </tbody>
-    </table>
+      </table>
+    </div>
   )
 }

@@ -12,12 +12,15 @@ export function TopBar({ menuButton }: { menuButton: ReactNode }) {
   const { autoRefresh, toggleAutoRefresh } = useSettings()
 
   return (
-    <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-border bg-background/85 px-4 backdrop-blur md:px-8">
+    <header className="no-print sticky top-0 z-20 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border bg-background/85 px-4 pt-2 pb-1.5 backdrop-blur sm:h-14 sm:flex-nowrap sm:py-0 md:px-8">
       {menuButton}
 
-      <TickerStrip />
+      {/* Phones: the ticker gets its own full-width row under the controls. */}
+      <div className="order-last flex min-w-0 basis-full sm:order-none sm:basis-auto sm:flex-1">
+        <TickerStrip />
+      </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
         <AssetPicker />
         <button
           type="button"
@@ -25,7 +28,7 @@ export function TopBar({ menuButton }: { menuButton: ReactNode }) {
           aria-pressed={autoRefresh}
           title={autoRefresh ? 'Live refresh on' : 'Live refresh paused'}
           className={clsx(
-            'rounded-md p-1.5 transition-colors hover:bg-surface-2',
+            'rounded-md p-1.5 transition-colors hover:bg-surface-2 pointer-coarse:p-2.5',
             autoRefresh ? 'text-brand' : 'text-faint',
           )}
         >
@@ -36,7 +39,7 @@ export function TopBar({ menuButton }: { menuButton: ReactNode }) {
         <button
           type="button"
           onClick={toggleTheme}
-          className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground pointer-coarse:p-2.5"
           aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
         >
           {theme === 'dark' ? <RiSunLine size={16} /> : <RiMoonLine size={16} />}

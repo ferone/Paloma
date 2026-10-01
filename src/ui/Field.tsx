@@ -2,7 +2,7 @@ import clsx from 'clsx'
 import type { ComponentProps, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 
 const control =
-  'w-full rounded-md border border-border-strong bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-brand focus:outline-none disabled:opacity-60'
+  'w-full rounded-md border border-border-strong bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-brand focus:outline-none disabled:opacity-60 pointer-coarse:py-2.5 pointer-coarse:text-base'
 
 export function Field({ label, hint, error, children, className }: { label: ReactNode; hint?: ReactNode; error?: ReactNode; children: ReactNode; className?: string }) {
   return (

@@ -68,8 +68,8 @@ export function PriceChartPanel({ symbols, defaultSymbol }: Props) {
             onClick={() => setSymbol(s)}
             className={
               s === symbol
-                ? 'num rounded border border-brand/50 bg-brand-soft px-2 py-0.5 text-xs text-foreground'
-                : 'num rounded border border-border px-2 py-0.5 text-xs text-muted hover:border-border-strong hover:text-foreground'
+                ? 'num rounded border border-brand/50 bg-brand-soft px-2 py-0.5 text-xs text-foreground pointer-coarse:px-3 pointer-coarse:py-2'
+                : 'num rounded border border-border px-2 py-0.5 text-xs text-muted hover:border-border-strong hover:text-foreground pointer-coarse:px-3 pointer-coarse:py-2'
             }
           >
             {shortSymbol(s)}

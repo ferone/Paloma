@@ -131,7 +131,7 @@ function OverflowMenu({ items, price, onFocusAsset }: { items: TickerItem[]; pri
         onClick={() => (open ? close() : openAt(0))}
         onKeyDown={onButtonKey}
         className={clsx(
-          'num rounded-md border border-border px-1.5 py-0.5 text-2xs transition-colors hover:bg-surface-2 hover:text-foreground',
+          'num rounded-md border border-border px-1.5 py-0.5 text-2xs transition-colors hover:bg-surface-2 hover:text-foreground pointer-coarse:px-3 pointer-coarse:py-2',
           open ? 'bg-surface-2 text-foreground' : 'text-muted',
         )}
       >
@@ -245,7 +245,7 @@ function TickerSettings({ cfg, focus, onChange }: { cfg: TickerConfig; focus: As
         aria-controls={id}
         title="Choose tickers"
         onClick={() => setOpen((o) => !o)}
-        className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-foreground"
+        className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-foreground pointer-coarse:p-2.5"
       >
         <RiEqualizerLine size={14} />
         <span className="sr-only">Choose tickers</span>

@@ -38,8 +38,10 @@ export function Panel({
   return (
     <Tag
       className={clsx(
-        'rounded-lg border border-border bg-surface shadow-[var(--shadow-panel)]',
-        dense ? 'p-3' : 'p-5',
+        // min-w-0: inside grids/flex a wide table must scroll within the panel,
+        // not stretch the panel (and the page) past the viewport.
+        'min-w-0 rounded-lg border border-border bg-surface shadow-[var(--shadow-panel)]',
+        dense ? 'p-3' : 'p-4 sm:p-5',
         className,
       )}
     >
@@ -51,7 +53,7 @@ export function Panel({
               <h2 className={clsx('font-medium text-foreground', dense ? 'text-[13px]' : 'text-[15px]')}>{title}</h2>
             )}
           </div>
-          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+          {actions && <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">{actions}</div>}
         </header>
       )}
       <div className={bodyClassName}>{children}</div>

@@ -167,6 +167,17 @@
 }
 
 @layer base {
+  /* SVG charts render at a fallback width until measured; capping them stops
+     that first render from stretching (and locking) their container on phones. */
+  main svg {
+    max-width: 100%;
+  }
+  /* Horizontal scrollers must be the containing block of absolutely positioned
+     descendants (sr-only labels, tooltips); otherwise those escape the clip and
+     widen the whole page on phones. Base layer, so position utilities still win. */
+  .overflow-x-auto {
+    position: relative;
+  }
   html {
     background: var(--background);
     color: var(--foreground);
@@ -279,5 +290,24 @@
   }
   body {
     background: white;
+  }
+}
+
+/* Touch screens: native checkboxes/radios are ~14px; make them thumb-sized.
+   Unlayered on purpose so it outranks size-* utilities. */
+@media (pointer: coarse) {
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
+/* Phones: table cells keep figures on one line; the table scrolls inside its
+   wrapper instead of crushing columns into each other. */
+@media (max-width: 639px) {
+  .overflow-x-auto > table th,
+  .overflow-x-auto > table td {
+    white-space: nowrap;
   }
 }

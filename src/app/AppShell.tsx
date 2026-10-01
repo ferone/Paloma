@@ -41,7 +41,7 @@ export function AppShell() {
                         onClick={() => setOpen(false)}
                         className={({ isActive }) =>
                           clsx(
-                            'group relative flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors',
+                            'group relative flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors pointer-coarse:py-3 pointer-coarse:text-sm',
                             isActive ? 'bg-surface-2 text-foreground' : 'text-muted hover:bg-surface-2/60 hover:text-foreground',
                           )
                         }
@@ -77,7 +77,7 @@ export function AppShell() {
               <button
                 type="button"
                 onClick={() => setOpen((o) => !o)}
-                className="-ml-1 rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-foreground lg:hidden"
+                className="-ml-1 rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-foreground pointer-coarse:p-2.5 lg:hidden"
                 aria-label={open ? 'Close navigation' : 'Open navigation'}
                 aria-expanded={open}
               >

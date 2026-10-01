@@ -10,7 +10,7 @@ export function Explainer({ title = DEFAULT_TITLE, ask, children }: { title?: Re
   const term = ask ?? (typeof title === 'string' && title !== DEFAULT_TITLE ? title : undefined)
   return (
     <details className="group rounded-md border border-border bg-surface-2/50 text-xs">
-      <summary className="cursor-pointer select-none list-none px-3 py-2 text-muted hover:text-foreground">
+      <summary className="cursor-pointer select-none list-none px-3 py-2 text-muted hover:text-foreground pointer-coarse:py-3">
         <span className="mr-1.5 inline-block transition-transform group-open:rotate-90" aria-hidden>
           ›
         </span>
@@ -22,7 +22,7 @@ export function Explainer({ title = DEFAULT_TITLE, ask, children }: { title?: Re
           <button
             type="button"
             onClick={() => assistant.open(askPrompt(term))}
-            className="no-print inline-flex items-center gap-1 text-2xs text-faint transition-colors hover:text-brand"
+            className="no-print inline-flex items-center gap-1 text-2xs text-faint transition-colors hover:text-brand pointer-coarse:py-2"
           >
             <RiQuestionAnswerLine size={12} aria-hidden />
             Ask about this
@@ -39,7 +39,8 @@ export function HelpTip({ term, ask, children }: { term: ReactNode; ask?: string
   const askTerm = ask ?? (typeof term === 'string' ? term : undefined)
   return (
     <span className="group relative inline-flex items-center">
-      <span className="cursor-help border-b border-dotted border-muted">{term}</span>
+      {/* tabIndex: a tap focuses the term, and focus-within shows the definition on touch screens. */}
+      <span tabIndex={0} className="cursor-help border-b border-dotted border-muted focus:outline-none">{term}</span>
       {assistant && askTerm && (
         // A span, not a <button>: HelpTip often sits inside sortable table-header buttons.
         <span
@@ -59,7 +60,7 @@ export function HelpTip({ term, ask, children }: { term: ReactNode; ask?: string
           }}
           aria-label={`Ask the assistant about ${askTerm}`}
           title="Ask about this"
-          className="no-print ml-0.5 cursor-pointer rounded p-px text-faint opacity-0 transition-opacity hover:text-brand focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+          className="no-print ml-0.5 cursor-pointer rounded p-px text-faint opacity-0 transition-opacity pointer-coarse:p-1.5 pointer-coarse:opacity-100 hover:text-brand focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
         >
           <RiQuestionAnswerLine size={11} aria-hidden />
         </span>

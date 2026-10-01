@@ -47,7 +47,7 @@ export default function ComparisonPage() {
                       title={symbolLabel(s)}
                       onClick={() => toggle(s)}
                       className={clsx(
-                        'num rounded border px-2 py-0.5 text-xs transition-colors',
+                        'num rounded border px-2 py-0.5 text-xs transition-colors pointer-coarse:px-3 pointer-coarse:py-2',
                         on ? 'border-brand/50 bg-brand-soft text-foreground' : 'border-border text-muted hover:border-border-strong hover:text-foreground',
                       )}
                     >

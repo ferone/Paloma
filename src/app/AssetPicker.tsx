@@ -75,7 +75,7 @@ export function AssetPicker() {
             openMenu()
           }
         }}
-        className="flex h-7 items-center gap-2 rounded-md border border-border bg-surface-2 pl-2 pr-1.5 text-xs font-medium text-foreground transition-colors hover:border-border-strong"
+        className="flex h-7 items-center gap-2 pointer-coarse:h-10 rounded-md border border-border bg-surface-2 pl-2 pr-1.5 text-xs font-medium text-foreground transition-colors hover:border-border-strong"
       >
         <span aria-hidden className="size-2 rounded-full" style={{ background: ASSET_COLOR[asset] }} />
         {spec.label}

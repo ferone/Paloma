@@ -92,7 +92,7 @@ export default function InvestorReportPage() {
       </section>
 
       <div className="grid gap-10 py-6 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] print:grid-cols-[1.6fr_1fr]">
-        <div className="space-y-8">
+        <div className="min-w-0 space-y-8">
           {/* Commentary */}
           <section>
             <h2 className="display mb-3 text-xl text-foreground">Manager commentary</h2>
@@ -164,7 +164,7 @@ export default function InvestorReportPage() {
           )}
         </div>
 
-        <aside className="space-y-8">
+        <aside className="min-w-0 space-y-8">
           <FactTable
             title="Returns"
             rows={[

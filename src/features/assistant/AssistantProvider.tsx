@@ -78,7 +78,7 @@ export function AssistantLauncher() {
       onClick={() => a.open()}
       aria-keyshortcuts="Control+J Meta+J"
       title="Ask the assistant (Ctrl+J)"
-      className="no-print fixed bottom-4 right-4 z-30 inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-surface px-3.5 py-2 text-xs font-medium text-foreground shadow-[var(--shadow-panel)] transition-colors hover:bg-surface-2"
+      className="no-print fixed bottom-4 right-4 z-30 hidden items-center sm:inline-flex gap-1.5 rounded-full border border-border-strong bg-surface px-3.5 py-2 text-xs font-medium text-foreground shadow-[var(--shadow-panel)] transition-colors hover:bg-surface-2"
     >
       <RiQuestionAnswerLine size={15} className="text-brand" aria-hidden />
       Ask
@@ -97,7 +97,7 @@ export function AssistantToggle() {
       aria-pressed={a.isOpen}
       aria-keyshortcuts="Control+J Meta+J"
       title="Assistant (Ctrl+J)"
-      className={clsx('rounded-md p-1.5 transition-colors hover:bg-surface-2', a.isOpen ? 'text-brand' : 'text-muted hover:text-foreground')}
+      className={clsx('rounded-md p-1.5 transition-colors hover:bg-surface-2 pointer-coarse:p-2.5', a.isOpen ? 'text-brand' : 'text-muted hover:text-foreground')}
     >
       <RiQuestionAnswerLine size={16} />
       <span className="sr-only">Toggle assistant</span>

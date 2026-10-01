@@ -64,7 +64,7 @@ export function DataTable<T>({ columns, rows, rowKey, empty, initialSort, onRowC
                   {c.sortValue ? (
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 uppercase hover:text-foreground"
+                      className="inline-flex items-center gap-1 uppercase hover:text-foreground pointer-coarse:min-h-9"
                       onClick={() =>
                         setSort((s) => ({ key: c.key, dir: s?.key === c.key && s.dir === 'desc' ? 'asc' : 'desc' }))
                       }

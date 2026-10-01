@@ -85,7 +85,7 @@ export function AppShell() {
               </button>
             }
           />
-          <main id="main" className="mx-auto max-w-[1600px] px-4 py-6 md:px-8 md:py-8 print:max-w-none print:p-0">
+          <main id="main" className="mx-auto max-w-[1600px] px-4 py-6 sm:pb-20 md:px-8 md:pt-8 print:max-w-none print:p-0">
             <Outlet />
           </main>
         </AssistantInset>

@@ -12,6 +12,9 @@ export default defineConfig({
     },
   },
   server: {
+    // IPv4 loopback: reachable as both localhost and 127.0.0.1 (the default
+    // bound only ::1 on Windows, so 127.0.0.1:5173 refused connections).
+    host: process.env.VITE_HOST || '127.0.0.1',
     // Windows' native watcher drops rapid back-to-back writes and atomic
     // replaces (temp file + rename), leaving Vite serving stale modules.
     // Polling costs a little CPU but never misses a change.

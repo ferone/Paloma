@@ -3,18 +3,21 @@ import type { ScheduleConfig, ScheduleStatus } from '../../shared/marketdata.js'
 import { getSetting, setSetting } from '../db/repo.js'
 import { JobBusyError, UnknownJobError, jobStatus, listJobs, runJob } from './registry.js'
 
-// Opt-in daily scheduler. After the CME close (default 22:30 UTC) on weekdays
-// it runs a configured list of registered jobs, sequentially, by name. Jobs
-// are owned by their domains (marketdata.*, macro.*, ml.*, portfolio.nav,
-// quant.recompute…); unknown names are skipped and reported, never fatal.
-// Config lives in settings key `scheduler`; the last run in `scheduler.lastRun`
-// so a restart never double-runs a day.
+// Daily scheduler, ON by default. After the CME close (default 22:30 UTC) on
+// weekdays it runs a configured list of registered jobs, sequentially, by
+// name. Jobs are owned by their domains (marketdata.*, macro.*, ml.*,
+// portfolio.nav, quant.recompute…); unknown names are skipped and reported,
+// never fatal. Config lives in settings key `scheduler` (an install that never
+// saved one runs DEFAULT_SCHEDULE; a saved "off" is always respected); the last
+// run in `scheduler.lastRun` so a restart never double-runs a day. Paid pulls
+// stay bounded: marketdata.databento.incremental is capped by DATABENTO_BUDGET
+// and INCREMENTAL_CAP, and skips itself when Databento is not configured.
 
 export const SCHEDULE_KEY = 'scheduler'
 const LAST_RUN_KEY = 'scheduler.lastRun'
 
 export const DEFAULT_SCHEDULE: ScheduleConfig = {
-  enabled: false,
+  enabled: true,
   timeUtc: '22:30',
   skipWeekends: true,
   jobs: ['marketdata.yahoo', 'marketdata.databento.incremental', 'macro.refresh', 'quant.recompute', 'ml.infer', 'portfolio.nav'],
@@ -28,6 +31,11 @@ export const scheduleSchema = z.object({
 })
 
 type LastRun = NonNullable<ScheduleStatus['lastRun']>
+
+/** True when the install never saved a schedule (DEFAULT_SCHEDULE applies). */
+export function isDefaultSchedule(): boolean {
+  return getSetting<Partial<ScheduleConfig> | null>(SCHEDULE_KEY, null) === null
+}
 
 export function getScheduleConfig(): ScheduleConfig {
   const parsed = scheduleSchema.safeParse({ ...DEFAULT_SCHEDULE, ...getSetting<Partial<ScheduleConfig>>(SCHEDULE_KEY, {}) })
@@ -130,6 +138,7 @@ export function getScheduleStatus(now = new Date()): ScheduleStatus {
     lastRun,
     running,
     unknownJobs: cfg.jobs.filter((j) => !registered.has(j)),
+    isDefault: isDefaultSchedule(),
   }
 }
 
@@ -144,11 +153,19 @@ export async function tick(now = new Date()): Promise<boolean> {
 }
 
 /**
+ * The scheduler never runs in OFFLINE=1 processes (golden captures, offline
+ * demos) or with SCHEDULER=0, so a throwaway server can't start paid pulls.
+ */
+export function schedulerAllowed(envVars: NodeJS.ProcessEnv = process.env): boolean {
+  return envVars.OFFLINE !== '1' && envVars.SCHEDULER !== '0'
+}
+
+/**
  * Start the in-process scheduler (checks every minute). Call once from
  * server/index.ts after the DB is open. Idempotent.
  */
 export function startScheduler(intervalMs = 60_000): void {
-  if (timer) return
+  if (timer || !schedulerAllowed()) return
   timer = setInterval(() => {
     tick().catch((err) => console.error('[scheduler]', err))
   }, intervalMs)

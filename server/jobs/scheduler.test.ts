@@ -1,7 +1,20 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useTestDb } from '../db/client.js'
 import { registerJob } from './registry.js'
-import { DEFAULT_SCHEDULE, getScheduleConfig, getScheduleStatus, isDue, nextRunAt, runScheduledJobs, setScheduleConfig, tick } from './scheduler.js'
+import { setSetting } from '../db/repo.js'
+import {
+  DEFAULT_SCHEDULE,
+  SCHEDULE_KEY,
+  getScheduleConfig,
+  getScheduleStatus,
+  isDefaultSchedule,
+  isDue,
+  nextRunAt,
+  runScheduledJobs,
+  schedulerAllowed,
+  setScheduleConfig,
+  tick,
+} from './scheduler.js'
 
 const cfg = { ...DEFAULT_SCHEDULE, enabled: true, timeUtc: '22:30', jobs: [] as string[] }
 const at = (iso: string) => new Date(iso)
@@ -19,6 +32,44 @@ describe('scheduler timing', () => {
     expect(nextRunAt(cfg, at('2026-09-30T10:00:00Z'), null)?.toISOString()).toBe('2026-09-30T22:30:00.000Z')
     expect(nextRunAt(cfg, at('2026-10-02T23:00:00Z'), '2026-10-02')?.toISOString()).toBe('2026-10-05T22:30:00.000Z')
     expect(nextRunAt({ ...cfg, enabled: false }, at('2026-09-30T10:00:00Z'), null)).toBeNull()
+  })
+})
+
+describe('scheduler defaults', () => {
+  beforeEach(() => {
+    useTestDb()
+  })
+
+  it('is ON with the full daily job list for an install that never saved a schedule', () => {
+    expect(isDefaultSchedule()).toBe(true)
+    const c = getScheduleConfig()
+    expect(c).toMatchObject({ enabled: true, timeUtc: '22:30', skipWeekends: true })
+    // Ingestion first, then everything that reads it; the NAV snapshot last.
+    expect(c.jobs).toEqual(['marketdata.yahoo', 'marketdata.databento.incremental', 'macro.refresh', 'quant.recompute', 'ml.infer', 'portfolio.nav'])
+    const s = getScheduleStatus(at('2026-09-30T10:00:00Z'))
+    expect(s.isDefault).toBe(true)
+    expect(s.nextRunAt).toBe('2026-09-30T22:30:00.000Z')
+    expect(isDue(c, at('2026-09-30T22:31:00Z'), null)).toBe(true)
+  })
+
+  it('respects an explicitly saved "off" (and any other saved choice)', () => {
+    setScheduleConfig({ ...DEFAULT_SCHEDULE, enabled: false })
+    expect(isDefaultSchedule()).toBe(false)
+    expect(getScheduleConfig().enabled).toBe(false)
+    expect(getScheduleStatus(at('2026-09-30T23:00:00Z'))).toMatchObject({ enabled: false, nextRunAt: null, isDefault: false })
+    setScheduleConfig({ ...DEFAULT_SCHEDULE, timeUtc: '23:15', jobs: ['portfolio.nav'] })
+    expect(getScheduleConfig()).toMatchObject({ enabled: true, timeUtc: '23:15', jobs: ['portfolio.nav'] })
+  })
+
+  it('a saved config from before the default flipped keeps its explicit enabled flag', () => {
+    setSetting(SCHEDULE_KEY, { enabled: false, timeUtc: '22:30', skipWeekends: true, jobs: ['marketdata.yahoo'] })
+    expect(getScheduleConfig().enabled).toBe(false)
+  })
+
+  it('never runs in OFFLINE or SCHEDULER=0 processes', () => {
+    expect(schedulerAllowed({})).toBe(true)
+    expect(schedulerAllowed({ OFFLINE: '1' })).toBe(false)
+    expect(schedulerAllowed({ SCHEDULER: '0' })).toBe(false)
   })
 })
 

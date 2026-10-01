@@ -10,8 +10,10 @@ interface RunView {
 /**
  * Held positions valued at their last trade price because no close was
  * available for their price symbol (e.g. the first valuation after an asset's
- * first trade, before its history finished loading). Never silent: these become
- * summary warnings, and such a result is only cached briefly so it self-heals.
+ * first trade, while its history could not be fetched). Never silent: these
+ * become summary warnings. The NAV cache recomputes as soon as closes land for
+ * a symbol it used (service.ts: price stamp + onPricesWritten), so this is a
+ * safety net, not an expected state.
  */
 export function fallbackMarks(c: RunView): { instrumentId: string; date: string; priceSymbol: string | null }[] {
   const out: { instrumentId: string; date: string; priceSymbol: string | null }[] = []

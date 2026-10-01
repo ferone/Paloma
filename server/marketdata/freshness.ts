@@ -1,6 +1,7 @@
 import { getDb } from '../db/client.js'
 import { GENERIC_EXPORT_TABLES, type FreshnessResponse, type FreshnessRow } from '../../shared/marketdata.js'
 import { dateColumn, tableColumns, tableExists } from './export.js'
+import { openInterestCoverage } from './open-interest.js'
 
 // Data freshness per (dataset, source): counts, coverage, the last successful
 // job that writes it, and a staleness flag against a per-dataset tolerance.
@@ -127,5 +128,6 @@ export function freshness(today = new Date().toISOString().slice(0, 10)): Freshn
       maxAgeDays: null,
     })
   }
-  return { generatedAt: new Date().toISOString(), rows }
+  const openInterest = tableExists('contract_bars') && tableExists('contracts') ? openInterestCoverage() : []
+  return { generatedAt: new Date().toISOString(), rows, openInterest }
 }

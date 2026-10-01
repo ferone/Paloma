@@ -19,7 +19,7 @@ mountRoutes(app)
 
 // Open the DB (and apply pending migrations) before serving.
 getDb()
-// Opt-in daily refresh (Data Center → Jobs); a no-op until enabled.
+// Daily refresh (Data Center → Jobs): on by default, off when saved off, OFFLINE=1 or SCHEDULER=0.
 startScheduler()
 
 app.listen(env.port, env.host, () => {

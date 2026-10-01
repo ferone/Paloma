@@ -50,7 +50,7 @@ DB_PATH=data/demo.db npm run portfolio:seed-demo   # demo ledger in a SEPARATE d
   - Every pull is estimated for free first and capped by `DATABENTO_BUDGET` (default $1) unless `maxCost` is given.
   - Backfilling is idempotent (upserts), but re-pulling history is paid again, so check `databento_pulls` before re-running.
   - Use `windowMonths=12` for ohlcv-1d history. The `statistics` schema (open interest) is slow server-side (~90 s per month), so pull it only incrementally.
-- **Scheduler** (Data Center → Jobs) is opt-in. It runs the registered jobs by name after the CME close.
+- **Scheduler** (Data Center → Jobs, Settings) is on by default for installs that never saved a schedule (22:30 UTC weekdays, after the CME close); a saved "off" is respected, and `OFFLINE=1` or `SCHEDULER=0` disables it (use these for throwaway servers so they never start paid pulls).
 - **Agents running shell commands:** never embed markdown or backticks in inline `node -e` / heredoc scripts. Bash executes backtick spans as commands; this once re-ran a paid backfill. Edit docs with file-editing tools.
 
 ## Architecture

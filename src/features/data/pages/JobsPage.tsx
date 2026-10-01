@@ -210,7 +210,10 @@ function SchedulePanel() {
       <dl className="grid grid-cols-2 gap-3 text-xs">
         <div>
           <dt className="label">Status</dt>
-          <dd className="mt-1">{s.running ? <Chip tone="brand">Running</Chip> : s.enabled ? <Chip tone="strong">Enabled</Chip> : <Chip tone="neutral">Off</Chip>}</dd>
+          <dd className="mt-1 flex flex-wrap items-center gap-2">
+            {s.running ? <Chip tone="brand">Running</Chip> : s.enabled ? <Chip tone="strong">Enabled</Chip> : <Chip tone="neutral">Off</Chip>}
+            {s.isDefault && <span className="text-2xs text-muted">default</span>}
+          </dd>
         </div>
         <div>
           <dt className="label">Next run</dt>
@@ -255,7 +258,7 @@ export default function JobsPage() {
           )}
         </Panel>
       </div>
-      <Panel title="Daily schedule" eyebrow="Opt-in" density="dense" provenance={{ source: 'settings: scheduler', note: 'jobs run sequentially; unknown names are skipped' }}>
+      <Panel title="Daily schedule" eyebrow="On by default" density="dense" provenance={{ source: 'settings: scheduler', note: 'jobs run sequentially; unknown names are skipped' }}>
         <SchedulePanel />
       </Panel>
     </div>

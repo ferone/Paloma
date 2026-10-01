@@ -9,6 +9,7 @@ import { useOpportunities } from '../api'
 import { QuantQuery } from '../components/QuantQuery'
 import { ActionChip, CarryChip, OosChip, TierChip } from '../components/chips'
 import { OuExplainer, VerdictExplainer, ZScoreExplainer } from '../components/glossary'
+import { SeasonalLeads } from '../components/SeasonalLeads'
 import { KIND_LABEL, fmtValue } from '../format'
 import { useQuantContext } from '../QuantLayout'
 import { pairNames } from '../pairs'
@@ -101,6 +102,8 @@ function Scanner({ data }: { data: OpportunitiesResponse }) {
         <Stat label="OOS passed" value={data.rows.filter((o) => o.oos === 'passed').length} size="sm" hint="walk-forward" />
         <Stat label="ML counted" value={data.rows.filter((o) => o.mlCounted).length} size="sm" hint="validated nudges only" />
       </div>
+
+      <SeasonalLeads rows={data.rows} asset={data.metal} />
 
       <Panel
         density="dense"

@@ -296,13 +296,15 @@ export function correlationResponse(asset: AssetId, window: number): Correlation
   const levels: Partial<Record<CorrelationFactor, SeriesPoint[]>> = {}
   for (const f of factors) levels[f.id] = readSeriesPoints(factorSource(f.id).id, from)
   const res = computeCorrelations(asset, window, levels)
-  const spots = factors.filter((f) => isAssetFactor(f.id)).map((f) => UNIVERSE[f.id as AssetId].spot)
+  // Describe the factors actually used (computeCorrelations drops any with no data yet).
+  const used = res.factors
+  const spots = used.filter((f) => isAssetFactor(f.id)).map((f) => UNIVERSE[f.id as AssetId].spot)
   return {
     ...res,
     provenance: {
       source: `Yahoo ${[...spots, 'DX-Y.NYB', 'SPY'].join(', ')} · FRED DFII10, VIXCLS`,
       asOf: res.asOf,
-      note: `${window}-day window on dates common to all ${NUMBER_WORDS[factors.length] ?? factors.length} series`,
+      note: `${window}-day window on dates common to all ${NUMBER_WORDS[used.length] ?? used.length} series`,
     },
   }
 }

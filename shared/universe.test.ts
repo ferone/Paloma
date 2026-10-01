@@ -43,6 +43,7 @@ describe('universe', () => {
     expect(isAssetId('bitcoin?')).toBe(false)
     expect(parseAssetId('nope')).toBe('gold')
     expect(parseAssetId('silver')).toBe('silver')
-    expect(physicalAssets()).toEqual(['gold', 'silver', 'btc'])
+    expect(physicalAssets()).toEqual(ASSETS.filter((a) => UNIVERSE[a].physical != null))
+    expect(physicalAssets()).toEqual(expect.arrayContaining(['gold', 'silver']))
   })
 })

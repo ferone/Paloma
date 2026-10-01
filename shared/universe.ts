@@ -3,8 +3,8 @@
 // instruments, units, sessions and data sources from here. Adding an asset is
 // a data change: extend `AssetId`, add a `UNIVERSE` entry, done.
 
-export type AssetId = 'gold' | 'silver' | 'copper' | 'btc'
-export const ASSETS: readonly AssetId[] = ['gold', 'silver', 'copper', 'btc'] as const
+export type AssetId = 'gold' | 'silver' | 'platinum' | 'palladium' | 'copper' | 'btc'
+export const ASSETS: readonly AssetId[] = ['gold', 'silver', 'platinum', 'palladium', 'copper', 'btc'] as const
 
 /** @deprecated Use `AssetId`. Kept while domains migrate. */
 export type Metal = AssetId
@@ -174,6 +174,51 @@ export const UNIVERSE: Record<AssetId, AssetSpec> = {
     cotMarket: 'SILVER',
     colorVar: '--metal-silver',
   },
+  platinum: {
+    id: 'platinum',
+    metal: 'platinum',
+    label: 'Platinum',
+    short: 'Pt',
+    assetClass: 'precious',
+    spot: 'PL=F',
+    priceUnit: 'oz',
+    unitLabel: '$/oz',
+    displayDecimals: 2,
+    session: 'globex',
+    futures: [
+      // NYMEX platinum: 50 troy oz, $0.10 tick ($5); liquid cycle Jan/Apr/Jul/Oct.
+      { root: 'PL', name: 'NYMEX Platinum', exchange: 'NYMEX', yahoo: 'PL=F', contractSize: 50, pointValue: 50, tickSize: 0.1, activeMonths: [1, 4, 7, 10], cashSettled: false, ozPerContract: 50 },
+    ],
+    etfs: ['PPLT'],
+    // No dedicated PGM miners ETF exists (Sibanye-Stillwater is a single stock), so no miners proxy.
+    benchmarkEtf: 'PPLT',
+    physical: { unit: 'oz', kind: 'bullion', instrumentId: 'XPT-PHYS' },
+    cot: { report: 'disagg', code: '076651', market: 'PLATINUM' },
+    cotMarket: 'PLATINUM',
+    colorVar: '--asset-platinum',
+  },
+  palladium: {
+    id: 'palladium',
+    metal: 'palladium',
+    label: 'Palladium',
+    short: 'Pd',
+    assetClass: 'precious',
+    spot: 'PA=F',
+    priceUnit: 'oz',
+    unitLabel: '$/oz',
+    displayDecimals: 2,
+    session: 'globex',
+    futures: [
+      // NYMEX palladium: 100 troy oz, $0.50 tick ($50); liquid cycle Mar/Jun/Sep/Dec.
+      { root: 'PA', name: 'NYMEX Palladium', exchange: 'NYMEX', yahoo: 'PA=F', contractSize: 100, pointValue: 100, tickSize: 0.5, activeMonths: [3, 6, 9, 12], cashSettled: false, ozPerContract: 100 },
+    ],
+    etfs: ['PALL'],
+    benchmarkEtf: 'PALL',
+    physical: { unit: 'oz', kind: 'bullion', instrumentId: 'XPD-PHYS' },
+    cot: { report: 'disagg', code: '075651', market: 'PALLADIUM' },
+    cotMarket: 'PALLADIUM',
+    colorVar: '--asset-palladium',
+  },
   copper: {
     id: 'copper',
     metal: 'copper',
@@ -283,6 +328,10 @@ export interface RelativeValuePair {
 
 export const RELATIVE_VALUE_PAIRS: RelativeValuePair[] = [
   { id: 'GS', key: 'gold-silver', label: 'Gold / silver', numerator: 'gold', denominator: 'silver' },
+  // Gold over platinum: historically near 1 or below; a high ratio means platinum is cheap vs gold.
+  { id: 'GP', key: 'gold-platinum', label: 'Gold / platinum', numerator: 'gold', denominator: 'platinum' },
+  // Palladium over platinum: the autocatalyst substitution trade (gasoline vs diesel loadings).
+  { id: 'DP', key: 'palladium-platinum', label: 'Palladium / platinum', numerator: 'palladium', denominator: 'platinum' },
   // Copper over gold: the classic growth-vs-fear gauge (cyclical demand vs haven demand).
   { id: 'CG', key: 'copper-gold', label: 'Copper / gold', numerator: 'copper', denominator: 'gold' },
   // Bitcoin priced in ounces of gold: the "digital vs physical store of value" gauge.

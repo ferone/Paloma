@@ -43,7 +43,8 @@ describe('physical units', () => {
     const base = { asset: 'gold', description: 'bar', weight: 1, purity: 0.9999 }
     expect(physicalItemInputSchema.safeParse({ ...base, form: 'bar', weightUnit: 'kg' }).success).toBe(true)
     expect(physicalItemInputSchema.safeParse({ ...base, form: 'balance', weightUnit: 'BTC' }).success).toBe(false)
-    expect(physicalItemInputSchema.safeParse({ ...base, asset: 'platinum', form: 'bar', weightUnit: 'kg' }).success).toBe(false)
+    expect(physicalItemInputSchema.safeParse({ ...base, asset: 'platinum', form: 'bar', weightUnit: 'kg' }).success).toBe(true)
+    expect(physicalItemInputSchema.safeParse({ ...base, asset: 'rhodium', form: 'bar', weightUnit: 'kg' }).success).toBe(false)
   })
 
   it('measures exposure in each asset price unit', () => {

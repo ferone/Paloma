@@ -159,7 +159,8 @@ describe('macro service', () => {
   })
 
   it('correlates an asset with its relative-value partner', () => {
-    expect(assetPeers('gold')).toEqual(['silver'])
+    // Same-class pair partners (gold/silver, gold/platinum); cross-class pairs (bitcoin/gold, copper/gold) are excluded.
+    expect(assetPeers('gold')).toEqual(['silver', 'platinum'])
     expect(assetPeers('silver')).toEqual(['gold'])
     expect(correlationFactors('silver').map((f) => f.id)).toEqual(['gold', 'silver', 'realYield', 'dxy', 'vix', 'spy'])
   })

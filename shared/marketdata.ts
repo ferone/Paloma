@@ -187,6 +187,8 @@ export interface ScheduleStatus extends ScheduleConfig {
   running: boolean
   /** Configured jobs no domain has registered (yet). */
   unknownJobs: string[]
+  /** True until a schedule is saved: the built-in default (on, 22:30 UTC) applies. */
+  isDefault?: boolean
 }
 
 export interface JobRunRow {

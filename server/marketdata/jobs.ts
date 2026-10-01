@@ -46,7 +46,9 @@ export async function runBackfill(ctx: JobContext, params: unknown): Promise<str
 
 export async function runIncremental(ctx: JobContext, params: unknown): Promise<string> {
   const p = z.object({ maxCost: z.number().nonnegative().optional() }).parse(params ?? {})
-  const client = requireClient()
+  // Part of the default daily schedule: without a key this is a no-op, not a daily failure.
+  const client = databentoClient()
+  if (!client) return 'Skipped: Databento is not configured (add the key in Settings → API keys)'
   let remaining = p.maxCost ?? Math.min(env.databentoBudget, INCREMENTAL_CAP)
   const plan = incrementalRequests(DATABENTO_ROOTS, todayUtc())
   const parts: string[] = []

@@ -74,7 +74,10 @@ function SchedulerForm({ s }: { s: ScheduleStatus }) {
           {s.isDefault && <span className="text-xs text-muted">default; not yet saved</span>}
         </dd>
         <dt className="text-muted">Next run</dt>
-        <dd className="num text-foreground">{s.nextRunAt ? fmtDateTime(s.nextRunAt) : '—'}</dd>
+        <dd className="text-foreground">
+          <span className="num">{s.nextRunAt ? fmtDateTime(s.nextRunAt) : '—'}</span>
+          {s.nextRunAt && <span className="ml-1.5 text-xs text-muted">your time</span>}
+        </dd>
         <dt className="text-muted">Last run</dt>
         <dd className="flex flex-wrap items-center gap-2">
           {last && verdict ? (

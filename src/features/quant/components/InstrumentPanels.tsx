@@ -43,7 +43,7 @@ export function SignalStats({ d }: { d: InstrumentDetail }) {
   const c = d.carry
   return (
     <Panel density="dense" title="Signal" eyebrow="Stretch · reversion · carry" provenance={{ source: 'Engine (score.ts, ou.ts, carry.ts)', asOf: d.asOf }}>
-      <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-5 gap-y-3 @lg:grid-cols-4">
         <Stat size="sm" label="z (60d)" value={<span className={signColor(s ? -s.z : null)}>{fmtSigned(s?.z, 2)}</span>} hint={s ? (s.z > 0 ? 'rich → fade short' : s.z < 0 ? 'cheap → fade long' : 'at mean') : undefined} />
         <Stat size="sm" label="Effective z" value={fmtSigned(ou?.zEff, 2)} hint={ou?.nEff ? `lookback ${ou.nEff}d (3 × half-life)` : undefined} />
         <Stat size="sm" label="Score" value={s ? fmtNum(s.score, 0) : '—'} hint={s ? <TierChip tier={s.tier} /> : undefined} />
@@ -62,7 +62,7 @@ export function SignalStats({ d }: { d: InstrumentDetail }) {
       {ou && <p className="mt-2 text-2xs text-muted">{ou.reason}</p>}
       {c?.detail && <p className="mt-0.5 text-2xs text-muted">Carry: {c.detail}</p>}
       {d.gates.structuralDetail && <p className="mt-0.5 text-2xs text-muted">Structural: {d.gates.structuralDetail}</p>}
-      <div className="mt-3 grid gap-2 md:grid-cols-2">
+      <div className="mt-3 grid gap-2 @md:grid-cols-2">
         <ZScoreExplainer />
         <OuExplainer />
       </div>
@@ -105,7 +105,7 @@ export function CurvaturePanel({ d }: { d: InstrumentDetail }) {
       provenance={{ source: 'Derived from the butterfly value (= −2 × curvature)', asOf: d.asOf }}
     >
       <TimeSeriesChart dates={pts.map((p) => p.date)} series={series} refLines={zero} height={200} yFormat={(v) => fmtNum(v, 2)} ariaLabel="Butterfly curvature over time" />
-      <div className="mt-2 grid gap-2 md:grid-cols-2">
+      <div className="mt-2 grid gap-2 @md:grid-cols-2">
         <ButterflyExplainer />
         <ContangoExplainer />
       </div>

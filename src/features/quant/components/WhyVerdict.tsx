@@ -81,7 +81,9 @@ export function WhyVerdict({ d, mode }: { d: InstrumentDetail; mode: QuantMode }
       {s && (
         <>
           <h3 className="label mb-2 mt-4">Score drivers — {fmtNum(s.score, 0)} / 100</h3>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Container queries: the panel's own width picks the columns (it shares a row, and the docked assistant narrows it). */}
+          <div className="@container">
+            <div className="grid gap-3 @md:grid-cols-2 @3xl:grid-cols-4 [&>*]:min-w-0">
             <div>
               <div className="flex items-baseline justify-between text-2xs">
                 <span className="label">Stretch base</span>
@@ -92,6 +94,7 @@ export function WhyVerdict({ d, mode }: { d: InstrumentDetail; mode: QuantMode }
             <FactorMeter label="Seasonality" value={s.seasonFactor} note="+ calendar drift agrees with the fade" />
             <FactorMeter label="Volatility regime" value={s.volFactor} note="− vol blow-up damps the score" />
             <FactorMeter label="Fundamentals" value={null} na note="none wired for this universe — neutral" />
+          </div>
           </div>
           {s.avoidOverride && <p className="mt-2 text-2xs text-neg-text">AVOID override: the stretch runs with the calendar and is justified.</p>}
         </>
@@ -105,14 +108,14 @@ export function WhyVerdict({ d, mode }: { d: InstrumentDetail; mode: QuantMode }
       </div>
       <ul className="mt-1.5 divide-y divide-border/60 text-xs">
         {d.decision.lenses.map((l) => (
-          <li key={l.key} className="flex items-center justify-between gap-3 py-1">
-            <span className="flex items-center gap-2">
+          <li key={l.key} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 py-1">
+            <span className="flex min-w-0 items-center gap-2">
               <Chip tone={STANCE[l.stance].tone}>
                 {STANCE[l.stance].mark} {l.stance}
               </Chip>
               <span className="text-foreground">{l.label}</span>
             </span>
-            <span className="text-right text-2xs text-muted">{l.detail}</span>
+            <span className="ml-auto min-w-0 text-right text-2xs text-muted">{l.detail}</span>
           </li>
         ))}
       </ul>

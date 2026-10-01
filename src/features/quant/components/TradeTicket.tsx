@@ -48,7 +48,7 @@ export function TradeTicket({ d, mode }: { d: InstrumentDetail; mode: QuantMode 
               </li>
             ))}
           </ul>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 @lg:grid-cols-4">
             <Metric k="Entry" v={fmtValue(p.entry, u)} help="The structure's current net value — quote it as one net combo order." />
             <Metric k="Target" v={fmtValue(p.target, u)} help="The reversion target: the rolling mean (spreads, flies, ratio) or the seasonal-average move (seasonal pairs)." />
             <Metric k="Stop" v={fmtValue(p.stop, u)} help="Where the realistic loss is hit: the out-of-sample max drawdown when available, else 2σ adverse." />

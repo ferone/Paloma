@@ -40,7 +40,7 @@ export function Panel({
       className={clsx(
         // min-w-0: inside grids/flex a wide table must scroll within the panel,
         // not stretch the panel (and the page) past the viewport.
-        'min-w-0 rounded-lg border border-border bg-surface shadow-[var(--shadow-panel)]',
+        '@container min-w-0 rounded-lg border border-border bg-surface shadow-[var(--shadow-panel)]',
         dense ? 'p-3' : 'p-4 sm:p-5',
         className,
       )}

@@ -108,6 +108,29 @@ describe("contractExpiry", () => {
     expect(contractExpiry("ETH", 3, 2026)!.lastTrade).toBe("2026-03-27");
   });
 
+  // ── Exchange holidays (shared/calendar/cme.ts) ──
+
+  it("BTC Dec-2026: the last Friday is Christmas, so trading ends Thursday 24 December", () => {
+    expect(contractExpiry("BTC", 12, 2026)!.lastTrade).toBe("2026-12-24");
+    expect(contractExpiry("MBT", 12, 2026)!.lastTrade).toBe("2026-12-24");
+    // Mar-2027: the last Friday (26th) is Good Friday → Thu 25 Mar.
+    expect(contractExpiry("BTC", 3, 2027)!.lastTrade).toBe("2027-03-25");
+  });
+
+  it("GC/HG skip holidays when counting business days", () => {
+    // Jun-2027 first notice = last business day of May 2027; Mon 31 May is Memorial Day → Fri 28 May.
+    expect(contractExpiry("GC", 6, 2027)!.firstNotice).toBe("2027-05-28");
+    // May-2028 last trade = 3rd-last business day: Wed 31, Tue 30, (Mon 29 = Memorial Day), Fri 26.
+    expect(contractExpiry("HG", 5, 2028)!.lastTrade).toBe("2028-05-26");
+    // Physically delivered note now documents the holiday calendar.
+    expect(contractExpiry("GC", 6, 2027)!.note).toMatch(/CME holiday calendar/);
+  });
+
+  it("CL: the 25th rolls back over a holiday before counting 3 business days", () => {
+    // Jan-2027 contract: 25 Dec 2026 is Christmas → 24 Dec, then 23, 22, 21.
+    expect(contractExpiry("CL", 1, 2027)!.lastTrade).toBe("2026-12-21");
+  });
+
   it("Softs (ICE, approximate): cocoa/coffee/sugar/cotton rules produce ordered dates", () => {
     const cc = contractExpiry("CC", 3, 2026)!; // 11 bd before last bd of Mar; FND 10 bd before first bd
     expect(cc.cashSettled).toBe(false);

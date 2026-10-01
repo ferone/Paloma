@@ -77,10 +77,11 @@ export function parseCanonical(symbol: string, roots: readonly string[]): Parsed
 // (server/quant/universe/contracts.ts). COMEX metals: last trade = 3rd-last
 // business day of the delivery month, first notice = last business day of the
 // prior month. Cash-settled products (CME bitcoin) have no first notice.
-// Weekends handled; exchange holidays are NOT (documented approximation).
+// Business days skip weekends and the rule-based CME holiday calendar
+// (shared/calendar/cme.ts); ad-hoc closures are not modelled.
 
 export const EXPIRY_NOTE =
-  'Approx: last trade and first notice follow the documented CME rules per product (cash-settled contracts have no first notice). Weekends handled, exchange holidays not.'
+  'Approx: last trade and first notice follow the documented CME rules per product (cash-settled contracts have no first notice). Business days skip weekends and CME holidays (rule-based calendar; ad-hoc closures not modelled).'
 
 export function contractExpiry(root: string, month: number, year: number): { lastTrade: string | null; firstNotice: string | null } {
   const e = quantContractExpiry(root, month, year)

@@ -12,6 +12,8 @@
  * runtime via `assertSingleContract` in `lib/data/databento.ts` (a window that
  * returns >1 `instrument_id` straddled two decades → that job is skipped). PURE.
  */
+import { addCalendarDays, dayOfWeek, isBusinessDay, isWeekend } from "../../../shared/calendar/cme.js";
+
 export const MONTH_CODES = ["F", "G", "H", "J", "K", "M", "N", "Q", "U", "V", "X", "Z"] as const;
 
 export function monthCode(month1to12: number): string {
@@ -100,60 +102,90 @@ export function contractPullWindow(
 
 // ── Contract expiry / first-notice (documented CME rules) ───────────────────
 // Pure calendar arithmetic (deterministic UTC, never reads "now" → look-ahead
-// safe). Weekends are handled; exchange HOLIDAYS are NOT — these are documented
-// APPROXIMATIONS for display, surfaced with a caveat, not a trading calendar.
+// safe). CME Group products (CME, CBOT, NYMEX, COMEX, incl. CME crypto) count
+// business days on the rule-based CME holiday calendar (shared/calendar/cme.ts):
+// weekends AND exchange holidays are skipped, and a rule that lands on a
+// specific weekday (e.g. "last Friday") steps back to the preceding business
+// day when that weekday is a holiday. ICE softs use weekends only (the ICE
+// holiday calendar is not modelled). Ad-hoc closures are not modelled either.
 
-/** Day of week (0=Sun..6=Sat) for Y,M,D — deterministic, no "now". */
-function dow(y: number, m: number, d: number): number {
-  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-}
+/** A business-day predicate on ISO dates (the exchange calendar). */
+type Calendar = (iso: string) => boolean;
+
+/** Mon–Fri only (ICE products: their holiday calendar is not modelled). */
+const weekdaysOnly: Calendar = (iso) => !isWeekend(iso);
+/** CME Group: Mon–Fri minus CME holidays. */
+const cme: Calendar = isBusinessDay;
+
 function isoOf(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 function daysInMonth(y: number, m: number): number {
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
-/** The nth (1-based) business day (Mon–Fri) of a month. */
-function nthBusinessDay(y: number, m: number, n: number): string {
+/** Step one calendar day at a time from `iso` until `cal` accepts the date. */
+function rollTo(iso: string, step: 1 | -1, cal: Calendar): string {
+  let d = iso;
+  while (!cal(d)) d = addCalendarDays(d, step);
+  return d;
+}
+/** Move `n` business days (n ≥ 0) in direction `step` on calendar `cal`. */
+function moveBusinessDays(iso: string, n: number, step: 1 | -1, cal: Calendar): string {
+  let d = iso;
+  let left = n;
+  while (left > 0) {
+    d = addCalendarDays(d, step);
+    if (cal(d)) left--;
+  }
+  return d;
+}
+/** The nth (1-based) business day of a month. */
+function nthBusinessDay(y: number, m: number, n: number, cal: Calendar = cme): string {
   let count = 0;
   const dim = daysInMonth(y, m);
   for (let d = 1; d <= dim; d++) {
-    const w = dow(y, m, d);
-    if (w !== 0 && w !== 6) {
+    if (cal(isoOf(y, m, d))) {
       count++;
       if (count === n) return isoOf(y, m, d);
     }
   }
   return isoOf(y, m, dim);
 }
-/** The last business day (Mon–Fri) of a month. */
-function lastBusinessDay(y: number, m: number): string {
+/** n-th business day counting from the END of the month (n=1 → last business day). */
+function nthLastBusinessDay(y: number, m: number, n: number, cal: Calendar = cme): string {
+  let count = 0;
+  for (let d = daysInMonth(y, m); d >= 1; d--) {
+    if (cal(isoOf(y, m, d))) {
+      count++;
+      if (count === n) return isoOf(y, m, d);
+    }
+  }
+  throw new Error(`month ${y}-${m} has fewer than ${n} business days`);
+}
+/** The last business day of a month. */
+function lastBusinessDay(y: number, m: number, cal: Calendar = cme): string {
+  return rollTo(isoOf(y, m, daysInMonth(y, m)), -1, cal);
+}
+/** First business day of a month. */
+function firstBusinessDay(y: number, m: number, cal: Calendar = cme): string {
+  return rollTo(isoOf(y, m, 1), 1, cal);
+}
+/**
+ * The last occurrence of `weekday` (0=Sun..6=Sat) in a month, e.g. last Friday;
+ * when that day is an exchange holiday, the preceding business day (CME rule
+ * wording: "if that day is not a business day, the business day prior").
+ */
+function lastWeekdayOfMonth(y: number, m: number, weekday: number, cal: Calendar = cme): string {
   const dim = daysInMonth(y, m);
   for (let d = dim; d >= 1; d--) {
-    const w = dow(y, m, d);
-    if (w !== 0 && w !== 6) return isoOf(y, m, d);
+    const iso = isoOf(y, m, d);
+    if (dayOfWeek(iso) === weekday) return rollTo(iso, -1, cal);
   }
   return isoOf(y, m, dim);
 }
-/** The last occurrence of `weekday` (0=Sun..6=Sat) in a month, e.g. last Thursday. */
-function lastWeekdayOfMonth(y: number, m: number, weekday: number): string {
-  const dim = daysInMonth(y, m);
-  for (let d = dim; d >= 1; d--) {
-    if (dow(y, m, d) === weekday) return isoOf(y, m, d);
-  }
-  return isoOf(y, m, dim);
-}
-/** Business day on or before day `d` of a month (steps back over weekends; into
- *  the prior month if the whole leading span is a weekend — unreachable for the
- *  d=14 grain caller, which always has ≥10 weekdays before it). */
-function businessDayOnOrBefore(y: number, m: number, d: number): string {
-  let dd = Math.min(d, daysInMonth(y, m));
-  while (dd >= 1) {
-    const w = dow(y, m, dd);
-    if (w !== 0 && w !== 6) return isoOf(y, m, dd);
-    dd--;
-  }
-  return lastBusinessDay(m === 1 ? y - 1 : y, m === 1 ? 12 : m - 1);
+/** Business day on or before day `d` of a month (may step into the prior month). */
+function businessDayOnOrBefore(y: number, m: number, d: number, cal: Calendar = cme): string {
+  return rollTo(isoOf(y, m, Math.min(d, daysInMonth(y, m))), -1, cal);
 }
 
 export interface ContractExpiry {
@@ -163,66 +195,18 @@ export interface ContractExpiry {
   note: string; // documents the rule + holiday caveat (surface in the UI)
 }
 
-/** n-th business day counting from the END of the month (n=1 → last business day). */
-function nthLastBusinessDay(y: number, m: number, n: number): string {
-  let d = daysInMonth(y, m);
-  let count = 0;
-  for (;;) {
-    const w = dow(y, m, d);
-    if (w !== 0 && w !== 6) {
-      count++;
-      if (count === n) return isoOf(y, m, d);
-    }
-    d--;
-    if (d < 1) throw new Error(`month ${y}-${m} has fewer than ${n} business days`);
-  }
-}
-
-/** First business day of a month. */
-function firstBusinessDay(y: number, m: number): string {
-  for (let d = 1; d <= 7; d++) {
-    const w = dow(y, m, d);
-    if (w !== 0 && w !== 6) return isoOf(y, m, d);
-  }
-  throw new Error(`no business day found in ${y}-${m}`);
-}
-
-/** Step back `n` business days from an ISO date (weekends skipped). */
+/** Step back `n` CME business days from an ISO date (weekends and CME holidays skipped). */
 export function businessDaysBefore(iso: string, n: number): string {
-  let [y, m, d] = iso.split("-").map(Number);
-  let left = n;
-  while (left > 0) {
-    d--;
-    if (d < 1) {
-      m--;
-      if (m < 1) { m = 12; y--; }
-      d = daysInMonth(y, m);
-    }
-    const w = dow(y, m, d);
-    if (w !== 0 && w !== 6) left--;
-  }
-  return isoOf(y, m, d);
+  return moveBusinessDays(iso, n, -1, cme);
 }
 
-/** Step forward `n` business days from an ISO date (weekends skipped). */
+/** Step forward `n` CME business days from an ISO date (weekends and CME holidays skipped). */
 export function businessDaysAfter(iso: string, n: number): string {
-  let [y, m, d] = iso.split("-").map(Number);
-  let left = n;
-  while (left > 0) {
-    d++;
-    if (d > daysInMonth(y, m)) {
-      d = 1;
-      m++;
-      if (m > 12) { m = 1; y++; }
-    }
-    const w = dow(y, m, d);
-    if (w !== 0 && w !== 6) left--;
-  }
-  return isoOf(y, m, d);
+  return moveBusinessDays(iso, n, 1, cme);
 }
 
-const HOLIDAY_CAVEAT = "Approx: weekends handled, exchange holidays NOT — confirm with CME before trading.";
-const ICE_CAVEAT = "ICE rule, approximate: weekends handled, exchange holidays NOT — confirm with ICE before trading.";
+const HOLIDAY_CAVEAT = "CME holiday calendar applied (rule-based; ad-hoc closures not modelled) — confirm with CME before trading.";
+const ICE_CAVEAT = "ICE rule, approximate: weekends handled, ICE holidays NOT — confirm with ICE before trading.";
 
 /**
  * Documented CME/CBOT last-trade & first-notice rules for the products we cover.
@@ -270,7 +254,7 @@ export function contractExpiry(product: string, month1to12: number, year: number
         note: `Physically delivered; last trade = business day before the 15th; first notice = last business day of the prior month. ${HOLIDAY_CAVEAT}`,
       };
     }
-    // ── Metals (COMEX gold/silver/copper, NYMEX platinum/palladium): physical;
+    // ── Metals (COMEX gold/silver/copper incl. micros, NYMEX platinum/palladium): physical;
     //    trading ends the 3rd-last business day of the delivery month; notices
     //    begin at the prior month's end (the same NYMEX rule for PL and PA). ──
     case "GC":
@@ -278,6 +262,7 @@ export function contractExpiry(product: string, month1to12: number, year: number
     case "MGC":
     case "SIL":
     case "HG":
+    case "MHG":
     case "PL":
     case "PA": {
       const prevM = month1to12 === 1 ? 12 : month1to12 - 1;
@@ -323,7 +308,10 @@ export function contractExpiry(product: string, month1to12: number, year: number
       };
     }
     // ── CME crypto: cash-settled to the 4 p.m. London reference rate on the
-    //    LAST FRIDAY of the contract month. ──
+    //    LAST FRIDAY of the contract month; if that is not a business day, the
+    //    business day before (e.g. Dec 2026: Fri 25th is Christmas → Thu 24th).
+    //    CME also requires a LONDON business day; UK-only holidays are not
+    //    modelled (Good Friday, the common case, is a CME holiday too). ──
     case "BTC":
     case "MBT":
     case "ETH":
@@ -336,32 +324,32 @@ export function contractExpiry(product: string, month1to12: number, year: number
     // ── ICE softs (approximate rules; ICE holiday calendar not modeled) ──
     case "CT":
       return {
-        lastTrade: businessDaysBefore(lastBusinessDay(year, month1to12), 17),
-        firstNotice: businessDaysBefore(firstBusinessDay(year, month1to12), 5),
+        lastTrade: moveBusinessDays(lastBusinessDay(year, month1to12, weekdaysOnly), 17, -1, weekdaysOnly),
+        firstNotice: moveBusinessDays(firstBusinessDay(year, month1to12, weekdaysOnly), 5, -1, weekdaysOnly),
         cashSettled: false,
         note: `Physically delivered; last trade ≈ 17 business days before month-end; first notice ≈ 5 business days before the first delivery day. ${ICE_CAVEAT}`,
       };
     case "CC":
       return {
-        lastTrade: businessDaysBefore(lastBusinessDay(year, month1to12), 11),
-        firstNotice: businessDaysBefore(firstBusinessDay(year, month1to12), 10),
+        lastTrade: moveBusinessDays(lastBusinessDay(year, month1to12, weekdaysOnly), 11, -1, weekdaysOnly),
+        firstNotice: moveBusinessDays(firstBusinessDay(year, month1to12, weekdaysOnly), 10, -1, weekdaysOnly),
         cashSettled: false,
         note: `Physically delivered; last trade = 11 business days before the last business day; first notice = 10 business days before the first business day. ${ICE_CAVEAT}`,
       };
     case "KC":
       return {
-        lastTrade: businessDaysBefore(lastBusinessDay(year, month1to12), 8),
-        firstNotice: businessDaysBefore(firstBusinessDay(year, month1to12), 7),
+        lastTrade: moveBusinessDays(lastBusinessDay(year, month1to12, weekdaysOnly), 8, -1, weekdaysOnly),
+        firstNotice: moveBusinessDays(firstBusinessDay(year, month1to12, weekdaysOnly), 7, -1, weekdaysOnly),
         cashSettled: false,
         note: `Physically delivered; last trade = 8 business days before the last business day; first notice = 7 business days before the first business day. ${ICE_CAVEAT}`,
       };
     case "SB": {
       const prevM = month1to12 === 1 ? 12 : month1to12 - 1;
       const prevY = month1to12 === 1 ? year - 1 : year;
-      const lastTrade = lastBusinessDay(prevY, prevM);
+      const lastTrade = lastBusinessDay(prevY, prevM, weekdaysOnly);
       return {
         lastTrade,
-        firstNotice: businessDaysAfter(lastTrade, 1),
+        firstNotice: moveBusinessDays(lastTrade, 1, 1, weekdaysOnly),
         cashSettled: false,
         note: `Physically delivered; last trade = last business day of the month preceding delivery; first notice = the following business day. ${ICE_CAVEAT}`,
       };

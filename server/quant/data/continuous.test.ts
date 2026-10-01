@@ -11,8 +11,9 @@ const SI_ACTIVE = new Set([3, 5, 7, 9, 12]);
 const monthOfSymbol = (s: string) => "FGHJKMNQUVXZ".indexOf(s.slice(-3, -2)) + 1;
 
 describe("rollDateFor — roll before First Position Day", () => {
-  it("GC Dec-2026: FND is 30 Nov 2026 (last business day of Nov); the leg rolls 3 business days earlier", () => {
-    expect(rollDateFor("GC", 12, 2026)).toBe("2026-11-25");
+  it("GC Dec-2026: FND is 30 Nov 2026 (last business day of Nov); the leg rolls 3 business days earlier, skipping Thanksgiving", () => {
+    // Business days before Mon 30 Nov: Fri 27, (Thu 26 = Thanksgiving), Wed 25, Tue 24.
+    expect(rollDateFor("GC", 12, 2026)).toBe("2026-11-24");
   });
   it("prefers the stored first-notice date when the marketdata domain recorded one", () => {
     expect(rollDateFor("SI", 3, 2027, "2027-02-26")).toBe("2027-02-23");
@@ -24,8 +25,8 @@ describe("rollDateFor — cash-settled products roll off LAST TRADE", () => {
     // BTC Mar-2026 last trade = Fri 27 Mar; 5 business days earlier = Fri 20 Mar.
     expect(CASH_ROLL_BDAYS).toBe(5);
     expect(rollDateFor("BTC", 3, 2026, null, { product: FAKE_CASH })).toBe("2026-03-20");
-    // Dec-2026 last trade = Fri 25 Dec (holidays not modelled) → Fri 18 Dec.
-    expect(rollDateFor("BTC", 12, 2026, null, { product: FAKE_CASH })).toBe("2026-12-18");
+    // Dec-2026: last Friday is 25 Dec (Christmas) → last trade Thu 24 Dec; 5 business days earlier = Thu 17 Dec.
+    expect(rollDateFor("BTC", 12, 2026, null, { product: FAKE_CASH })).toBe("2026-12-17");
   });
   it("prefers a stored last-trade date and ignores first notice", () => {
     expect(rollDateFor("BTC", 3, 2026, "2026-02-27", { product: FAKE_CASH, lastTrade: "2026-03-26" })).toBe("2026-03-19");
@@ -37,7 +38,7 @@ describe("rollDateFor — cash-settled products roll off LAST TRADE", () => {
     }
   });
   it("physically settled products are unchanged by the option", () => {
-    expect(rollDateFor("GC", 12, 2026, null, { lastTrade: "2026-12-29" })).toBe("2026-11-25");
+    expect(rollDateFor("GC", 12, 2026, null, { lastTrade: "2026-12-29" })).toBe("2026-11-24");
   });
   it("prepareContracts threads the product through: the cash chain serves into the contract month", () => {
     const fx = makeFixture({ root: "BTC", startYear: 2022, endDate: "2023-12-31", spot0: 30000, seed: 3 });

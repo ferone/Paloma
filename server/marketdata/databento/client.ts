@@ -39,7 +39,9 @@ export class DatabentoClient {
     if (!opts.apiKey) throw new Error('DATABENTO_API_KEY is not set')
     this.auth = 'Basic ' + Buffer.from(`${opts.apiKey}:`).toString('base64')
     this.f = opts.fetchImpl ?? fetch
-    this.timeoutMs = opts.timeoutMs ?? 120_000
+    // Generous: the statistics (open interest) schema is slow server-side (~90 s per
+    // month of data), so a multi-month request can legitimately take many minutes.
+    this.timeoutMs = opts.timeoutMs ?? 900_000
     this.tries = opts.tries ?? 5
     this.backoffMs = opts.backoffMs ?? 500
   }

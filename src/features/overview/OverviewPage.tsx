@@ -10,6 +10,8 @@ import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import { Chip, EmptyState, ErrorNote, PageHeader, Panel, PanelSkeleton, Stat, type ChipTone } from '../../ui'
 import { fmtAge, fmtNum, fmtPct, fmtPctSigned, fmtSigned, fmtUsd, fmtUsdCompact, fmtUsdSigned, fmtRatio } from '../../design/format'
 import { PALETTE, signColor, TIER } from '../../design/tokens'
+import { useChartWidth } from '../../charts/frame'
+import { pickColumns } from './strip'
 
 const SLEEVE_LABEL: Record<Sleeve, string> = {
   physical: 'Direct holdings',
@@ -147,10 +149,17 @@ function AllocationBar({ items }: { items: PortfolioSummaryLite['allocation'] })
   )
 }
 
+const TILE_MIN_PX = 136 // 8.5rem
+
 function MarketStrip({ data }: { data: OverviewResponse }) {
+  // Choose the column count from the measured width so the last row is never a lone tile.
+  const [ref, width] = useChartWidth(1024)
+  const tiles = data.markets.length + RELATIVE_VALUE_PAIRS.length // quotes, then one tile per ratio pair
+  const cols = width < 600 ? 2 : pickColumns(tiles, width / TILE_MIN_PX)
   return (
     <section aria-label="Markets" className="rounded-lg border border-border bg-surface">
-      <dl className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))]">
+      <div ref={ref}>
+      <dl className="grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {data.markets.map((m) => {
           const isYield = m.symbol === '^TNX'
           return (
@@ -163,10 +172,12 @@ function MarketStrip({ data }: { data: OverviewResponse }) {
             </div>
           )
         })}
-        {RELATIVE_VALUE_PAIRS.map((pair) => {
+        {RELATIVE_VALUE_PAIRS.map((pair, i) => {
           const { ratio, caption } = pairRatio(pair, data.markets)
+          // An odd tile count on the 2-column phone layout: the last tile spans the row.
+          const spanLast = cols === 2 && tiles % 2 === 1 && i === RELATIVE_VALUE_PAIRS.length - 1
           return (
-            <div key={pair.id} className="px-4 py-3">
+            <div key={pair.id} className="px-4 py-3" style={spanLast ? { gridColumn: 'span 2' } : undefined}>
               <dt className="label">{pair.label}</dt>
               <dd className="num mt-1 text-base text-foreground">{fmtRatio(ratio, 2)}</dd>
               <dd className="text-2xs text-muted">{caption}</dd>
@@ -174,6 +185,7 @@ function MarketStrip({ data }: { data: OverviewResponse }) {
           )
         })}
       </dl>
+      </div>
     </section>
   )
 }

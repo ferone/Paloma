@@ -91,17 +91,22 @@ export function SeasonalPattern({ envelope, current, monthTicks, originDoy = 1, 
     <figure>
       <div ref={ref} className="relative w-full select-none">
         <svg width={width} height={height} role="img" aria-label="Seasonal envelope with the current season overlaid" onPointerMove={onMove} onPointerLeave={() => setHoverDoy(null)} className="block touch-none">
-          {windows.map((w, i) => (
-            <rect
-              key={i}
-              x={x(w.entryDoy)}
-              width={Math.max(1, x(w.exitDoy) - x(w.entryDoy))}
-              y={box.mt}
-              height={plotH(box)}
-              style={{ fill: w.side === 'long' ? PALETTE.pos : PALETTE.neg }}
-              opacity={0.09}
-            />
-          ))}
+          {windows.flatMap((w, i) =>
+            // A window that crosses the axis end (exit before entry) is drawn as two bands.
+            (w.exitDoy >= w.entryDoy ? [[w.entryDoy, w.exitDoy]] : [[w.entryDoy, 366], [1, w.exitDoy]]).map(([a, b], j) => (
+              <rect
+                key={`${i}-${j}`}
+                x={x(a)}
+                width={Math.max(1, x(b) - x(a))}
+                y={box.mt}
+                height={plotH(box)}
+                style={{ fill: w.side === 'long' ? PALETTE.pos : PALETTE.neg }}
+                opacity={0.09}
+              >
+                <title>{w.label ?? `${w.side === 'long' ? 'Long' : 'Short'} seasonal window`}</title>
+              </rect>
+            )),
+          )}
           {ticks(lo, hi, Math.max(3, Math.floor(height / 55))).map((t) => (
             <g key={t}>
               <line x1={box.ml} x2={box.ml + plotW(box)} y1={y(t)} y2={y(t)} style={GRID} opacity={0.6} />
@@ -136,7 +141,8 @@ export function SeasonalPattern({ envelope, current, monthTicks, originDoy = 1, 
           { label: 'mean', color: PALETTE.muted },
           { label: 'median', color: PALETTE.muted, dash: true },
           { label: '25–75% / 10–90%', color: PALETTE.muted, area: true },
-          ...(windows.length ? [{ label: 'long / short window', color: PALETTE.pos, area: true }] : []),
+          ...(windows.some((w) => w.side === 'long') ? [{ label: 'green = long window', color: PALETTE.pos, area: true }] : []),
+          ...(windows.some((w) => w.side === 'short') ? [{ label: 'red = short window', color: PALETTE.neg, area: true }] : []),
         ]}
       />
     </figure>

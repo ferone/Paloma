@@ -134,10 +134,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'seasonality',
     term: 'Seasonality',
     title: 'How to read the seasonality',
-    aliases: ['seasonality', 'seasonal', 'seasonal window', 'season', 'envelope', 'roll-clean', 'roll clean', 'seasonal pair', 'day of year'],
+    aliases: ['seasonality', 'seasonal', 'seasonal window', 'season', 'envelope', 'roll-clean', 'roll clean', 'seasonal pair', 'day of year', 'green band', 'green bands', 'red band', 'red bands', 'vertical band', 'vertical bands', 'shaded window', 'shaded windows', 'shaded band', 'band'],
     short: 'Day-of-year behaviour across past seasons; a window is trusted only after the walk-forward out-of-sample test passes.',
     body: p(
       'The shaded envelope shows, for each day of the year, where the value sat across past years (10–90% and 25–75% ranges); the solid line is the average and the coloured line is this season. Outrights and the ratio are rebased to % change from each season’s start; spreads are shown in the product’s price unit ($/oz for the metals).',
+      '**Shaded windows (the green and red vertical bands).** On the envelope chart a vertical band marks a seasonal window: it starts on the entry day and ends on the exit day of a move that recurred across past seasons. **Green = a long window** (the value tended to rise between those dates), **red = a short window** (it tended to fall). By default the top three windows by score are shaded; clicking a row in the “Seasonal windows” table shades only that one, and the checkbox turns shading off. Each window shows its in-sample record: seasons tested, win rate, average and median move, t-stat, profit factor and the average adverse/favourable excursion. A band is an **in-sample candidate, not a signal**: it was found by searching past seasons, so it only earns trust when the instrument’s walk-forward out-of-sample test passes, and the conservative verdict acts only while today is inside a validated window.',
       'Roll-clean pair spreads (e.g. gold Jun–Aug) are rebuilt from the same two contract months every year, so there is no roll splice. Their contract window starts nine months before the front month, so the axis starts where each season starts. Windows are searched on **prior seasons only**, and a window only earns trust when the walk-forward test (pick the window on past years, trade it blind on the next) passes: ≥ 3 out-of-sample years, ≥ 60% wins, positive average, |t| ≥ 1.5.',
     ),
     more: p(

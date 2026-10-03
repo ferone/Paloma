@@ -38,7 +38,7 @@ export function startersFor(pathname: string): string[] {
   }
   if (pathname === '/quant' || pathname === '/quant/') return ['Which of these is the most actionable, and why?', 'How is the QT rank calculated?', 'What is the difference between conservative and aggressive?', 'What does OU fail mean?']
   if (pathname.startsWith('/quant/relative-value')) return ['How would I size this ratio trade dollar-neutral?', 'Why is the ratio’s half-life flagged?', 'What drives this ratio?']
-  if (pathname.startsWith('/quant/seasonality')) return ['How do I read this seasonal envelope?', 'What does the walk-forward test require to pass?', 'What do the month letters mean?']
+  if (pathname.startsWith('/quant/seasonality')) return ['What do the green bands on this chart mean?', 'Is the shaded window trustworthy (out-of-sample)?', 'How do I read this seasonal envelope?', 'What do the month letters mean?']
   if (pathname.startsWith('/quant')) return ['How does a butterfly differ from a calendar spread?', 'What is the structural-move gate?', 'How are spreads executed on CME?']
   if (pathname.startsWith('/markets/curve')) return ['Is the curve in contango or backwardation, and what does it imply?', 'What does Z26 mean in these contract names?', 'Why compare term carry with the T-bill?']
   if (pathname.startsWith('/markets/etfs')) return ['Which ETF trades at a premium or discount?', 'How is the premium calculated for closed-end trusts?', 'What does tracking difference include?']

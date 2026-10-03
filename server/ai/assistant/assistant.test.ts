@@ -56,6 +56,11 @@ describe('retrieval', () => {
     expect(retrieve('structural pass?', '/').full[0]).toBe('structural')
   })
 
+  it('finds the seasonality entry for questions about the green bands', () => {
+    expect(retrieve('what are the green vertical bands on the chart?', '/quant/seasonality').full[0]).toBe('seasonality')
+    expect([...scoreEntries('what does the red band mean').keys()]).toContain('seasonality')
+  })
+
   it('finds month codes for "what does Z26 mean"', () => {
     expect(retrieve('what does Z26 mean', '/markets').full[0]).toBe('month-codes')
     expect([...scoreEntries('is GCZ26 the December contract?').keys()]).toContain('month-codes')

@@ -14,6 +14,8 @@ import { SeasonalExplainer } from '../components/glossary'
 import { OosPanel } from '../components/InstrumentPanels'
 import { KIND_LABEL, valueFormatter } from '../format'
 import { useQuantContext } from '../QuantLayout'
+import { useAssistantContext } from '../../assistant/context'
+import { seasonalitySummary } from '../../assistant/summaries'
 import { pairsForAsset } from '../pairs'
 
 export default function SeasonalityPage() {
@@ -88,7 +90,10 @@ function SeasonalityView({ s }: { s: SeasonalityDetail }) {
   const [selected, setSelected] = useState<number | null>(null)
   const fmt = valueFormatter(s.unit)
   const color = ASSET_COLOR[s.metal]
+  const { mode } = useQuantContext()
   const wins = selected !== null ? [s.windows[selected]] : s.windows.slice(0, 3)
+  // Tell the assistant exactly which coloured bands are on screen and whether they passed OOS.
+  useAssistantContext(() => seasonalitySummary(s, wins, showWindows, selected !== null, mode), [s, selected, showWindows, mode])
   const unitNote = s.rebase === 'rebasePct' ? '% change from each season’s start' : `${s.unit}, absolute`
   const provenance = { ...s.provenance }
   return (
@@ -112,7 +117,7 @@ function SeasonalityView({ s }: { s: SeasonalityDetail }) {
           originDoy={s.originDoy}
           yFormat={fmt}
           color={color}
-          windows={showWindows ? wins.map((w) => ({ entryDoy: w.entryDoy, exitDoy: w.exitDoy, side: w.side })) : []}
+          windows={showWindows ? wins.map((w) => ({ entryDoy: w.entryDoy, exitDoy: w.exitDoy, side: w.side, label: `${w.side === 'long' ? 'Green · long' : 'Red · short'} window ${w.entryLabel} → ${w.exitLabel}: won ${fmtPct(w.winRate, 0)} of ${w.years} past seasons (in-sample; see the out-of-sample test)` })) : []}
         />
         <div className="mt-2">
           <SeasonalExplainer />

@@ -1,4 +1,4 @@
-import type { InstrumentDetail, OpportunitiesResponse, OosView, OuView, QuantMode, RelativeValueDetail, VerdictView } from '@shared/quant'
+import type { InstrumentDetail, OpportunitiesResponse, OosView, OuView, QuantMode, RelativeValueDetail, SeasonalWindowView, SeasonalityDetail, VerdictView } from '@shared/quant'
 import type { CurveResponse, EtfsResponse } from '@shared/markets'
 import type { MlPrediction, MlRunDetail } from '@shared/ml'
 import type { HoldingsResponse, PerformanceResponse, PortfolioSummary, RiskResponse } from '@shared/portfolio'
@@ -64,6 +64,52 @@ export function instrumentSummary(d: InstrumentDetail, mode: QuantMode): PageCon
       d.decision ? `Decision lenses: conviction ${d.decision.convictionLabel}${d.decision.trap ? ' (TRAP flagged)' : ''} — ${d.decision.headline}` : '',
       d.evidence.length ? `Evidence: ${d.evidence.slice(0, 6).join('; ')}` : '',
       d.caveats.length ? `Caveats: ${d.caveats.slice(0, 4).join('; ')}` : '',
+    ),
+  }
+}
+
+/** Where today's value sits inside the envelope for the same day of the season. */
+function envelopeBucket(s: SeasonalityDetail): string {
+  const last = s.current?.points.at(-1)
+  if (!last) return 'No current-season value yet.'
+  const e = s.envelope.find((x) => x.doy === last.doy)
+  if (!e || e.p10 == null || e.p90 == null || e.p25 == null || e.p75 == null) return `Current season latest ${fmtNum(last.value, 2)} (no envelope for that day).`
+  const v = last.value
+  const where =
+    v < e.p10 ? 'BELOW the 10th percentile (unusually low for this point of the season)'
+    : v < e.p25 ? 'between the 10th and 25th percentiles (low side)'
+    : v <= e.p75 ? 'inside the 25th–75th percentile range (normal)'
+    : v <= e.p90 ? 'between the 75th and 90th percentiles (high side)'
+    : 'ABOVE the 90th percentile (unusually high for this point of the season)'
+  return `This season (${s.current!.year}) latest ${fmtNum(v, 2)} is ${where}; that day's median ${fmtNum(e.p50, 2)}, mean ${fmtNum(e.mean, 2)}, 10–90% range ${fmtNum(e.p10, 2)} to ${fmtNum(e.p90, 2)}.`
+}
+
+/**
+ * Quant Lab › Seasonality. The chart shades seasonal windows as vertical bands
+ * (green = long window, red = short window); this tells the assistant exactly
+ * which bands are on screen, what they are, and whether they earned trust (OOS).
+ */
+export function seasonalitySummary(s: SeasonalityDetail, shaded: SeasonalWindowView[], showWindows: boolean, selectedOnly: boolean, mode: QuantMode): PageContextValue {
+  const unit = s.rebase === 'rebasePct' ? '% move from season start' : s.unit
+  const axis = s.originDoy > 1 ? `season-day axis starting on day-of-year ${s.originDoy} (each season starts when the contract pair starts trading)` : 'calendar day-of-year axis (Jan → Dec)'
+  const band = (w: SeasonalWindowView) =>
+    `- ${w.side === 'long' ? 'GREEN band = LONG window' : 'RED band = SHORT window'}: enter ${w.entryLabel} → exit ${w.exitLabel}; in-sample over ${w.years} seasons won ${fmtPct(w.winRate, 0)}; avg ${fmtNum(w.avgPnl, 2)} / median ${fmtNum(w.medianPnl, 2)} (${unit}); t ${fmtNum(w.tStat, 2)}; profit factor ${fmtNum(w.profitFactor, 2)}; avg adverse excursion ${fmtNum(w.avgMae, 2)}, avg favourable ${fmtNum(w.avgMfe, 2)}; today inside it: ${yn(w.active)}.`
+  return {
+    label: `Seasonality · ${s.label}`,
+    summary: lines(
+      `Seasonality page for ${s.label} (${s.id}); kind ${s.kind}; values in ${unit}; ${axis}; data through ${s.dataThrough ?? 'n/a'}; verdict mode ${mode}.`,
+      'Envelope chart: shaded grey bands are the 10–90% and 25–75% ranges of past seasons for each day; solid line = average; coloured line = the current season.',
+      envelopeBucket(s),
+      showWindows && shaded.length
+        ? `Vertical coloured bands on the envelope chart (${selectedOnly ? 'the ONE window the user selected in the table' : `the top ${shaded.length} windows by score`}) — green = long, red = short; each band spans entry → exit day of a recurring move:`
+        : 'Window shading is switched OFF (no coloured bands on the chart).',
+      ...(showWindows ? shaded.map(band) : []),
+      `These windows are IN-SAMPLE CANDIDATES found on prior seasons only — a band is not a signal by itself. Trust comes from the walk-forward out-of-sample test below.`,
+      oosLine(s.oos),
+      s.oos.status === 'passed'
+        ? 'OOS passed: the window-selection rule worked on unseen years; the conservative verdict still only acts while today is inside the validated window.'
+        : `OOS ${s.oos.status}: treat the shaded bands as hypotheses, not trades.`,
+      s.windows.length > shaded.length ? `Other candidate windows in the table: ${s.windows.filter((w) => !shaded.includes(w)).slice(0, 5).map((w) => `${w.side} ${w.entryLabel}→${w.exitLabel} (${fmtPct(w.winRate, 0)} of ${w.years})`).join('; ')}.` : '',
     ),
   }
 }

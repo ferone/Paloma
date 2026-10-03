@@ -31,6 +31,9 @@ export interface StoredSecret {
 let keyOverride: Buffer | null = null
 let cachedKey: Buffer | null = null
 let cache: Map<string, StoredSecret> | null = null
+let cachedAt = 0
+/** Re-read after this long, so a key saved by another process (CLI, second server) is picked up without a restart. */
+const CACHE_MS = 5_000
 
 /** Where the encryption key lives: SECRET_KEY_PATH, else next to the DB. */
 export function keyPath(): string {
@@ -73,7 +76,7 @@ export function decrypt(box: { iv: string; tag: string; ciphertext: string }, ke
 }
 
 function loadAll(): Map<string, StoredSecret> {
-  if (cache) return cache
+  if (cache && Date.now() - cachedAt < CACHE_MS) return cache
   const out = new Map<string, StoredSecret>()
   let rows: Row[] = []
   try {
@@ -94,6 +97,7 @@ function loadAll(): Map<string, StoredSecret> {
     }
     out.set(r.name, { value, last4: r.last4, updatedAt: sqliteToIso(r.updated_at) })
   }
+  cachedAt = Date.now()
   return (cache = out)
 }
 

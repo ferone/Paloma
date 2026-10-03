@@ -7,7 +7,7 @@ import { ARTIFACTS, type QuantOpportunityLite, type QuantSnapshotLite } from '..
 import { readArtifact } from '../db/repo.js'
 import { env } from '../lib/env.js'
 import { chat, extractJson, type ChatResult, type Citation } from './openrouter.js'
-import { contextFor } from './context.js'
+import { contextFor, rankForBrief } from './context.js'
 import { buildMessages } from './prompts.js'
 import { SourcePolicy, cleanTitle, isValidUrl, normalizeReport, normalizeUrl } from './sourcing.js'
 import { completeReport, failReport, getReport, insertRunning } from './repo.js'
@@ -46,7 +46,8 @@ export function parseRequest(body: unknown): ReportRequest {
     if (!opp) {
       const snap = readArtifact<QuantSnapshotLite>(ARTIFACTS.quantSnapshot)?.data
       const pool = snap?.opportunities.filter((o) => o.asset === metal) ?? []
-      opp = input.opportunityId ? pool.find((o) => o.id === input.opportunityId) : [...pool].sort((a, b) => b.qtRank - a.qtRank)[0]
+      // Default focus: what the Quant Lab would actually trade (actionable, OOS-passed), not merely the top rank.
+      opp = input.opportunityId ? pool.find((o) => o.id === input.opportunityId) : rankForBrief(pool)[0]
     }
     if (!opp || typeof opp.id !== 'string' || typeof opp.label !== 'string')
       throw new BadRequest('trade_brief needs an opportunity: post input.opportunity, or run the quant engine so a snapshot exists')

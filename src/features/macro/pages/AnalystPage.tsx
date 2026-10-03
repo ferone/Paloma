@@ -1,19 +1,21 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { ReportKind, ReportRequest } from '@shared/ai'
 import { UNIVERSE } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
-import { Button, EmptyState, ErrorNote, Field, NotConfiguredState, Panel, PanelSkeleton, Textarea, isNotConfigured } from '../../../ui'
+import { Button, EmptyState, Select, ErrorNote, Field, NotConfiguredState, Panel, PanelSkeleton, Textarea, isNotConfigured } from '../../../ui'
 import { fmtDateTime } from '../../../design/format'
 import { errorMessage, useAiStatus, useDeleteReport, useGenerateReport, useReport, useReports } from '../api'
 import { ModelPicker } from '../ai/ModelPicker'
+import { isQuantEmpty } from '@shared/quant'
+import { useOpportunities } from '../../quant/api'
 import { ReportReader } from '../ai/ReportReader'
 import { ReportHistory } from '../ai/ReportHistory'
 import { KIND_LABEL } from '../ai/labels'
 
 const KIND_HELP: Record<Exclude<ReportKind, 'ask'>, string> = {
   macro_brief: 'Drivers, risks and what would change the view, from the live scorecard and COT.',
-  trade_brief: 'Thesis, legs, entry plan and invalidation for the top-ranked Quant Lab opportunity.',
+  trade_brief: 'Thesis, legs, entry plan and invalidation for a Quant Lab opportunity — by default the one the engine would trade today.',
   portfolio_commentary: 'Investor-grade paragraph and bullets for the factsheet, from the latest NAV.',
 }
 
@@ -40,7 +42,17 @@ export default function AnalystPage() {
         if (!isNotConfigured(r)) setSelected(r.id)
       },
     })
-  const opportunityId = params.get('opportunity') ?? undefined
+  // Trade brief focus: a link from the Quant Lab wins; otherwise the operator picks, defaulting to
+  // what the engine would trade today (actionable, then OOS-passed, then rank) — not merely the top rank.
+  const opps = useOpportunities(metal, 'conservative')
+  const choices = useMemo(() => {
+    const rows = opps.data && !isQuantEmpty(opps.data) ? opps.data.rows : []
+    const actionable = (a: string) => a === 'BUY' || a === 'SELL'
+    const score = (o: (typeof rows)[number]) => (actionable(o.verdict.action) ? 2 : 0) + (o.oos === 'passed' ? 1 : 0)
+    return [...rows].sort((a, b) => score(b) - score(a) || b.qtRank - a.qtRank).slice(0, 30)
+  }, [opps.data])
+  const [oppPick, setOppPick] = useState<{ asset: typeof metal; id: string } | null>(null)
+  const opportunityId = params.get('opportunity') ?? (oppPick?.asset === metal ? oppPick.id : choices[0]?.id)
   const notConfigured = status.data && !status.data.configured
 
   return (
@@ -63,13 +75,28 @@ export default function AnalystPage() {
                     <div className="text-sm font-medium text-foreground">{KIND_LABEL[k]}</div>
                     <p className="text-2xs leading-relaxed text-muted">
                       {KIND_HELP[k]}
-                      {k === 'trade_brief' && opportunityId && (
-                        <>
-                          {' '}
-                          Linked opportunity: <code className="num text-foreground">{opportunityId}</code>.
-                        </>
-                      )}
                     </p>
+                    {k === 'trade_brief' && choices.length > 0 && !params.get('opportunity') && (
+                      <Select
+                        aria-label="Opportunity to brief"
+                        value={opportunityId}
+                        onChange={(e) => setOppPick({ asset: metal, id: e.target.value })}
+                        className="mt-1.5 text-xs"
+                      >
+                        {choices.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.verdict.action === 'BUY' || o.verdict.action === 'SELL' ? `${o.verdict.action} · ` : ''}
+                            {o.label} · rank {Math.round(o.qtRank)}
+                            {o.oos === 'passed' ? ' · OOS passed' : ''}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                    {k === 'trade_brief' && params.get('opportunity') && (
+                      <p className="mt-1 text-2xs text-muted">
+                        Linked from the Quant Lab: <code className="num text-foreground">{opportunityId}</code>.
+                      </p>
+                    )}
                   </div>
                   <Button
                     size="sm"

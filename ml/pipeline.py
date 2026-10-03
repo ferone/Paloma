@@ -87,6 +87,10 @@ MIN_TEST_ROWS = 60
 MIN_TEST_YEARS = 3
 N_PERM_MIN = 100
 GATE = {"p": 0.05, "auc": 0.55, "hit": 0.52}
+# Recency: the model must still beat chance on its most recent test years, so an
+# edge that has faded (strong history, coin-flip lately) does not count.
+RECENT_YEARS = 2
+RECENT_MIN_AUC = 0.50
 CAL_BINS = 10
 
 
@@ -332,7 +336,17 @@ def summarize(folds: list[dict], oos: pd.DataFrame) -> dict:
         "rmse": avg("rmse"),
         "ic": avg("ic"),
         "pooledAuc": r4(pooled),
+        **recent_auc(folds),
     }
+
+
+def recent_auc(folds: list[dict]) -> dict:
+    """Mean AUC of the last RECENT_YEARS test years (a partial current year counts:
+    it is what the model faces now)."""
+    scored = sorted((f for f in folds if f.get("auc") is not None), key=lambda f: f["testYear"])[-RECENT_YEARS:]
+    if not scored:
+        return {}
+    return {"recentAuc": r4(float(np.mean([f["auc"] for f in scored]))), "recentYears": [f["testYear"] for f in scored]}
 
 
 # ── permutation test ─────────────────────────────────────────────────────────
@@ -458,6 +472,11 @@ def gate(summary: dict, perm: dict | None, n_tests: int = 1) -> dict:
         {"id": "baseline", "label": BASELINE_LABEL.get(summary.get("baselineKind") or "logistic", BASELINE_LABEL["mixed"]), "value": bauc, "threshold": None,
          "ok": auc is not None and bauc is not None and auc > bauc},
     ]
+    recent = summary.get("recentAuc")
+    if recent is not None:  # absent on runs summarised before the recency rule
+        years = summary.get("recentYears") or []
+        checks.append({"id": "recent", "label": f"Recent test years mean AUC ({', '.join(str(y) for y in years)})", "value": recent,
+                       "threshold": RECENT_MIN_AUC, "ok": recent >= RECENT_MIN_AUC})
     if folds < MIN_TEST_YEARS:
         return {"status": "untested", "reasons": [f"only {folds} test year(s) < {MIN_TEST_YEARS}"], "checks": checks, "multipleTesting": mt}
     if perm is None:
@@ -475,6 +494,8 @@ def gate(summary: dict, perm: dict | None, n_tests: int = 1) -> dict:
             reasons.append(f"AUC {auc:.3f} < {GATE['auc']:.2f}" if auc is not None else "AUC undefined")
         elif c["id"] == "hit":
             reasons.append(f"hit {hit:.1%} < {GATE['hit']:.0%}" if hit is not None else "hit rate undefined")
+        elif c["id"] == "recent":
+            reasons.append(f"recent {len(summary.get('recentYears') or [])} test years mean AUC {summary['recentAuc']:.3f} < {RECENT_MIN_AUC:.2f} (edge has faded)")
         elif c["id"] == "baseline":
             reasons.append(f"AUC {auc:.3f} ≤ baseline {bauc:.3f}" if auc is not None and bauc is not None else "baseline comparison undefined")
     return {"status": "passed" if not reasons else "failed", "reasons": reasons, "checks": checks, "multipleTesting": mt}

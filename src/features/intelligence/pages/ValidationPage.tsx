@@ -115,6 +115,12 @@ function GatePanel({ run, gate }: { run: MlRunDetail; gate: MlGate }) {
       title={<span className="inline-flex items-center gap-2">Validation status <ValidationChip status={gate.status} /></span>}
       provenance={{ source: runProvenance(run) }}
     >
+      {gate.status === 'failed' && gate.checks.every((c) => c.ok || c.id === 'recent') && (
+        <p className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+          <Chip tone="watch">Recent decay</Chip>
+          Every long-run check passes, but the model has not beaten a coin flip over its last {ML_GATE.recentYears} test years, so it is not counted until it does.
+        </p>
+      )}
       {gate.reasons.length > 0 && (
         <p className="mb-3 text-xs text-muted">
           {gate.status === 'failed' ? 'Failed because ' : 'Untested: '}
@@ -228,6 +234,11 @@ export default function ValidationPage() {
                 short blocks instead was tested and rejected: on targets with no signal it called 10% of them significant at 0.05, twice
                 the intended rate. If the real walk-forward AUC does not clearly beat the shifted reruns, it could be luck. The test is
                 one-sided: an AUC below 0.50 gets a p-value above 0.5.
+              </p>
+              <p>
+                The recency check guards against an edge that has faded: a model can average well over a decade yet sit at a coin flip in
+                its last {ML_GATE.recentYears} test years. Its mean AUC over those years must reach {fmtNum(ML_GATE.recentMinAuc, 2)}, or
+                the model is not counted, however good its long-run record looks.
               </p>
               <p>
                 <HelpTip term="Model family">Gradient boosting or logistic regression.</HelpTip> is chosen per asset, inside each

@@ -253,3 +253,23 @@ if __name__ == "__main__":
             print(f"FAIL {t.__name__}: {e!r}")
     print(f"{len(tests) - failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
+
+
+def test_gate_recency_rule():
+    perm_ok = {"pValue": 0.001}
+    # strong overall, but the last two test years are below chance -> fails on recency only
+    g = pl.gate(_summary(recentAuc=0.488, recentYears=[2025, 2026]), perm_ok)
+    assert g["status"] == "failed"
+    assert any("edge has faded" in r for r in g["reasons"]) and len(g["reasons"]) == 1
+    assert any(c["id"] == "recent" and not c["ok"] for c in g["checks"])
+    # recent years at or above chance -> passes
+    assert pl.gate(_summary(recentAuc=0.50, recentYears=[2025, 2026]), perm_ok)["status"] == "passed"
+    # runs summarised before the rule (no recentAuc) are gated as before
+    assert all(c["id"] != "recent" for c in pl.gate(_summary(), perm_ok)["checks"])
+
+
+def test_recent_auc_uses_the_last_two_test_years():
+    folds = [{"testYear": y, "auc": a} for y, a in [(2022, 0.70), (2025, 0.478), (2024, 0.71), (2026, 0.498)]]
+    r = pl.recent_auc(folds)
+    assert r["recentYears"] == [2025, 2026]
+    assert abs(r["recentAuc"] - 0.488) < 1e-4

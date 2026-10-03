@@ -19,6 +19,9 @@ export const ML_GATE = {
   minTestYears: 3,
   /** Minimum calendar years of training history before a year can be a test year. */
   minTrainYears: 5,
+  /** Recency: mean AUC over the last `recentYears` test years must reach `recentMinAuc` (an edge that has faded does not count). */
+  recentYears: 2,
+  recentMinAuc: 0.5,
 } as const
 
 /**
@@ -221,7 +224,7 @@ export interface MlGate {
   status: ValidationStatus
   /** Human-readable reasons, e.g. "AUC 0.53 < 0.55". Empty when passed. */
   reasons: string[]
-  checks: { id: 'pValue' | 'auc' | 'hit' | 'baseline' | 'folds'; label: string; value: number | null; threshold: number | null; ok: boolean }[]
+  checks: { id: 'pValue' | 'auc' | 'hit' | 'baseline' | 'folds' | 'recent'; label: string; value: number | null; threshold: number | null; ok: boolean }[]
   /**
    * Multiple-testing correction applied to the permutation p (the pValue
    * check's threshold is `alphaAdjusted`). Absent on runs trained before the

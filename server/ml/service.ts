@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { ASSETS, UNIVERSE, type AssetId } from '../../shared/universe.js'
 import { ML_TEST_COUNT, type MlPrediction } from '../../shared/ml.js'
 import { exportFeatures, mlDataDir, refreshYahooInputs } from './data.js'
-import { runPipeline } from './python.js'
+import { mlDeviceMode, runPipeline } from './python.js'
 import {
   completeRun,
   createRun,
@@ -34,12 +34,15 @@ export async function trainMetal(metal: AssetId, ctx: Ctx, opts: { refresh?: boo
   }
   ctx.progress(0.03, `Exporting ${metal} features`)
   const exp = exportFeatures(metal)
-  ctx.log(`${metal}: ${exp.rows} feature rows through ${exp.dataThrough}`)
+  const device = mlDeviceMode()
+  ctx.log(`${metal}: ${exp.rows} feature rows ${exp.dataFrom} → ${exp.dataThrough}; ML device ${device}`)
   const runId = createRun(metal)
   try {
     // --n-tests: every universe market is trained and gated, so the gate applies a Bonferroni correction over all of them.
-    const path = await runPipeline(['train', '--metal', metal, '--data-dir', mlDataDir(), '--n-tests', String(ML_TEST_COUNT)], (f, msg) =>
-      ctx.progress(0.05 + 0.93 * f, `${UNIVERSE[metal].label}: ${msg}`),
+    const path = await runPipeline(
+      ['train', '--metal', metal, '--data-dir', mlDataDir(), '--n-tests', String(ML_TEST_COUNT)],
+      (f, msg) => ctx.progress(0.05 + 0.93 * f, `${UNIVERSE[metal].label}: ${msg}`),
+      { device },
     )
     const res = readJson<PyTrainResult>(path)
     const pred = completeRun(runId, res)

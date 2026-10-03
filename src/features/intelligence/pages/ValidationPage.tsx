@@ -5,12 +5,14 @@ import {
   ML_FAMILY_LABEL,
   ML_GATE,
   ML_TEST_COUNT,
+  type MlCompute,
   type MlFamily,
   type MlFold,
   type MlGate,
   type MlRunDetail,
 } from '@shared/ml'
-import { fmtNum, fmtPct } from '../../../design/format'
+import { fmtDate, fmtNum, fmtPct } from '../../../design/format'
+import { devicesLong, fmtDuration } from '../components/compute'
 import { PALETTE } from '../../../design/tokens'
 import { Chip, DataTable, Explainer, HelpTip, Panel, Stat, type Column } from '../../../ui'
 import { AucByYear, PermutationHistogram } from '../components/charts'
@@ -92,6 +94,22 @@ function FamilyPanel({ run }: { run: MlRunDetail }) {
   )
 }
 
+/** Where the run's fits ran and how long they took (runs with compute metadata only). */
+function ComputeNote({ compute }: { compute: MlCompute }) {
+  const t = compute.timings
+  const b = compute.benchmark
+  const fam = t.permutationFamilySec
+  return (
+    <p className="mt-2 text-2xs text-muted">
+      Ran {devicesLong(compute.devices, compute.gpu, compute.workers)} (device {compute.requested}
+      {compute.requested === 'auto' && b ? `: one fold's fits for every shift, trees CPU ${fmtDuration(b.gb.cpu)} vs GPU ${fmtDuration(b.gb.cuda)}, logistic CPU ${fmtDuration(b.logit.cpu)} vs GPU ${fmtDuration(b.logit.cuda)}` : ''}
+      ). Permutation test {fmtDuration(t.permutationSec)}
+      {fam.gb != null && fam.logit != null ? ` (trees ${fmtDuration(fam.gb)}, logistic ${fmtDuration(fam.logit)} for all shifts at once)` : ''}; whole run{' '}
+      {fmtDuration(t.wallSec)}.
+    </p>
+  )
+}
+
 function GatePanel({ run, gate }: { run: MlRunDetail; gate: MlGate }) {
   const fmt = (id: string, v: number | null) =>
     v == null ? '—' : id === 'hit' ? fmtPct(v, 1) : id === 'folds' ? String(v) : id === 'pValue' ? fmtP(v) : fmtNum(v, 3)
@@ -141,6 +159,7 @@ export default function ValidationPage() {
         const s = m.summary
         const perm = m.permutation
         const alpha = gateAlpha(m.gate)
+        const span = m.span ?? { from: m.dataFrom ?? '', to: m.labelThrough ?? '', rows: m.nRows, testFrom: m.folds[0]?.testYear ?? null, testTo: m.folds.at(-1)?.testYear ?? null, oosRows: 0 }
         const foldCols: Column<MlFold>[] = [
           { key: 'y', header: 'Test year', cell: (f) => <span className="num">{f.testYear}</span>, sortValue: (f) => f.testYear },
           { key: 'n', header: 'Train / test', numeric: true, cell: (f) => `${f.nTrain.toLocaleString('en-US')} / ${f.nTest}` },
@@ -170,11 +189,14 @@ export default function ValidationPage() {
                 <Stat size="sm" label="Hit rate" value={fmtPct(s.hit, 1)} />
                 <Stat size="sm" label="Always-up hit" value={fmtPct(s.baseRate, 1)} hint="share of up 20d windows" />
                 <Stat size="sm" label="Brier" value={fmtNum(s.brier, 3)} hint="lower is better; 0.25 = coin flip" />
-                <Stat size="sm" label="Test years" value={String(s.folds)} />
+                <Stat size="sm" label="Test years" value={String(s.folds)} hint={span.testFrom ? `${span.testFrom}–${span.testTo}` : undefined} />
               </div>
               <p className="mt-3 text-2xs text-muted">
-                {m.nRows.toLocaleString('en-US')} labeled days from {m.dataFrom} to {m.labelThrough}. Each fold trains on every earlier
-                year (at least five) and drops the last 20 training days, whose forward labels would overlap the test year.
+                Training span: <span className="num text-foreground">{span.rows.toLocaleString('en-US')}</span> labeled days from{' '}
+                <span className="num text-foreground">{fmtDate(span.from)}</span> to <span className="num text-foreground">{fmtDate(span.to)}</span>
+                {m.span ? ', every day where all core inputs (price, dollar, yields, VIX, equities, calendar) exist; later feeds count where they have data' : ''}.
+                Each fold trains on every earlier year (at least five) and drops the last 20 training days, whose forward labels would overlap
+                the test year.
               </p>
             </Panel>
 
@@ -212,6 +234,7 @@ export default function ValidationPage() {
                       : 'Older run: the statistic is the holdout-year AUC of a lighter model, not the walk-forward mean. Retrain for the full-procedure test.'}{' '}
                     The smallest p this test can report is 1 / ({perm.nPerm} + 1) = {fmtP(1 / (perm.nPerm + 1))}.
                   </p>
+                  {m.compute && <ComputeNote compute={m.compute} />}
                 </>
               ) : (
                 <p className="text-sm text-muted">The permutation test could not run (too little data in the latest test year).</p>

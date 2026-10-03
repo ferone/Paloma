@@ -44,7 +44,8 @@ npm run data:backfill -- roots=GC,SI schemas=ohlcv-1d start=2010-06-06 windowMon
 npm run data:yahoo          # Yahoo daily history (universe fronts/spots/ETFs/miners, DXY/10Y/VIX/SPY, listed futures months)
 npm run macro:refresh       # FRED (keyless CSV unless FRED_API_KEY) + CFTC COT
 npm run quant:recompute     # quant engine over contract_bars (~35 s)
-npm run ml:train            # nested family selection + walk-forward + 480-shift permutation gate (~7 min/asset); ml:infer for daily scoring
+npm run ml:train            # whole-history walk-forward + nested family selection + 480-shift permutation gate (~7 min/asset, see ML below); ml:infer for daily scoring
+npm run ml:test             # pytest ml/ (CUDA equivalence tests skip without a GPU)
 DB_PATH=data/demo.db npm run portfolio:seed-demo   # demo ledger in a SEPARATE db; never seed the real one
 ```
 - **Databento:**
@@ -52,6 +53,11 @@ DB_PATH=data/demo.db npm run portfolio:seed-demo   # demo ledger in a SEPARATE d
   - Every pull is estimated for free first and capped by `DATABENTO_BUDGET` (default $1) unless `maxCost` is given.
   - Backfilling is idempotent (upserts), but re-pulling history is paid again, so check `databento_pulls` before re-running.
   - Use `windowMonths=12` for ohlcv-1d history. The `statistics` schema (open interest) is slow server-side (~90 s per month), so pull it only incrementally.
+- **ML** (`ml/`, `server/ml/`):
+  - Trains on the whole Yahoo history (from 2000 where it exists). Core features (price, cross-asset, calendar) set the span; late feeds (ETF volume, FRED, COT, open interest, curve) are optional and may be NaN (`isOptionalFor` in `shared/ml.ts`).
+  - Families: XGBoost hist trees and a torch L2 logistic (median imputation + missing indicators). `ml/models.py` fits each training window once for a matrix of label vectors; the permutation test batches all shifts in one call.
+  - `ML_DEVICE=auto|cuda|cpu` (settings `ml.device` wins, then env; `--device` on the CLI). `auto` benchmarks one fold per family; on the RTX 5080 it picks the GPU for the logistic family and the CPU (16 threads) for trees, because small XGBoost fits are launch-bound and serialize on the GPU. Training wall time is dominated by the CPU tree fits.
+  - `ML_WORKERS` caps the tree threads. Python deps include `xgboost` and `torch` (`ml/requirements.txt`).
 - **Scheduler** (Data Center → Jobs, Settings) is on by default for installs that never saved a schedule (22:30 UTC weekdays, after the CME close); a saved "off" is respected, and `OFFLINE=1` or `SCHEDULER=0` disables it (use these for throwaway servers so they never start paid pulls).
 - **Agents running shell commands:** never embed markdown or backticks in inline `node -e` / heredoc scripts. Bash executes backtick spans as commands; this once re-ran a paid backfill. Edit docs with file-editing tools.
 

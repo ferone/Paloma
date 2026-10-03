@@ -3,3 +3,10 @@
 numpy==2.2.3
 pandas==2.2.3
 scikit-learn==1.6.1
+scipy>=1.13
+# Tree family (CPU wheels on PyPI include CUDA support on Windows/Linux x86-64).
+xgboost==3.1.3
+# Logistic family solver. Any build works on the CPU; for an NVIDIA GPU install a CUDA build, e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
+# ML_DEVICE=auto|cuda|cpu picks the device (auto benchmarks both per family).
+torch>=2.5

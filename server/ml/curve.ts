@@ -1,5 +1,23 @@
 import type { ContractBar, ContractRow } from '../db/shared-repo.js'
-import type { CurvePoint } from './features.js'
+import { pickFronts } from '../marketdata/continuous.js'
+import type { CurvePoint, OiPoint } from './features.js'
+
+/**
+ * Daily open interest of a futures root from per-contract bars: `front` is the
+ * OI of the front month as the marketdata domain defines it (the most-held
+ * contract before its first-notice / last-trade day, never rolling back), and
+ * `total` the sum over every contract that reported OI that day. Dates with no
+ * reported OI are omitted. The values are as of each date's settlement; the
+ * feature builder uses them only from the next day.
+ */
+export function buildOiSeries(bars: ContractBar[], contracts: ContractRow[]): OiPoint[] {
+  const withOi = bars.filter((b) => b.openInterest != null && Number.isFinite(b.openInterest) && b.openInterest > 0)
+  if (!withOi.length) return []
+  const total = new Map<string, number>()
+  for (const b of withOi) total.set(b.date, (total.get(b.date) ?? 0) + b.openInterest!)
+  const front = new Map(pickFronts(withOi, contracts).map((b) => [b.date, b.openInterest]))
+  return [...total.keys()].sort().map((date) => ({ date, front: front.get(date) ?? null, total: total.get(date)! }))
+}
 
 /**
  * Last date a contract is treated as "front": the day before first notice when

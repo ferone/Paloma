@@ -35,7 +35,14 @@ export default function FeaturesPage() {
             key: 'used', header: 'Status', sortValue: (r) => (r.avail?.used ? 1 : 0),
             cell: (r) =>
               r.avail?.used ? (
-                <Chip tone="strong">Used</Chip>
+                <div className="flex flex-col items-start gap-1">
+                  <Chip tone="strong">Used</Chip>
+                  {r.avail.core != null && (
+                    <span className="text-2xs text-muted" title={r.avail.core ? 'Must exist on every training day: sets the training span' : 'May be missing on early days'}>
+                      {r.avail.core ? 'core' : 'optional'}
+                    </span>
+                  )}
+                </div>
               ) : (
                 <div className="flex flex-col items-start gap-1">
                   <Chip tone="neutral">Not used</Chip>
@@ -82,10 +89,18 @@ export default function FeaturesPage() {
 
             <Explainer title="Look-ahead rules">
               <p>Every feature on day t uses only data dated t or earlier. Market closes are aligned to the asset&rsquo;s trading days.</p>
-              <p>FRED macro series are lagged by one day. A COT report is used only from the day after its Friday release, not from its Tuesday position date.</p>
               <p>
-                An optional feed (FRED, COT, futures curve) is used only when it covers at least 60% of the training history and is present
-                on the latest day. Otherwise the model trains without it and lists it above.
+                FRED macro series are lagged by one day. A COT report is used only from the day after its Friday release, not from its
+                Tuesday position date. Futures open interest for a day is published after that day&rsquo;s settlement, so it is used from
+                the next day.
+              </p>
+              <p>
+                Core inputs (price, dollar, yields, VIX, equities, calendar) must exist on every training day, so they set the training
+                span: the whole history back to 2000 where Yahoo has it. Feeds that start later (benchmark-ETF volume, FRED macro, COT,
+                open interest, the futures curve) are optional: they count from the day they start, and earlier days are treated as
+                missing (the tree model handles gaps natively; the logistic model fills the training-window median and adds a
+                missing flag). An optional feed is used when it has at least three years of training days and is present on the latest
+                day. Otherwise the model trains without it and lists it above.
               </p>
             </Explainer>
           </div>

@@ -95,6 +95,16 @@ function toSummary(r: RunRow): MlRunSummary {
     folds: metrics?.summary.folds ?? null,
     dataThrough: r.data_through,
     error: r.error,
+    durationSec: metrics?.durationSec ?? null,
+    devices: metrics?.compute?.devices ?? null,
+    gpu: metrics?.compute?.gpu ?? null,
+    span: metrics
+      ? metrics.span
+        ? { from: metrics.span.from, to: metrics.span.to, rows: metrics.span.rows }
+        : metrics.dataFrom && metrics.labelThrough
+          ? { from: metrics.dataFrom, to: metrics.labelThrough, rows: metrics.nRows }
+          : null
+      : null,
   }
 }
 

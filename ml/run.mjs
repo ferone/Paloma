@@ -31,7 +31,7 @@ function resolvePython() {
   let runnable = null
   for (const cmd of process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']) {
     try {
-      if (spawnSync(cmd, ['-c', 'import sklearn, pandas, joblib'], { stdio: 'pipe', windowsHide: true }).status === 0) return cmd
+      if (spawnSync(cmd, ['-c', 'import sklearn, pandas, joblib, xgboost, torch'], { stdio: 'pipe', windowsHide: true }).status === 0) return cmd
       if (!runnable && spawnSync(cmd, ['--version'], { stdio: 'pipe', windowsHide: true }).status === 0) runnable = cmd
     } catch {
       // try the next candidate

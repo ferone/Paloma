@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { ASSETS, UNIVERSE } from '../../shared/universe.js'
 import { FEATURES, FEATURE_IDS, ML_INSTRUMENT, featureApplies, featuresFor, isOptionalFor, type FeatureSpec } from '../../shared/ml.js'
-import { buildCurveSeries } from './curve.js'
+import { buildCurveSeries, buildOiSeries } from './curve.js'
 import {
   asOf,
   buildFeatureMatrix,
   cotSeries,
   matrixToCsv,
+  oiFeatures,
   rsi,
   seasonalDrift,
   type CotPoint,
   type FeatureInputs,
+  type OiPoint,
   type PricePoint,
 } from './features.js'
 
@@ -270,17 +272,92 @@ describe('helpers', () => {
   })
 })
 
-describe('class-conditional optional features', () => {
+describe('core vs optional features', () => {
   const f = (id: string) => FEATURES.find((x) => x.id === id)!
-  it('keeps late-starting feeds core for metals but optional for crypto', () => {
-    for (const id of ['etf_volume_z']) {
-      expect(isOptionalFor(f(id), 'gold')).toBe(false)
-      expect(isOptionalFor(f(id), 'silver')).toBe(false)
-      expect(isOptionalFor(f(id), 'btc')).toBe(true)
+  it('only the price/cross-asset/calendar set is core; late-starting feeds are optional for every asset', () => {
+    // Core features set the training span (every core feature must exist on a row);
+    // these feeds start years after the price history, so they may be missing.
+    const late = ['etf_volume_z', 'seasonal_drift', 'real_yield_chg20', 'breakeven_chg20', 'usd_broad_mom20', 'gvz_level',
+      'cot_mm_z', 'oi_z', 'oi_chg20', 'oi_price_div', 'curve_spread_z', 'curve_fly_z', 'carry_slope']
+    for (const a of ASSETS) {
+      for (const spec of featuresFor(a)) {
+        expect(isOptionalFor(spec, a), `${spec.id} @ ${a}`).toBe(late.includes(spec.id))
+      }
     }
     expect(isOptionalFor(f('mom20'), 'btc')).toBe(false)
     // Seasonal drift is not modelled for crypto: too few years to estimate a day-of-year effect.
     expect(featureApplies(f('seasonal_drift'), 'btc')).toBe(false)
     expect(featureApplies(f('seasonal_drift'), 'gold')).toBe(true)
+  })
+})
+
+describe('open interest features', () => {
+  // Front OI oscillates; total OI grows steadily, so its 20-session change is known in closed form.
+  const oiPoints = (dates: string[]): OiPoint[] =>
+    dates.map((date, i) => ({ date, front: 1000 + 100 * Math.sin(i / 15), total: 5000 * 1.001 ** i }))
+
+  it('oiFeatures: 252-session z of front OI and 20-session % change of total OI, keyed by settlement date', () => {
+    const pts = oiPoints(DATES.slice(0, 400))
+    const r = oiFeatures(pts)!
+    expect(r.z[0].date).toBe(DATES[251])
+    expect(r.chg20[0].date).toBe(DATES[20])
+    expect(r.chg20[0].value).toBeCloseTo(1.001 ** 20 - 1, 12)
+    const w = pts.slice(300 - 251, 301).map((p) => p.front!)
+    const m = w.reduce((a, b) => a + b, 0) / w.length
+    const sd = Math.sqrt(w.reduce((a, b) => a + (b - m) ** 2, 0) / (w.length - 1))
+    expect(r.z.find((p) => p.date === DATES[300])!.value).toBeCloseTo((pts[300].front! - m) / sd, 10)
+    expect(oiFeatures([])).toBeNull()
+  })
+
+  it('falls back to front-month OI when no total is available', () => {
+    const pts = DATES.slice(0, 60).map((date, i) => ({ date, front: 100 + i, total: null }))
+    const r = oiFeatures(pts)!
+    expect(r.chg20[0].value).toBeCloseTo(120 / 100 - 1, 12)
+  })
+
+  it('OI for day d is used only from d+1, and price/OI agreement is sign(mom20) × sign(OI change)', () => {
+    const pts = oiPoints(DATES)
+    const m1 = buildFeatureMatrix(inputs({ oi: pts }))
+    const r = oiFeatures(pts)!
+    const i = 700
+    // the value at row i is the OI-derived value of the PREVIOUS settlement date
+    expect(m1.rows[i].values.oi_chg20).toBeCloseTo(r.chg20.find((p) => p.date === DATES[i - 1])!.value, 12)
+    expect(m1.rows[i].values.oi_z).toBeCloseTo(r.z.find((p) => p.date === DATES[i - 1])!.value, 12)
+    expect(m1.rows[i].values.oi_price_div).toBe(Math.sign(m1.rows[i].values.mom20!) * Math.sign(m1.rows[i].values.oi_chg20!))
+    // corrupting OI dated t itself (and later) changes nothing at or before t
+    const cut = 900
+    const m2 = buildFeatureMatrix(inputs({ oi: corruptAfter(pts, DATES[cut - 1], (p) => ({ ...p, front: 1, total: 1e9 })) }))
+    for (let k = 0; k <= cut; k++) {
+      for (const id of ['oi_z', 'oi_chg20', 'oi_price_div']) expect(m2.rows[k].values[id], `${id} @ ${k}`).toBe(m1.rows[k].values[id])
+    }
+    expect(m2.rows[cut + 1].values.oi_chg20).not.toBe(m1.rows[cut + 1].values.oi_chg20)
+  })
+
+  it('reports missing OI with a reason and leaves the columns empty', () => {
+    const m = buildFeatureMatrix(inputs())
+    for (const id of ['oi_z', 'oi_chg20', 'oi_price_div']) {
+      expect(m.missing[id]).toBe('Open interest not loaded yet')
+      expect(m.rows.every((row) => row.values[id] === null)).toBe(true)
+    }
+  })
+
+  it('buildOiSeries: total over every reporting contract, front = most-held live contract', () => {
+    const contracts = [
+      { symbol: 'GCG24', root: 'GC', year: 2024, month: 2, lastTrade: null, firstNotice: '2024-01-31' },
+      { symbol: 'GCJ24', root: 'GC', year: 2024, month: 4, lastTrade: null, firstNotice: '2024-03-28' },
+    ]
+    const bar = (symbol: string, date: string, oi: number | null) => ({
+      symbol, date, close: 2000, open: null, high: null, low: null, volume: null, openInterest: oi, source: 'databento',
+    })
+    const s = buildOiSeries(
+      [bar('GCG24', '2024-01-29', 300), bar('GCJ24', '2024-01-29', 200), bar('GCG24', '2024-01-30', 100), bar('GCJ24', '2024-01-30', 400),
+        bar('GCG24', '2024-01-31', null), bar('GCJ24', '2024-01-31', null)],
+      contracts,
+    )
+    expect(s).toEqual([
+      { date: '2024-01-29', front: 300, total: 500 },
+      { date: '2024-01-30', front: 400, total: 500 },
+    ])
+    expect(buildOiSeries([], contracts)).toEqual([])
   })
 })

@@ -97,15 +97,18 @@ export const FEATURES: FeatureSpec[] = [
   { id: 'vix_level', label: 'VIX level', group: 'cross-asset', source: 'yahoo', optional: false, description: '^VIX close.' },
   { id: 'vix_chg20', label: 'VIX 20d change', group: 'cross-asset', source: 'yahoo', optional: false, description: 'Change in ^VIX over 20 days.' },
   { id: 'spy_mom20', label: 'S&P 500 20d momentum', group: 'cross-asset', source: 'yahoo', optional: false, description: 'ln change of SPY over 20 days.' },
-  { id: 'etf_volume_z', label: 'ETF volume z (flows proxy)', group: 'flows', source: 'yahoo', optional: false, optionalFor: ['crypto'], description: 'z-score (120d) of the 5-day mean log volume of the asset\'s benchmark ETF (GLD for gold, SLV for silver).' },
+  { id: 'etf_volume_z', label: 'ETF volume z (flows proxy)', group: 'flows', source: 'yahoo', optional: true, description: 'z-score (120d) of the 5-day mean log volume of the asset\'s benchmark ETF (GLD for gold, SLV for silver).' },
   { id: 'doy_sin', label: 'Day of year (sin)', group: 'seasonal', source: 'calendar', optional: false, description: 'sin(2π·doy/365.25).' },
   { id: 'doy_cos', label: 'Day of year (cos)', group: 'seasonal', source: 'calendar', optional: false, description: 'cos(2π·doy/365.25).' },
-  { id: 'seasonal_drift', label: 'Seasonal drift', group: 'seasonal', source: 'yahoo', optional: false, classes: ['precious', 'industrial'], description: 'Mean 20-day forward return from the same ±10 calendar days in prior years, using only windows fully completed by t (≥3 years).' },
+  { id: 'seasonal_drift', label: 'Seasonal drift', group: 'seasonal', source: 'yahoo', optional: true, classes: ['precious', 'industrial'], description: 'Mean 20-day forward return from the same ±10 calendar days in prior years, using only windows fully completed by t (≥3 years).' },
   { id: 'real_yield_chg20', label: 'Real yield 20d change', group: 'macro', source: 'fred', optional: true, description: 'Change in 10y TIPS yield (FRED DFII10) over 20 observations, lagged one day.' },
   { id: 'breakeven_chg20', label: 'Breakeven 20d change', group: 'macro', source: 'fred', optional: true, description: 'Change in 10y breakeven inflation (FRED T10YIE) over 20 observations, lagged one day.' },
   { id: 'usd_broad_mom20', label: 'Broad dollar 20d momentum', group: 'macro', source: 'fred', optional: true, description: 'ln change of the trade-weighted dollar (FRED DTWEXBGS) over 20 observations, lagged one day.' },
   { id: 'gvz_level', label: 'Gold VIX (GVZ)', group: 'macro', source: 'fred', optional: true, onlyFor: ['gold', 'silver'], description: 'CBOE gold volatility index (FRED GVZCLS), lagged one day.' },
   { id: 'cot_mm_z', label: 'COT speculator z', group: 'positioning', source: 'cftc', optional: true, description: 'z-score (156 reports) of speculator net positions as % of open interest (managed money in the disaggregated report, leveraged funds in TFF); a report is used only from the day after it was published.' },
+  { id: 'oi_z', label: 'Open interest z', group: 'positioning', source: 'contracts', optional: true, description: 'z-score over the trailing 252 sessions of front-month open interest (the most-held contract before its first-notice day). Open interest for day d is published after d\'s settlement, so it is used from d+1.' },
+  { id: 'oi_chg20', label: 'Open interest 20d change', group: 'positioning', source: 'contracts', optional: true, description: '% change over 20 sessions of total open interest across all listed contracts (front month when no total is available); each day\'s figure is used from the next day.' },
+  { id: 'oi_price_div', label: 'Price / open interest agreement', group: 'positioning', source: 'contracts', optional: true, description: 'sign(20d price change) × sign(20d open-interest change): +1 when price and open interest move together (new positions behind the move), −1 when they diverge (short covering or liquidation). Open interest used from d+1.' },
   { id: 'curve_spread_z', label: 'Front spread z', group: 'curve', source: 'contracts', optional: true, description: 'z-score (252d) of (2nd − 1st active contract) / 1st.' },
   { id: 'curve_fly_z', label: 'Front butterfly z', group: 'curve', source: 'contracts', optional: true, description: 'z-score (252d) of (1st − 2·2nd + 3rd) / 1st.' },
   { id: 'carry_slope', label: 'Carry slope', group: 'curve', source: 'contracts', optional: true, description: 'Annualized ln(2nd / 1st) per month between the two contracts.' },
@@ -146,6 +149,65 @@ export interface FeatureAvailability {
   /** Fraction of trainable rows where the feature is present. */
   coverage: number
   firstDate: string | null
+  /** Core features must exist on every trainable row (they set the span); optional ones may be missing. Absent on older runs. */
+  core?: boolean
+}
+
+/** Where a run's model families ran (ML_DEVICE / settings `ml.device`). */
+export type MlDeviceMode = 'auto' | 'cuda' | 'cpu'
+export type MlDevice = 'cuda' | 'cpu'
+export const ML_DEVICE_MODES: readonly MlDeviceMode[] = ['auto', 'cuda', 'cpu']
+
+/** Per-family timings of the `auto` micro-benchmark, in seconds for one fold's fits over all permutation shifts. */
+export interface MlDeviceBenchmark {
+  fold: number
+  trainRows: number
+  features: number
+  nPerm: number
+  gb: { workers: number; cpu: number | null; cuda: number | null }
+  logit: { columns: number; cpu: number | null; cuda: number | null }
+}
+
+export interface MlCompute {
+  requested: MlDeviceMode
+  devices: Record<MlFamily, MlDevice>
+  gpu: string | null
+  cudaAvailable: boolean
+  /** CPU worker threads for the per-shift tree fits. */
+  workers: number
+  benchmark: MlDeviceBenchmark | null
+  notes: string[]
+  timings: {
+    wallSec: number
+    benchmarkSec: number
+    walkForwardSec: number
+    permutationSec: number
+    finalFitSec: number
+    /** Seconds spent per family inside the permutation test. */
+    permutationFamilySec: Partial<Record<MlFamily, number>>
+  }
+}
+
+/** Training span: labeled rows where every core feature exists. */
+export interface MlSpan {
+  from: string
+  to: string
+  rows: number
+  testFrom: number | null
+  testTo: number | null
+  /** Out-of-sample (walk-forward test) rows. */
+  oosRows: number
+}
+
+/** Per-day walk-forward out-of-sample series, columnar (every `step`-th day when downsampled). */
+export interface MlOosSeries {
+  date: string[]
+  /** Out-of-sample P(up) from the model chosen for that test year. */
+  p: number[]
+  /** Realized outcome: 1 if the 20-day forward return was positive. */
+  y: (0 | 1)[]
+  testYear: number[]
+  step: number
 }
 
 /** Direction-model families the pipeline selects between (nested, per training window). */
@@ -291,6 +353,14 @@ export interface MlMetrics {
   labelThrough: string | null
   durationSec: number
   sklearnVersion: string | null
+  xgboostVersion?: string | null
+  torchVersion?: string | null
+  /** Training span (absent on older runs: use dataFrom / labelThrough / nRows). */
+  span?: MlSpan
+  /** Devices, benchmark and timings (absent on runs before the GPU pipeline). */
+  compute?: MlCompute
+  /** Walk-forward out-of-sample P(up) per day with the realized outcome (absent on older runs). */
+  oos?: MlOosSeries
 }
 
 export interface MlRunSummary {
@@ -305,6 +375,13 @@ export interface MlRunSummary {
   folds: number | null
   dataThrough: string | null
   error: string | null
+  /** Pipeline wall time in seconds (absent on older runs). */
+  durationSec?: number | null
+  /** Device per family (absent on runs before the GPU pipeline). */
+  devices?: Record<MlFamily, MlDevice> | null
+  gpu?: string | null
+  /** Training span (first / last labeled date, rows). */
+  span?: { from: string; to: string; rows: number } | null
 }
 
 export interface MlRunParams {
@@ -314,6 +391,8 @@ export interface MlRunParams {
   nTests?: number
   /** Family of the saved model (absent on older runs = gradient boosting). */
   family?: MlFamily
+  /** Requested device mode (absent on older runs = CPU). */
+  device?: MlDeviceMode
   minTrainYears: number
   model: string
   baseline: string
@@ -357,6 +436,13 @@ export interface MlPythonStatus {
   interpreter: string | null
   pythonVersion: string | null
   sklearnVersion: string | null
+  xgboostVersion?: string | null
+  torchVersion?: string | null
+  /** CUDA usable by torch, and the GPU name. */
+  cuda?: boolean
+  gpu?: string | null
+  /** Device mode the next run will request (settings `ml.device`, else env ML_DEVICE, else auto). */
+  deviceMode?: MlDeviceMode
   error: string | null
 }
 

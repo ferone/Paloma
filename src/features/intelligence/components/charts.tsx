@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { MlCalibrationBin, MlFold, MlImportance } from '@shared/ml'
+import type { MlCalibrationBin, MlFold, MlImportance, MlOosSeries } from '@shared/ml'
 import { PALETTE } from '../../../design/tokens'
 import { fmtNum, fmtPct } from '../../../design/format'
 
@@ -67,6 +67,98 @@ export function AucByYear({ folds }: { folds: MlFold[] }) {
       <line x1={pad.l} x2={W - pad.r} y1={y(0.55)} y2={y(0.55)} style={{ stroke: PALETTE.brand }} strokeWidth={1} strokeDasharray="4 3" />
       <text x={W - pad.r} y={y(0.55) - 4} textAnchor="end" style={{ ...AXIS, fill: PALETTE.brand }}>gate 0.55</text>
       <text x={W - pad.r} y={y(0.5) + 12} textAnchor="end" style={AXIS}>coin flip 0.50</text>
+    </Frame>
+  )
+}
+
+/** Trailing mean over `n` points (shorter at the start). */
+function trailingMean(xs: number[], n: number): number[] {
+  const out: number[] = []
+  let sum = 0
+  for (let i = 0; i < xs.length; i++) {
+    sum += xs[i]
+    if (i >= n) sum -= xs[i - n]
+    out.push(sum / Math.min(i + 1, n))
+  }
+  return out
+}
+
+/** Smoothing window (test days) of the OOS history lines: about a quarter. */
+export const OOS_SMOOTH = 63
+
+/**
+ * The walk-forward out-of-sample record over the whole span: daily P(up) (faint
+ * band: the range within each pixel column), its quarterly mean (line) against
+ * the realized quarterly up-share (dashed), and a strip of what actually happened
+ * (green = mostly up, red = mostly down, stronger = more one-sided). The x axis
+ * is test days; test years are marked.
+ */
+export function OosHistory({ oos }: { oos: MlOosSeries }) {
+  const H = 260
+  const strip = 14
+  const pad = { l: 36, r: 8, t: 10, b: 22 + strip + 6 }
+  const n = oos.p.length
+  const plotW = W - pad.l - pad.r
+  const y = (v: number) => pad.t + (1 - v) * (H - pad.t - pad.b)
+  const smooth = Math.max(1, Math.round(OOS_SMOOTH / Math.max(1, oos.step)))
+  const pMean = trailingMean(oos.p, smooth)
+  const yMean = trailingMean(oos.y, smooth)
+  const cols = Math.max(1, Math.min(n, Math.floor(plotW / 2)))
+  const per = n / cols
+  const buckets = Array.from({ length: cols }, (_, c) => {
+    const a = Math.floor(c * per)
+    const b = Math.max(a + 1, Math.floor((c + 1) * per))
+    let lo = 1
+    let hi = 0
+    let up = 0
+    for (let i = a; i < b && i < n; i++) {
+      lo = Math.min(lo, oos.p[i])
+      hi = Math.max(hi, oos.p[i])
+      up += oos.y[i]
+    }
+    const last = Math.min(n - 1, b - 1)
+    return { x: pad.l + ((c + 0.5) / cols) * plotW, lo, hi, share: up / Math.max(1, Math.min(b, n) - a), pm: pMean[last], ym: yMean[last] }
+  })
+  const bw = plotW / cols
+  const years: { year: number; i: number }[] = []
+  oos.testYear.forEach((ty, i) => {
+    if (i === 0 || ty !== oos.testYear[i - 1]) years.push({ year: ty, i })
+  })
+  const xi = (i: number) => pad.l + (i / Math.max(1, n)) * plotW
+  const everyYear = years.length <= 14
+  const upShare = n ? oos.y.reduce<number>((a, b) => a + b, 0) / n : 0
+  const meanP = n ? oos.p.reduce((a, b) => a + b, 0) / n : 0
+  const label =
+    `Out-of-sample P(up) for ${n} test days, ${oos.date[0] ?? ''} to ${oos.date.at(-1) ?? ''}` +
+    `${oos.step > 1 ? ` (every ${oos.step}th day)` : ''}: mean P(up) ${fmtPct(meanP, 1)}, realized up share ${fmtPct(upShare, 1)}.`
+  const line = (key: 'pm' | 'ym') => buckets.map((b) => `${b.x.toFixed(1)},${y(b[key]).toFixed(1)}`).join(' ')
+  const yStrip = H - pad.b + 6
+  return (
+    <Frame label={label} height={H}>
+      {[0.25, 0.5, 0.75].map((t) => (
+        <g key={t}>
+          <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} style={{ stroke: t === 0.5 ? PALETTE.muted : PALETTE.border }} strokeWidth={t === 0.5 ? 1 : 0.5} />
+          <text x={pad.l - 6} y={y(t) + 3} textAnchor="end" style={MONO}>{t.toFixed(2)}</text>
+        </g>
+      ))}
+      {years.map(({ year, i }, k) => (
+        <g key={year}>
+          <line x1={xi(i)} x2={xi(i)} y1={pad.t} y2={yStrip + strip} style={{ stroke: PALETTE.border }} strokeWidth={0.5} />
+          {(everyYear || k % 2 === 0) && (
+            <text x={xi(i) + 2} y={H - 6} style={MONO}>{`’${String(year).slice(2)}`}</text>
+          )}
+        </g>
+      ))}
+      {buckets.map((b, c) => (
+        <rect key={c} x={b.x - bw / 2} width={bw} y={y(b.hi)} height={Math.max(0.5, y(b.lo) - y(b.hi))} style={{ fill: PALETTE.brand, opacity: 0.1 }} />
+      ))}
+      <polyline fill="none" points={line('ym')} style={{ stroke: PALETTE.muted }} strokeWidth={1} strokeDasharray="3 2" />
+      <polyline fill="none" points={line('pm')} style={{ stroke: PALETTE.brand }} strokeWidth={1.75} />
+      {buckets.map((b, c) => (
+        <rect key={`s${c}`} x={b.x - bw / 2} width={bw + 0.3} y={yStrip} height={strip}
+          style={{ fill: b.share >= 0.5 ? PALETTE.pos : PALETTE.neg, opacity: 0.15 + 0.85 * Math.min(1, Math.abs(b.share - 0.5) * 2) }} />
+      ))}
+      <text x={pad.l - 6} y={yStrip + strip - 3} textAnchor="end" style={AXIS}>real</text>
     </Frame>
   )
 }

@@ -148,7 +148,7 @@ assistantRouter.post('/chat', async (req, res) => {
   })
 
   let text = ''
-  for await (const ev of chatStream(prompt, { apiKey, model, maxTokens: 1500, temperature: 0.2, fetchImpl: deps.fetchImpl, signal: upstream.signal, retries: 1 })) {
+  for await (const ev of chatStream(prompt, { apiKey, model, maxTokens: 4000, temperature: 0.2, fetchImpl: deps.fetchImpl, signal: upstream.signal, retries: 1 })) {
     if (ev.type === 'delta') {
       text += ev.text
       send(res, 'delta', { text: ev.text })

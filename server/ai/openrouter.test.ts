@@ -50,6 +50,14 @@ describe('OpenRouter chat()', () => {
     expect(sent.plugins).toBeUndefined()
   })
 
+  it('caps the thinking share so reasoning models leave room for the answer', async () => {
+    const f = vi.fn(async () => ok({ choices: [{ message: { content: '{}' } }] }))
+    await chat([], { apiKey: 'k', model: 'moonshotai/kimi-k3', maxTokens: 16000, fetchImpl: f as unknown as typeof fetch })
+    const sent = JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    expect(sent.max_tokens).toBe(16000)
+    expect(sent.reasoning).toEqual({ max_tokens: 6400, exclude: true })
+  })
+
   it('returns null without a key and never calls fetch', async () => {
     const f = vi.fn()
     const onError = vi.fn()

@@ -93,7 +93,8 @@ export function startReport(req: ReportRequest, deps: GenerateDeps = {}): { id: 
       result = await chat(messages, {
         apiKey: deps.apiKey ?? env.openrouterKey,
         model,
-        maxTokens: req.kind === 'ask' ? 2000 : 4000,
+        // Generous caps: only used tokens are billed, and reasoning models think before writing.
+        maxTokens: req.kind === 'ask' ? 6000 : 16000,
         fetchImpl: deps.fetchImpl,
         retries: deps.retries,
         backoffMs: deps.backoffMs,
@@ -110,7 +111,7 @@ export function startReport(req: ReportRequest, deps: GenerateDeps = {}): { id: 
           failReport(
             id,
             result.finishReason === 'length'
-              ? 'The model reply was cut off at the token limit before the JSON report was complete'
+              ? 'The model reply was cut off at the token limit before the JSON report was complete (reasoning models can spend most of the budget thinking). Regenerate, or pick a non-reasoning model.'
               : 'The model did not return a valid JSON report',
             { rawText: result.text, tokens: result.tokens, costUsd: result.costUsd, webResults },
           )

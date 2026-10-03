@@ -8,6 +8,16 @@ import { createSseParser } from '../../shared/assistant.js'
 export const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 export const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models'
 
+/**
+ * Reasoning ("thinking") models spend part of max_tokens before they write the
+ * answer; uncapped, a long think can exhaust the budget and truncate the reply.
+ * OpenRouter's unified `reasoning` setting caps the thinking share; models
+ * without reasoning ignore it.
+ */
+export function reasoningBudget(maxTokens: number): { max_tokens: number; exclude: boolean } {
+  return { max_tokens: Math.floor(maxTokens * 0.4), exclude: true }
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
@@ -95,6 +105,7 @@ export async function chat(messages: ChatMessage[], opts: ChatOpts): Promise<Cha
     messages,
     temperature: opts.temperature ?? 0.2,
     max_tokens: opts.maxTokens ?? 2000,
+    reasoning: reasoningBudget(opts.maxTokens ?? 2000),
     // Ask OpenRouter to report the request's cost in usage.cost.
     usage: { include: true },
     ...(online ? { plugins: [{ id: 'web', max_results: opts.webResults ?? 3 }] } : {}),
@@ -177,6 +188,7 @@ export async function* chatStream(messages: ChatMessage[], opts: StreamOpts): As
     messages,
     temperature: opts.temperature ?? 0.2,
     max_tokens: opts.maxTokens ?? 1500,
+    reasoning: reasoningBudget(opts.maxTokens ?? 1500),
     stream: true,
     usage: { include: true },
     ...(online ? { plugins: [{ id: 'web', max_results: opts.webResults ?? 3 }] } : {}),

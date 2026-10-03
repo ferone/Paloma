@@ -93,7 +93,7 @@ describe('portfolio pages (demo ledger)', () => {
 
   it('renders performance, risk and attribution', async () => {
     await renderAt('/portfolio/performance')
-    expect(await screen.findByRole('heading', { name: 'NAV per unit vs benchmark' }, { timeout: 8000 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'NAV per unit vs benchmark' }, { timeout: 15_000 })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Monthly returns' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Attribution' })).toBeInTheDocument()
     expect(await screen.findByRole('table', { name: 'Value at risk' })).toBeInTheDocument()

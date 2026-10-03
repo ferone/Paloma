@@ -7,6 +7,7 @@ import { PALETTE, signColor } from '../../../design/tokens'
 import { ErrorNote, Explainer, HelpTip, Panel, PanelSkeleton, Segmented, Stat } from '../../../ui'
 import { useAttribution, usePerformance, useRisk, useSummary } from '../api'
 import { RecordFirstTransaction } from '../components/common'
+import { LongRunPanel } from '../components/LongRunPanel'
 import { MonthlyHeatmap } from '../components/MonthlyHeatmap'
 import { TimeChart } from '../components/TimeChart'
 import { useAssistantContext } from '../../assistant/context'
@@ -132,6 +133,8 @@ export default function PerformancePage() {
           <p className="text-sm text-muted">No P&L in this period.</p>
         )}
       </Panel>
+
+      <LongRunPanel />
 
       <Explainer>
         <p>NAV per unit is the fund's unit price. Subscriptions and redemptions issue or cancel units at the day's pre-flow NAV per unit, so NAV per unit moves only with investment performance.</p>

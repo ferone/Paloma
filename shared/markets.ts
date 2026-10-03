@@ -29,7 +29,8 @@ export interface OHLCV {
   volume: number
 }
 
-export const TIME_RANGES = ['1D', '1W', '1M', '3M', '6M', '1Y', '5Y', 'ALL'] as const
+/** MAX = every stored daily bar (served from the local DB, back to 2000 where history exists); ALL = Yahoo monthly. */
+export const TIME_RANGES = ['1D', '1W', '1M', '3M', '6M', '1Y', '5Y', 'ALL', 'MAX'] as const
 export type TimeRange = (typeof TIME_RANGES)[number]
 
 // ── Term structure ────────────────────────────────────────────────────────

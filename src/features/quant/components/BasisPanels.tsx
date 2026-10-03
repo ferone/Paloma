@@ -30,7 +30,7 @@ function trailingMean(values: number[], n: number): (number | null)[] {
 /** Annualized basis (daily, and its 20-day mean) against the T-bill. */
 export function BasisVsBillPanel({ d, height = 260 }: { d: InstrumentDetail; height?: number }) {
   const b = d.basis as BasisView
-  const { range, setRange, slice } = useRange('1Y')
+  const { range, setRange, slice } = useRange('All')
   // The mean is computed on the full history so it is valid from the first visible date.
   const withMean = useMemo(() => {
     const m = trailingMean(
@@ -89,7 +89,7 @@ export function BasisVsBillPanel({ d, height = 260 }: { d: InstrumentDetail; hei
 
 /** Excess carry with its rolling mean and ±1σ/±2σ bands (the z the engine fades). */
 export function ExcessCarryBandsPanel({ d, height = 240 }: { d: InstrumentDetail; height?: number }) {
-  const { range, setRange, slice } = useRange('1Y')
+  const { range, setRange, slice } = useRange('All')
   const pts = useMemo(() => slice(d.series), [d.series, slice])
   const last = d.series[d.series.length - 1]
   return (

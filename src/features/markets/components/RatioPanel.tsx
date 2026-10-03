@@ -1,8 +1,8 @@
 import { CHART_INITIAL_SIZE } from '../../../design/tokens'
-import { useId, useMemo } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { UNIVERSE, type PriceUnit, type RelativeValuePair } from '@shared/universe'
-import { ErrorNote, HelpTip, Panel, Skeleton, Stat } from '../../../ui'
+import { ErrorNote, HelpTip, Panel, Segmented, Skeleton, Stat } from '../../../ui'
 import { fmtDate, fmtPct, fmtRatio } from '../../../design/format'
 import { useHistory, useQuote } from '../hooks'
 import { percentileRank, ratioSeries } from '../lib/series'
@@ -11,14 +11,15 @@ import { dateTick, rechartsStyle } from '../charts/recharts'
 
 const UNIT_WORD: Record<PriceUnit, string> = { oz: 'Ounce', lb: 'Pound', BTC: 'Bitcoin' }
 
-/** Relative-value ratio (numerator ÷ denominator reference prices): live value, 5Y weekly history, percentile and range. */
+/** Relative-value ratio (numerator ÷ denominator reference prices): live value, full daily history (or 5Y weekly), percentile and range. */
 export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
   const num = UNIVERSE[pair.numerator]
   const den = UNIVERSE[pair.denominator]
   const numQ = useQuote(num.spot)
   const denQ = useQuote(den.spot)
-  const gh = useHistory(num.spot, '5Y')
-  const sh = useHistory(den.spot, '5Y')
+  const [range, setRange] = useState<'5Y' | 'MAX'>('MAX')
+  const gh = useHistory(num.spot, range)
+  const sh = useHistory(den.spot, range)
   const t = useChartTheme()
   // The numerator names the ratio (gold/silver, bitcoin/gold), so it carries the colour.
   const color = t.asset[pair.numerator]
@@ -26,6 +27,10 @@ export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
   const gid = useId().replace(/:/g, '')
 
   const series = useMemo(() => (gh.data && sh.data ? ratioSeries(gh.data, sh.data) : []), [gh.data, sh.data])
+  // Statistics use every day; the chart thins long daily history to about weekly points.
+  const plotted = useMemo(() => (series.length > 1500 ? series.filter((_, i) => i % 5 === 0 || i === series.length - 1) : series), [series])
+  const span = range === 'MAX' && series.length ? `since ${series[0].date.slice(0, 4)}` : '5Y'
+  const spanLabel = range === 'MAX' ? 'Full-history' : '5Y'
   const live = numQ.data && denQ.data && denQ.data.price > 0 ? numQ.data.price / denQ.data.price : null
   const current = live ?? series.at(-1)?.value ?? null
   const values = series.map((p) => p.value)
@@ -48,13 +53,19 @@ export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
           relative-value switches between the two.
         </HelpTip>
       }
-      provenance={{ source: `Yahoo Finance · ${num.spot} ÷ ${den.spot}, weekly closes (5Y); live value from the reference quotes`, asOf: series.at(-1)?.date ?? null }}
+      actions={
+        <Segmented<'5Y' | 'MAX'> ariaLabel="Ratio history" value={range} onChange={setRange} options={[{ value: '5Y', label: '5Y' }, { value: 'MAX', label: 'Max' }]} />
+      }
+      provenance={{
+        source: `Yahoo Finance · ${num.spot} ÷ ${den.spot}, ${range === 'MAX' ? `daily closes ${span}` : 'weekly closes (5Y)'}; live value from the reference quotes`,
+        asOf: series.at(-1)?.date ?? null,
+      }}
     >
       <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3">
         <Stat label="Now" value={fmtRatio(current)} size="md" />
-        <Stat label="5Y average" value={fmtRatio(avg)} size="sm" />
-        <Stat label="5Y percentile" value={fmtPct(pct, 0)} size="sm" hint="Share of weeks below today" />
-        <Stat label="5Y range" value={`${fmtRatio(lo)}–${fmtRatio(hi)}`} size="sm" />
+        <Stat label={`${spanLabel} average`} value={fmtRatio(avg)} size="sm" />
+        <Stat label={`${spanLabel} percentile`} value={fmtPct(pct, 0)} size="sm" hint={range === 'MAX' ? `Share of days ${span} below today` : 'Share of weeks below today'} />
+        <Stat label={`${spanLabel} range`} value={`${fmtRatio(lo)}–${fmtRatio(hi)}`} size="sm" />
       </div>
       {loading ? (
         <Skeleton className="h-52 w-full" />
@@ -63,7 +74,7 @@ export function RatioPanel({ pair }: { pair: RelativeValuePair }) {
       ) : (
         <div className="h-52">
           <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
-            <AreaChart data={series} margin={{ left: 0, right: 22, top: 4, bottom: 0 }}>
+            <AreaChart data={plotted} margin={{ left: 0, right: 22, top: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={color} stopOpacity={0.25} />

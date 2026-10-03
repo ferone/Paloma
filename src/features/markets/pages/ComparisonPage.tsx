@@ -17,7 +17,7 @@ import { dateTick, rechartsStyle } from '../charts/recharts'
 const DEFAULT_PAIR = RELATIVE_VALUE_PAIRS[0]
 const DEFAULT_ASSETS = DEFAULT_PAIR ? [UNIVERSE[DEFAULT_PAIR.numerator], UNIVERSE[DEFAULT_PAIR.denominator]] : [UNIVERSE[ASSETS[0]]]
 const DEFAULT = [...DEFAULT_ASSETS.map((u) => u.spot), ...DEFAULT_ASSETS.map((u) => u.benchmarkEtf), 'SPY', MACRO_SYMBOLS.dxy]
-const RANGES = ['1M', '3M', '6M', '1Y', '5Y'] as const satisfies readonly TimeRange[]
+const RANGES = ['1M', '3M', '6M', '1Y', '5Y', 'MAX'] as const satisfies readonly TimeRange[]
 const GROUPS = [
   ...ASSETS.map((a) => ({ label: UNIVERSE[a].label, symbols: assetInstruments(a) })),
   { label: 'Macro', symbols: [...MACRO_COMPARISON] },
@@ -87,7 +87,11 @@ function PerformanceChart({ symbols }: { symbols: string[] }) {
   const loading = qs.some((q) => q.isLoading)
   const dataKey = qs.map((q) => q.dataUpdatedAt).join(',')
   const rows = useMemo(
-    () => rebase(symbols.map((symbol, i) => ({ symbol, bars: qs[i]?.data ?? [] }))),
+    () => {
+      const all = rebase(symbols.map((symbol, i) => ({ symbol, bars: qs[i]?.data ?? [] })))
+      // Long daily history: plot about weekly points (the last row is always kept).
+      return all.length > 1500 ? all.filter((_, i) => i % 5 === 0 || i === all.length - 1) : all
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recompute when any series updates
     [symbols, dataKey],
   )
@@ -100,7 +104,7 @@ function PerformanceChart({ symbols }: { symbols: string[] }) {
       eyebrow="Rebased to 0% at the first common date"
       actions={<Segmented ariaLabel="Range" value={range} onChange={setRange} options={RANGES} />}
       provenance={{
-        source: `Yahoo Finance ${range === '5Y' ? 'weekly' : 'daily'} closes`,
+        source: `Yahoo Finance ${range === '5Y' ? 'weekly' : range === 'MAX' ? 'daily (full stored history)' : 'daily'} closes`,
         asOf: rows.at(-1)?.date ?? null,
         note: failed.length ? `no data: ${failed.map(shortSymbol).join(', ')}` : undefined,
       }}
@@ -114,7 +118,7 @@ function PerformanceChart({ symbols }: { symbols: string[] }) {
           <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_SIZE}>
             <LineChart data={rows} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
               <CartesianGrid {...s.grid} />
-              <XAxis dataKey="date" tick={s.tick} axisLine={s.axisLine} tickLine={false} tickFormatter={dateTick(range === '5Y' || range === '1Y')} minTickGap={40} />
+              <XAxis dataKey="date" tick={s.tick} axisLine={s.axisLine} tickLine={false} tickFormatter={dateTick(range === '5Y' || range === '1Y' || range === 'MAX')} minTickGap={40} />
               <YAxis tick={s.tick} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => fmtPctSigned(v, 0)} />
               <ReferenceLine y={0} stroke={t.border} />
               <Tooltip

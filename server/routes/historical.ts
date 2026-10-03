@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { getHistorical } from '../services/yahoo-finance.service.js'
 import { cacheMiddleware } from '../middleware/cache.js'
+import { readDailyBars } from '../db/repo.js'
 
 export const historicalRouter = Router()
 
@@ -19,6 +20,17 @@ historicalRouter.get('/:symbol', cacheMiddleware('daily'), async (req, res) => {
   try {
     const symbol = req.params.symbol as string
     const range = (req.query.range as string) || '1M'
+    if (range === 'MAX') {
+      // Full daily history from the local DB (Yahoo closes stored by the history job);
+      // fall back to Yahoo daily when the symbol has little stored history.
+      const stored = readDailyBars(symbol, { source: 'yahoo' }).filter((b) => b.close > 0)
+      if (stored.length >= 500) {
+        return void res.json(
+          stored.map((b) => ({ date: `${b.date}T00:00:00.000Z`, open: b.open ?? b.close, high: b.high ?? b.close, low: b.low ?? b.close, close: b.close, volume: b.volume ?? 0 })),
+        )
+      }
+      return void res.json(await getHistorical(symbol, { range: 'ALL', interval: '1d' }))
+    }
     const interval = (req.query.interval as string) || INTERVAL_MAP[range] || '1d'
     const data = await getHistorical(symbol, {
       range,

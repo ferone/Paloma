@@ -55,7 +55,7 @@ export function PriceChartPanel({ symbols, defaultSymbol }: Props) {
         </div>
       }
       provenance={{
-        source: `Yahoo Finance · ${symbol} · ${intraday ? 'intraday' : range === '5Y' ? 'weekly' : range === 'ALL' ? 'monthly' : 'daily'} bars`,
+        source: `Yahoo Finance · ${symbol} · ${intraday ? 'intraday' : range === '5Y' ? 'weekly' : range === 'ALL' ? 'monthly' : range === 'MAX' ? 'daily, full stored history' : 'daily'} bars`,
         asOf: stats?.asOf ?? null,
       }}
     >

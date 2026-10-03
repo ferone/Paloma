@@ -11,7 +11,7 @@ import { valueFormatter } from '../format'
 
 /** Value with rolling mean ±1σ/±2σ bands (the z picture), with a range selector. */
 export function ZBandPanel({ d, title }: { d: InstrumentDetail; title?: string }) {
-  const { range, setRange, slice } = useRange(d.kind === 'ratio' ? '5Y' : '3Y')
+  const { range, setRange, slice } = useRange('All')
   const points = useMemo(() => slice(d.series), [d.series, slice])
   const last = d.series[d.series.length - 1]
   return (
@@ -90,7 +90,7 @@ export function StructuralPanel({ d }: { d: InstrumentDetail }) {
 }
 
 export function CurvaturePanel({ d }: { d: InstrumentDetail }) {
-  const { range, setRange, slice } = useRange('3Y')
+  const { range, setRange, slice } = useRange('All')
   const pts = useMemo(() => slice(d.curvature ?? []), [d.curvature, slice])
   const series = useMemo(() => [{ key: 'c', label: 'curvature (bow)', values: pts.map((p) => p.value), color: PALETTE.series[1], width: 1.4 }], [pts])
   const zero = useMemo(() => [{ value: 0, label: 'straight line', color: PALETTE.muted }], [])

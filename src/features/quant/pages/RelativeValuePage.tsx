@@ -96,8 +96,8 @@ function RelativeValue({ rv, cp }: { rv: RelativeValueDetail; cp: ClientPair }) 
   const denUnit = UNIVERSE[pair.denominator].priceUnit
   const r = rv.ratio
   const s = rv.spread
-  const ratioRange = useRange('5Y')
-  const spreadRange = useRange('3Y')
+  const ratioRange = useRange('All')
+  const spreadRange = useRange('All')
   const ratioPts = useMemo(() => ratioRange.slice(r.series), [r.series, ratioRange])
   const spreadPts = useMemo(() => spreadRange.slice(s.series), [s.series, spreadRange])
   const prov = rv.provenance

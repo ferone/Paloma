@@ -6,7 +6,7 @@ const YEARS: Record<RangeKey, number | null> = { '1Y': 1, '3Y': 3, '5Y': 5, All:
 
 /** Date-range selector state + a slicer for any `{date}` array. */
 // eslint-disable-next-line react-refresh/only-export-components
-export function useRange(initial: RangeKey = '3Y') {
+export function useRange(initial: RangeKey = 'All') {
   const [range, setRange] = useState<RangeKey>(initial)
   const slice = useMemo(
     () =>

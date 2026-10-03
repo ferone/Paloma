@@ -517,3 +517,23 @@ if __name__ == "__main__":
                 setattr(obj, name, value)
     print(f"{len(tests) - failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
+
+
+def test_device_benchmark_cache(tmp_path):
+    calls = []
+
+    def bench():
+        calls.append(1)
+        return {"gb": {"cpu": 1.0, "cuda": 2.0}, "logit": {"cpu": 2.0, "cuda": 0.1}}
+
+    f = tmp_path / "device-benchmark.json"
+    extra = {"rows": 6000, "features": 31, "nPerm": 480, "fast": False}
+    b1, reused1 = dv.cached_benchmark(bench, f, extra)
+    b2, reused2 = dv.cached_benchmark(bench, f, extra)
+    assert not reused1 and reused2 and b1 == b2 and len(calls) == 1
+    # a different problem size is a miss
+    _, reused3 = dv.cached_benchmark(bench, f, {**extra, "rows": 2000})
+    assert not reused3 and len(calls) == 2
+    # no cache file -> always runs
+    _, reused4 = dv.cached_benchmark(bench, None, extra)
+    assert not reused4 and len(calls) == 3

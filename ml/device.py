@@ -14,6 +14,10 @@ absent (e.g. CI), so the pipeline never requires a GPU.
 """
 from __future__ import annotations
 
+import json
+import time
+from pathlib import Path
+
 import os
 from functools import lru_cache
 
@@ -76,7 +80,49 @@ def torch_device(device: str):
     return torch.device("cuda" if device == "cuda" and torch_cuda() else "cpu")
 
 
-def resolve(mode: str, benchmark=None) -> dict:
+BENCH_CACHE_DAYS = 14
+
+
+def _bench_key(extra: dict) -> str:
+    """What makes a benchmark result reusable: same GPU, library versions, CPU
+    workers and problem size (rows rounded to 500, features, permutations)."""
+    try:
+        import torch
+        tv = torch.__version__
+    except Exception:  # noqa: BLE001
+        tv = None
+    try:
+        import xgboost
+        xv = xgboost.__version__
+    except Exception:  # noqa: BLE001
+        xv = None
+    parts = {"gpu": gpu_name(), "torch": tv, "xgboost": xv, "workers": cpu_workers(), **extra}
+    return json.dumps(parts, sort_keys=True)
+
+
+def cached_benchmark(benchmark, cache_file: Path | None, extra: dict):
+    """Run `benchmark` unless a fresh result for the same hardware/problem size is
+    cached in `cache_file` (saves the 10-50 s benchmark on most runs)."""
+    if cache_file is None:
+        return benchmark(), False
+    key = _bench_key(extra)
+    try:
+        store = json.loads(cache_file.read_text(encoding="utf-8")) if cache_file.exists() else {}
+    except Exception:  # noqa: BLE001 - a corrupt cache is just a miss
+        store = {}
+    hit = store.get(key)
+    if hit and time.time() - hit.get("at", 0) < BENCH_CACHE_DAYS * 86400:
+        return hit["bench"], True
+    bench = benchmark()
+    store[key] = {"bench": bench, "at": time.time()}
+    try:
+        cache_file.write_text(json.dumps(store, indent=1), encoding="utf-8")
+    except Exception:  # noqa: BLE001 - caching is best-effort
+        pass
+    return bench, False
+
+
+def resolve(mode: str, benchmark=None, cache_file: Path | None = None, cache_extra: dict | None = None) -> dict:
     """Pick a device per family.
 
     `benchmark` is a zero-arg callable returning {family: {"cpu": sec, "cuda": sec}}
@@ -97,7 +143,9 @@ def resolve(mode: str, benchmark=None) -> dict:
         if not any(family_cuda(f) for f in FAMILY_KEYS):
             notes.append("CUDA unavailable: CPU only")
         elif benchmark is not None:
-            bench = benchmark()
+            bench, reused = cached_benchmark(benchmark, cache_file, cache_extra or {})
+            if reused:
+                notes.append(f"auto: reused a benchmark from the last {BENCH_CACHE_DAYS} days (same GPU, libraries and problem size)")
             for f in FAMILY_KEYS:
                 t = bench.get(f) or {}
                 if family_cuda(f) and t.get("cuda") is not None and t.get("cpu") is not None and t["cuda"] < t["cpu"]:

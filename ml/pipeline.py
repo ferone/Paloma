@@ -846,7 +846,12 @@ def do_train(metal: str, data_dir: Path, n_perm: int | None = None, fast: bool =
 
     tb = time.time()
     mode = dv.requested(device)
-    compute = dv.resolve(mode, lambda: benchmark_devices(data, feats, n_perm, fast))
+    compute = dv.resolve(
+        mode,
+        lambda: benchmark_devices(data, feats, n_perm, fast),
+        cache_file=data_dir / "device-benchmark.json",
+        cache_extra={"rows": round(len(data) / 500) * 500, "features": len(feats), "nPerm": n_perm, "fast": bool(fast)},
+    )
     d = compute["devices"]
     bench_sec = time.time() - tb
     progress(0.06, f"Devices: gradient boosting on {d['gb']}, logistic on {d['logit']} ({mode}"

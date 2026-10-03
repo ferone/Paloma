@@ -2,11 +2,11 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { ASSETS, MACRO_SYMBOLS, RELATIVE_VALUE_PAIRS, UNIVERSE, type AssetId } from '../../shared/universe.js'
 import { featuresFor, isOptionalFor } from '../../shared/ml.js'
-import { readDailyBars, upsertDailyBars, type DailyBar } from '../db/repo.js'
+import { getSetting, readDailyBars, setSetting, upsertDailyBars, type DailyBar } from '../db/repo.js'
 import { listContracts, readMacro, readRootBars } from '../db/shared-repo.js'
 import { readSpeculator } from '../macro/cot-repo.js'
 import { getHistorical } from '../services/yahoo-finance.service.js'
-import { buildCurveSeries } from './curve.js'
+import { buildCurveSeries, buildOiSeries } from './curve.js'
 import { buildFeatureMatrix, matrixToCsv, type FeatureMatrix, type MacroId, type PricePoint } from './features.js'
 
 // Loads the ML inputs from SQLite (fetching Yahoo history when missing or
@@ -24,9 +24,14 @@ export const ML_SYMBOLS: readonly string[] = [
   ]),
 ]
 const MACRO_IDS: MacroId[] = ['DFII10', 'T10YIE', 'DTWEXBGS', 'VIXCLS', 'GVZCLS']
-/** We want at least this much history (≥15 years) where Yahoo has it. */
-const HISTORY_FROM = '2008-01-01'
+/**
+ * Train on the whole available history: ask Yahoo for everything it has from
+ * here (each symbol then starts at its own first quote, e.g. GLD in 2004).
+ */
+export const HISTORY_FROM = '2000-01-01'
 const STALE_DAYS = 4
+/** settings key recording that the full Yahoo range was fetched for a symbol (value: ISO date). */
+const fullHistoryKey = (symbol: string) => `ml.yahooFullHistory.${symbol}`
 
 export function mlDataDir(): string {
   return resolve(process.env.ML_DATA_DIR || 'data/ml')
@@ -41,15 +46,19 @@ function yahooBars(symbol: string): DailyBar[] {
 }
 
 /**
- * Ensure prices_daily holds long daily Yahoo history for `symbol`. Refetches the
- * full range when the first bar is too recent or the last bar is stale.
- * Returns the number of bars written (0 when already fresh).
+ * Ensure prices_daily holds the whole daily Yahoo history for `symbol`. When
+ * the stored history starts after HISTORY_FROM, the full range is fetched ONCE
+ * (recorded in settings, so a symbol that simply starts later — an ETF listed
+ * in 2004 — is not refetched on every run); otherwise only a stale tail is
+ * refreshed. Returns the number of bars written (0 when already fresh).
  */
 export async function ensureYahooHistory(symbol: string, today = new Date().toISOString().slice(0, 10)): Promise<number> {
   const bars = yahooBars(symbol)
   const first = bars[0]?.date
   const last = bars.at(-1)?.date
-  const needsFull = !first || first > HISTORY_FROM
+  // (a few days' grace: the first session of 2000 was Jan 3)
+  const startsLate = !!first && daysBetween(HISTORY_FROM, first) > 10
+  const needsFull = !first || (startsLate && !getSetting<string | null>(fullHistoryKey(symbol), null))
   const stale = !last || daysBetween(last, today) > STALE_DAYS
   if (!needsFull && !stale) return 0
   const raw = (await getHistorical(symbol, { range: needsFull ? 'ALL' : '1Y', interval: '1d' })) as {
@@ -74,7 +83,9 @@ export async function ensureYahooHistory(symbol: string, today = new Date().toIS
     }))
   // Deduplicate by date (keep the last quote for a day).
   const byDate = new Map(rows.map((r) => [r.date, r]))
-  return upsertDailyBars([...byDate.values()])
+  const written = upsertDailyBars([...byDate.values()])
+  if (needsFull && rows.length) setSetting(fullHistoryKey(symbol), today)
+  return written
 }
 
 export async function refreshYahooInputs(log: (m: string) => void = () => {}): Promise<Record<string, string>> {
@@ -108,7 +119,10 @@ export function loadFeatureMatrix(metal: AssetId): FeatureMatrix {
     const pts = readMacro(id)
     if (pts.length) macro[id] = pts.map((p) => ({ date: p.date, value: p.value }))
   }
-  const curve = front ? buildCurveSeries(readRootBars(front.root), listContracts(front.root), front.activeMonths) : []
+  const rootBars = front ? readRootBars(front.root) : []
+  const contracts = front ? listContracts(front.root) : []
+  const curve = front ? buildCurveSeries(rootBars, contracts, front.activeMonths) : []
+  const oi = front ? buildOiSeries(rootBars, contracts) : []
   const pair = pairOf(metal)
   return buildFeatureMatrix({
     metal,
@@ -133,6 +147,7 @@ export function loadFeatureMatrix(metal: AssetId): FeatureMatrix {
         }))
       : [],
     curve,
+    oi,
   })
 }
 

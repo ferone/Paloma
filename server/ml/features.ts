@@ -4,7 +4,8 @@ import { ML_HORIZON, featuresFor } from '../../shared/ml.js'
 // Pure, look-ahead-safe feature construction. Every value at row t (a trading
 // day of the asset's reference series) uses only observations dated ≤ t;
 // FRED macro series are lagged one day (< t) and COT reports are used only
-// strictly after their publication date. Targets look H rows ahead and are
+// strictly after their publication date; open interest for settlement day d is
+// used strictly after d (from d+1). Targets look H rows ahead and are
 // null for the last H rows (those rows are scored, never trained on).
 
 export interface PricePoint {
@@ -36,6 +37,17 @@ export interface CurvePoint {
   monthsApart: number
 }
 
+/**
+ * Open interest on one settlement date (Databento statistics). `front` is the
+ * front-month contract's OI, `total` the sum over every listed contract that
+ * reported OI that day. Known only after the day's settlement → used from d+1.
+ */
+export interface OiPoint {
+  date: string
+  front: number | null
+  total: number | null
+}
+
 export type MacroId = 'DFII10' | 'T10YIE' | 'DTWEXBGS' | 'VIXCLS' | 'GVZCLS'
 
 export interface FeatureInputs {
@@ -53,6 +65,8 @@ export interface FeatureInputs {
   macro: Partial<Record<MacroId, ValuePoint[]>>
   cot: CotPoint[]
   curve: CurvePoint[]
+  /** Open interest per settlement date of the asset's front futures root (empty when not loaded). */
+  oi?: OiPoint[]
   horizon?: number
   /** Feature columns to build (default: `featuresFor(metal)`); tests pass an explicit list. */
   featureIds?: string[]
@@ -259,6 +273,26 @@ export function cotSeries(rows: CotPoint[], zWindow = 156, minReports = 52): Val
   return out
 }
 
+/**
+ * OI-derived series keyed by settlement date (NOT yet lagged; the caller aligns
+ * them strictly after the date). `z`: 252-observation z-score of front-month
+ * OI; `chg20`: 20-observation % change of total OI (front-month OI when no
+ * total is available). Null when there is no OI at all.
+ */
+export function oiFeatures(points: OiPoint[], zWindow = 252, chgN = 20): { z: ValuePoint[]; chg20: ValuePoint[] } | null {
+  const sorted = [...points].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  const front = sorted.filter((p) => isNum(p.front) && p.front > 0)
+  const hasTotal = sorted.some((p) => isNum(p.total) && p.total > 0)
+  const base = hasTotal
+    ? sorted.filter((p) => isNum(p.total) && p.total > 0).map((p) => ({ date: p.date, v: p.total! }))
+    : front.map((p) => ({ date: p.date, v: p.front! }))
+  if (!front.length && !base.length) return null
+  const fz = rollingZ(front.map((p) => p.front), zWindow)
+  const z = front.flatMap((p, i) => (isNum(fz[i]) ? [{ date: p.date, value: fz[i]! }] : []))
+  const chg20 = base.flatMap((p, i) => (i >= chgN ? [{ date: p.date, value: p.v / base[i - chgN].v - 1 }] : []))
+  return { z, chg20 }
+}
+
 // ── the matrix ───────────────────────────────────────────────────────────────
 
 export function buildFeatureMatrix(inp: FeatureInputs): FeatureMatrix {
@@ -349,6 +383,29 @@ export function buildFeatureMatrix(inp: FeatureInputs): FeatureMatrix {
       f.cot_mm_z = new Array(n).fill(null)
     } else {
       f.cot_mm_z = asOf(cotSeries(inp.cot), dates, { strict: true, maxStaleDays: 21 })
+    }
+  }
+
+  // Open interest: derived on its own settlement calendar, then aligned
+  // STRICTLY (< t): OI for day d is published after d's settlement.
+  const OI_IDS = ['oi_z', 'oi_chg20', 'oi_price_div'].filter((id) => wanted.has(id))
+  if (OI_IDS.length) {
+    const oi = oiFeatures(inp.oi ?? [])
+    if (!oi) {
+      for (const id of OI_IDS) {
+        missing[id] = 'Open interest not loaded yet'
+        f[id] = new Array(n).fill(null)
+      }
+    } else {
+      f.oi_z = asOf(oi.z, dates, { strict: true })
+      f.oi_chg20 = asOf(oi.chg20, dates, { strict: true })
+      // Price change at t (known at t) against the OI change known at t (from ≤ t−1).
+      const mom20 = f.mom20
+      f.oi_price_div = dates.map((_, i) => {
+        const pc = mom20[i]
+        const oc = f.oi_chg20[i]
+        return isNum(pc) && isNum(oc) ? Math.sign(pc) * Math.sign(oc) : null
+      })
     }
   }
 

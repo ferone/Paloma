@@ -19,6 +19,8 @@ npm run lint         # eslint
 npm test             # vitest run (all *.test.ts[x] in src/, server/, shared/)
 npx vitest run server/db/repo.test.ts     # single test file
 npx vitest run -t "FIFO"                  # tests matching a name
+npm run e2e          # Playwright end-to-end (own API 3901 + Vite 5901, throwaway data/e2e.db seeded from free Yahoo closes)
+npm run e2e:ui       # same, in the Playwright UI
 npm run db:migrate   # apply pending SQLite migrations (the server also does this on boot)
 ```
 

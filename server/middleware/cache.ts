@@ -21,7 +21,9 @@ export function cacheMiddleware(ttlKey: keyof typeof TTL) {
 
     const originalJson = res.json.bind(res)
     res.json = (body: unknown) => {
-      cache.set(key, body, TTL[ttlKey])
+      // Only successes are cached: an error body (e.g. a Yahoo outage) must not be
+      // replayed to later requests as a 200 for the whole TTL.
+      if (res.statusCode < 400) cache.set(key, body, TTL[ttlKey])
       return originalJson(body)
     }
     next()

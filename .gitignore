@@ -38,3 +38,7 @@ dist-ssr
 ml/.venv/
 ml/__pycache__/
 .pytest_cache/
+
+# Playwright e2e output
+test-results/
+playwright-report/

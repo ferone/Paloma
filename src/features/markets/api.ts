@@ -33,7 +33,10 @@ export async function fetchQuotes(symbols: string[]): Promise<Quote[]> {
 }
 
 export async function fetchHistory(symbol: string, range: string): Promise<OHLCV[]> {
-  return (await api.get<OHLCV[]>(`/historical/${enc(symbol)}`, { params: { range } })).data
+  const data = (await api.get<OHLCV[]>(`/historical/${enc(symbol)}`, { params: { range } })).data
+  // Charts iterate the bars: anything but a list is an error state, not data.
+  if (!Array.isArray(data)) throw new Error(`No price history for ${symbol}`)
+  return data
 }
 
 export async function fetchCurve(metal: AssetId): Promise<CurveResponse> {

@@ -11,6 +11,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "db:migrate": "tsx server/db/migrate-cli.ts",
@@ -60,6 +62,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
     "@types/better-sqlite3": "^9.6.0",

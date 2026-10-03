@@ -48,14 +48,13 @@ export default function OverviewPage() {
         <div className="space-y-6">
           <FundPanel portfolio={q.data.portfolio?.data ?? null} generatedAt={q.data.portfolio?.generatedAt ?? null} />
           <MarketStrip data={q.data} />
-          <div className="grid gap-6 xl:grid-cols-5">
-            <div className="xl:col-span-3">
+          {/* Wide screens: three equal-height columns; laptops: opportunities above macro + model side by side. */}
+          <div className="grid gap-6 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className="lg:col-span-2 2xl:col-span-1">
               <OpportunitiesPanel ops={q.data.quant?.data.opportunities ?? null} generatedAt={q.data.quant?.generatedAt ?? null} dataThrough={q.data.quant?.data.dataThrough ?? null} />
             </div>
-            <div className="space-y-6 xl:col-span-2">
-              <MacroPanel regime={q.data.macro?.data.regime ?? null} drivers={q.data.macro?.data.drivers ?? null} generatedAt={q.data.macro?.generatedAt ?? null} />
-              <MlPanel predictions={q.data.ml?.data.predictions ?? null} generatedAt={q.data.ml?.generatedAt ?? null} />
-            </div>
+            <MacroPanel regime={q.data.macro?.data.regime ?? null} drivers={q.data.macro?.data.drivers ?? null} generatedAt={q.data.macro?.generatedAt ?? null} />
+            <MlPanel predictions={q.data.ml?.data.predictions ?? null} generatedAt={q.data.ml?.generatedAt ?? null} />
           </div>
         </div>
       )}
@@ -151,7 +150,7 @@ function AllocationBar({ items }: { items: PortfolioSummaryLite['allocation'] })
 function MarketStrip({ data }: { data: OverviewResponse }) {
   return (
     <section aria-label="Markets" className="rounded-lg border border-border bg-surface">
-      <dl className="grid grid-cols-2 divide-border sm:grid-cols-4 lg:grid-cols-7 lg:divide-x">
+      <dl className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))]">
         {data.markets.map((m) => {
           const isYield = m.symbol === '^TNX'
           return (
@@ -186,6 +185,8 @@ function OpportunitiesPanel({ ops, generatedAt, dataThrough }: { ops: QuantOppor
   const top = (ops ?? []).filter((o) => o.verdict !== 'AVOID').sort((a, b) => b.qtRank - a.qtRank).slice(0, 5)
   return (
     <Panel
+      className="flex h-full flex-col"
+      bodyClassName="flex-1"
       eyebrow="Quant Lab"
       title="Where the models see an edge"
       actions={<Link to="/quant" className="text-xs text-muted hover:text-foreground">Open scanner →</Link>}
@@ -223,6 +224,8 @@ const STANCE_TONE: Record<MacroDriverLite['stance'], ChipTone> = { tailwind: 'st
 function MacroPanel({ regime, drivers, generatedAt }: { regime: string | null; drivers: MacroDriverLite[] | null; generatedAt: string | null }) {
   return (
     <Panel
+      className="flex h-full flex-col"
+      bodyClassName="flex-1"
       eyebrow="Macro"
       title={regime ?? 'Macro regime'}
       actions={<Link to="/macro" className="text-xs text-muted hover:text-foreground">Macro & AI →</Link>}
@@ -249,10 +252,12 @@ function MlPanel({ predictions, generatedAt }: { predictions: MlPredictionLite[]
   const outrights = (predictions ?? []).filter((p) => p.pUp != null)
   return (
     <Panel
+      className="flex h-full flex-col"
+      bodyClassName="flex-1"
       eyebrow="Intelligence"
       title="Model signal · 20-day direction"
       actions={<Link to="/intelligence" className="text-xs text-muted hover:text-foreground">Details →</Link>}
-      provenance={{ source: 'Gradient-boosted classifier, walk-forward validated', asOf: generatedAt ? generatedAt.slice(0, 10) : null }}
+      provenance={{ source: 'Walk-forward validated model (family chosen per asset)', asOf: generatedAt ? generatedAt.slice(0, 10) : null }}
     >
       {outrights.length === 0 ? (
         <EmptyState compact title="No model run yet">Train the model in Intelligence to see calibrated probabilities.</EmptyState>

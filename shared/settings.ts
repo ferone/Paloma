@@ -43,4 +43,6 @@ export interface AdminUnlockResponse {
 
 export interface GeneralSettings {
   databentoBudget: number
+  /** ML training/inference device: auto (benchmark per run), cuda (GPU) or cpu. */
+  mlDevice: 'auto' | 'cuda' | 'cpu'
 }

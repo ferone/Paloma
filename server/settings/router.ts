@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import type { GeneralSettings, SecretsResponse, SecretView } from '../../shared/settings.js'
-import { setSetting } from '../db/repo.js'
+import { getSetting, setSetting } from '../db/repo.js'
 import { adminStatus, lock, requireAdmin, setPin, tokenOf, unlock } from '../lib/admin.js'
 import { env, keySource } from '../lib/env.js'
 import { SECRET_NAMES, deleteSecret, getStoredSecret, isSecretName, keyPath, setSecret, type SecretName } from '../lib/secrets.js'
@@ -114,17 +114,24 @@ router.post('/secrets/:name/test', async (req, res, next) => {
 
 // --- General (non-secret) settings -----------------------------------------------
 
+const mlDevice = (): GeneralSettings['mlDevice'] => {
+  const v = getSetting<string>('ml.device', 'auto')
+  return v === 'cuda' || v === 'cpu' ? v : 'auto'
+}
+const general = (): GeneralSettings => ({ databentoBudget: env.databentoBudget, mlDevice: mlDevice() })
+
 router.get('/general', (_req, res) => {
-  res.json({ databentoBudget: env.databentoBudget } satisfies GeneralSettings)
+  res.json(general())
 })
 
-const generalSchema = z.object({ databentoBudget: z.number().min(0).max(1000).optional() })
+const generalSchema = z.object({ databentoBudget: z.number().min(0).max(1000).optional(), mlDevice: z.enum(['auto', 'cuda', 'cpu']).optional() })
 
 router.put('/general', requireAdmin, (req, res) => {
   const parsed = generalSchema.safeParse(req.body ?? {})
   if (!parsed.success) return void res.status(400).json({ error: 'invalid', message: parsed.error.issues[0].message })
   if (parsed.data.databentoBudget !== undefined) setSetting('databento.budget', parsed.data.databentoBudget)
-  res.json({ databentoBudget: env.databentoBudget } satisfies GeneralSettings)
+  if (parsed.data.mlDevice !== undefined) setSetting('ml.device', parsed.data.mlDevice)
+  res.json(general())
 })
 
 // --- Admin PIN ---------------------------------------------------------------------

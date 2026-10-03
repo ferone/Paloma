@@ -103,6 +103,15 @@ describe('admin PIN', () => {
     expect((await call('POST', '/api/admin/unlock', { pin: '2468' })).status).toBe(429)
   })
 
+  it('the ML device setting needs the PIN and persists', async () => {
+    expect((await call('PUT', '/api/settings/general', { mlDevice: 'cpu' })).status).toBe(401)
+    const { body } = await call<{ token: string }>('POST', '/api/admin/pin', { pin: '2468' })
+    expect((await call('PUT', '/api/settings/general', { mlDevice: 'gpu' }, body.token)).status).toBe(400)
+    const ok = await call<{ mlDevice: string }>('PUT', '/api/settings/general', { mlDevice: 'cpu' }, body.token)
+    expect(ok.body.mlDevice).toBe('cpu')
+    expect((await call<{ mlDevice: string }>('GET', '/api/settings/general')).body.mlDevice).toBe('cpu')
+  })
+
   it('changing the PIN needs the current one', async () => {
     await call('POST', '/api/admin/pin', { pin: '2468' })
     expect((await call('POST', '/api/admin/pin', { pin: '1357' })).status).toBe(403)

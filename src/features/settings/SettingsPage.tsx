@@ -10,6 +10,7 @@ import { ApiKeysPanel } from './ApiKeysPanel'
 import { AssistantSettingsPanel } from '../assistant/AssistantSettingsPanel'
 import { SchedulerPanel } from './SchedulerPanel'
 import { TickerSettingsPanel } from './TickerSettingsPanel'
+import { MlDevicePanel } from './MlDevicePanel'
 import { useAdminStatus, useGeneralSettings, useLock, useSaveGeneral, useSecrets } from './api'
 
 export default function SettingsPage() {
@@ -40,6 +41,7 @@ export default function SettingsPage() {
         </div>
         <AssistantSettingsPanel />
         <SchedulerPanel />
+        <MlDevicePanel />
         <TickerSettingsPanel />
         <AdminPanel />
         <StoragePanel />

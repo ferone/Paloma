@@ -13,3 +13,8 @@ export function fmtCost(v: number | null | undefined): string {
   if (v == null) return '—'
   return v < 0.01 ? `$${fmtNum(v, 4)}` : `$${fmtNum(v, 3)}`
 }
+
+/** "anthropic/claude-sonnet-4.6:online" → "claude-sonnet-4.6" (provider and :online shown separately). */
+export function shortModel(id: string): string {
+  return id.replace(/:online$/i, '').split('/').pop() ?? id
+}

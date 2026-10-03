@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import clsx from 'clsx'
-import type { AiReportSummary, ReportKind, ReportRequest } from '@shared/ai'
+import type { ReportKind, ReportRequest } from '@shared/ai'
 import { UNIVERSE } from '@shared/universe'
 import { useSettings } from '../../../store/settings-context'
-import { Button, Chip, EmptyState, ErrorNote, Field, NotConfiguredState, Panel, PanelSkeleton, Textarea, isNotConfigured } from '../../../ui'
-import { fmtAge } from '../../../design/format'
+import { Button, EmptyState, ErrorNote, Field, NotConfiguredState, Panel, PanelSkeleton, Textarea, isNotConfigured } from '../../../ui'
+import { fmtDateTime } from '../../../design/format'
 import { errorMessage, useAiStatus, useDeleteReport, useGenerateReport, useReport, useReports } from '../api'
 import { ModelPicker } from '../ai/ModelPicker'
 import { ReportReader } from '../ai/ReportReader'
-import { KIND_LABEL, fmtCost } from '../ai/labels'
+import { ReportHistory } from '../ai/ReportHistory'
+import { KIND_LABEL } from '../ai/labels'
 
 const KIND_HELP: Record<Exclude<ReportKind, 'ask'>, string> = {
   macro_brief: 'Drivers, risks and what would change the view, from the live scorecard and COT.',
@@ -29,7 +29,9 @@ export default function AnalystPage() {
   const selected = picked?.asset === metal ? picked.id : null
   const setSelected = (id: number | null) => setPicked(id == null ? null : { asset: metal, id })
   const [question, setQuestion] = useState('')
-  const activeId = selected ?? reports.data?.[0]?.id ?? null
+  // Newest first from the API: the latest report is shown unless an older one is picked.
+  const latestId = reports.data?.[0]?.id ?? null
+  const activeId = selected ?? latestId
   const active = useReport(activeId)
 
   const run = (req: ReportRequest) =>
@@ -118,11 +120,7 @@ export default function AnalystPage() {
               another asset&rsquo;s reports.
             </EmptyState>
           ) : (
-            <ul className="-mx-1 max-h-[480px] space-y-px overflow-y-auto">
-              {reports.data.map((r) => (
-                <HistoryItem key={r.id} r={r} active={r.id === activeId} onSelect={() => setSelected(r.id)} />
-              ))}
-            </ul>
+            <ReportHistory reports={reports.data} activeId={activeId} latestId={latestId} onSelect={setSelected} />
           )}
         </Panel>
       </div>
@@ -137,6 +135,15 @@ export default function AnalystPage() {
         ) : active.error ? (
           <ErrorNote error={active.error} onRetry={() => active.refetch()} />
         ) : active.data ? (
+          <>
+          {latestId != null && activeId !== latestId && (
+            <p className="mx-1 mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-2/60 px-3 py-2 text-xs text-muted md:mx-0">
+              Viewing an older report from {fmtDateTime(active.data.createdAt)}.
+              <button type="button" className="text-brand underline underline-offset-2" onClick={() => setSelected(null)}>
+                Back to the latest
+              </button>
+            </p>
+          )}
           <ReportReader
             report={active.data}
             busy={generate.isPending || del.isPending || !!notConfigured}
@@ -145,39 +152,9 @@ export default function AnalystPage() {
               if (window.confirm('Delete this report?')) del.mutate(active.data!.id, { onSuccess: () => setSelected(null) })
             }}
           />
+          </>
         ) : null}
       </Panel>
     </div>
-  )
-}
-
-function HistoryItem({ r, active, onSelect }: { r: AiReportSummary; active: boolean; onSelect: () => void }) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-current={active ? 'true' : undefined}
-        className={clsx('w-full rounded-md px-2 py-1.5 text-left transition-colors', active ? 'bg-surface-2' : 'hover:bg-surface-2/60')}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-[13px] text-foreground">{r.title}</span>
-          {r.status === 'running' ? (
-            <Chip tone="brand">Running</Chip>
-          ) : r.status === 'failed' ? (
-            <Chip tone="avoid">Failed</Chip>
-          ) : r.unsourcedCount > 0 ? (
-            <Chip tone="watch">{r.unsourcedCount} unsourced</Chip>
-          ) : null}
-        </div>
-        <div className="mt-0.5 flex gap-2 text-2xs text-muted">
-          <span>{KIND_LABEL[r.kind]}</span>
-          <span>·</span>
-          <span>{fmtAge(r.createdAt)}</span>
-          <span>·</span>
-          <span className="num">{fmtCost(r.costUsd)}</span>
-        </div>
-      </button>
-    </li>
   )
 }

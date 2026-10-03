@@ -76,10 +76,11 @@ export function useSaveAiSettings() {
   })
 }
 
-export function useReports() {
+/** Reports are saved per asset; the history shows only the asset in focus. */
+export function useReports(asset: AssetId) {
   return useQuery({
-    queryKey: ['macro', 'ai', 'reports'],
-    queryFn: async () => (await api.get<AiReportSummary[]>('/ai/reports')).data,
+    queryKey: ['macro', 'ai', 'reports', asset],
+    queryFn: async () => (await api.get<AiReportSummary[]>('/ai/reports', { params: { asset } })).data,
     refetchInterval: (q) => (q.state.data?.some((r) => r.status === 'running') ? 3000 : false),
   })
 }

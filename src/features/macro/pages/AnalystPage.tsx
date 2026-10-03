@@ -21,10 +21,13 @@ export default function AnalystPage() {
   const { asset: metal } = useSettings()
   const [params] = useSearchParams()
   const status = useAiStatus()
-  const reports = useReports()
+  const reports = useReports(metal)
   const generate = useGenerateReport()
   const del = useDeleteReport()
-  const [selected, setSelected] = useState<number | null>(null)
+  // The selection remembers which asset it belongs to, so switching asset shows that asset's latest report.
+  const [picked, setPicked] = useState<{ asset: typeof metal; id: number } | null>(null)
+  const selected = picked?.asset === metal ? picked.id : null
+  const setSelected = (id: number | null) => setPicked(id == null ? null : { asset: metal, id })
   const [question, setQuestion] = useState('')
   const activeId = selected ?? reports.data?.[0]?.id ?? null
   const active = useReport(activeId)
@@ -104,13 +107,16 @@ export default function AnalystPage() {
           </div>
         </details>
 
-        <Panel title="History" density="dense">
+        <Panel title={`${UNIVERSE[metal].label} reports`} eyebrow="History · saved per asset" density="dense">
           {reports.isLoading ? (
             <PanelSkeleton rows={4} />
           ) : reports.error ? (
             <ErrorNote error={reports.error} onRetry={() => reports.refetch()} />
           ) : !reports.data?.length ? (
-            <EmptyState compact title="No reports yet">Generated briefs are kept here with their sources and cost.</EmptyState>
+            <EmptyState compact title={`No ${UNIVERSE[metal].label.toLowerCase()} reports yet`}>
+              Briefs and answers generated while {UNIVERSE[metal].label} is in focus are kept here with their sources and cost. Switch asset in the top bar to see
+              another asset&rsquo;s reports.
+            </EmptyState>
           ) : (
             <ul className="-mx-1 max-h-[480px] space-y-px overflow-y-auto">
               {reports.data.map((r) => (
@@ -123,7 +129,9 @@ export default function AnalystPage() {
 
       <Panel className="min-w-0" bodyClassName="px-1 py-2 md:px-6">
         {activeId == null ? (
-          <EmptyState title="Nothing to read yet">Generate a macro brief or ask a question. Reports cite real, fetched pages or are flagged as unsourced.</EmptyState>
+          <EmptyState title={`Nothing to read yet for ${UNIVERSE[metal].label}`}>
+            Generate a {UNIVERSE[metal].label.toLowerCase()} macro brief or ask a question. Reports cite real, fetched pages or are flagged as unsourced.
+          </EmptyState>
         ) : active.isLoading ? (
           <PanelSkeleton rows={10} />
         ) : active.error ? (

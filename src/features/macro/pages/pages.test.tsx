@@ -113,7 +113,8 @@ vi.mock('../../../api/client', () => ({
         '/macro/correlations': corr,
         '/ai/status': status,
         '/ai/models': models,
-        '/ai/reports': [{ ...report, body: undefined }],
+        // Like the real API: reports are filtered by the asset in focus.
+        '/ai/reports': cfg?.params?.asset === undefined || cfg.params.asset === 'gold' ? [{ ...report, body: undefined }] : [],
         '/ai/reports/1': report,
       }
       if (!(url in data)) throw new Error(`unmocked ${url}`)
@@ -186,5 +187,18 @@ describe('macro pages render', { timeout: 30_000 }, () => {
     await waitFor(() => expect(screen.getByText('Integration not configured')).toBeTruthy())
     expect(await screen.findByText('Real yields rose.')).toBeTruthy()
     expect(screen.getAllByText('Why is gold down?').length).toBeGreaterThan(0)
+  })
+
+  it('analyst: reports are per asset — silver in focus shows only silver reports', async () => {
+    localStorage.setItem('gid.asset', 'silver')
+    try {
+      const { default: Page } = await import('./AnalystPage')
+      await wrap(<Page />)
+      expect(await screen.findByText('No silver reports yet')).toBeTruthy()
+      expect(screen.getByText('Silver reports')).toBeTruthy()
+      expect(screen.queryByText('Why is gold down?')).toBeNull()
+    } finally {
+      localStorage.removeItem('gid.asset')
+    }
   })
 })

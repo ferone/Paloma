@@ -1,13 +1,33 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { MlPythonStatus } from '../../shared/ml.js'
+import { ML_DEVICE_MODES, type MlDeviceMode, type MlPythonStatus } from '../../shared/ml.js'
+import { getSetting } from '../db/repo.js'
 
 // Locates the Python interpreter (same order as ml/run.mjs) and runs
 // ml/pipeline.py, streaming its `PROGRESS <f> <msg>` lines.
 
 const ML_DIR = resolve('ml')
 const PIPELINE = join(ML_DIR, 'pipeline.py')
+
+const isMode = (v: unknown): v is MlDeviceMode => typeof v === 'string' && (ML_DEVICE_MODES as readonly string[]).includes(v)
+
+/**
+ * Device mode passed to the pipeline as ML_DEVICE: the `ml.device` setting when
+ * saved, else the ML_DEVICE environment variable, else 'auto' (the pipeline
+ * benchmarks both devices per family and falls back to the CPU without CUDA).
+ */
+export function mlDeviceMode(): MlDeviceMode {
+  let saved: unknown = null
+  try {
+    saved = getSetting<unknown>('ml.device', null)
+  } catch {
+    // no database (e.g. a bare CLI call): fall through to the environment
+  }
+  if (isMode(saved)) return saved
+  const env = process.env.ML_DEVICE?.trim().toLowerCase()
+  return isMode(env) ? env : 'auto'
+}
 
 let cachedPython: string | null | undefined
 
@@ -29,7 +49,7 @@ export function resolvePython(): string | null {
   let runnable: string | null = null
   for (const cmd of process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']) {
     try {
-      if (spawnSync(cmd, ['-c', 'import sklearn, pandas, joblib'], { stdio: 'pipe', windowsHide: true }).status === 0) {
+      if (spawnSync(cmd, ['-c', 'import sklearn, pandas, joblib, xgboost, torch'], { stdio: 'pipe', windowsHide: true }).status === 0) {
         cachedPython = cmd
         return cmd
       }
@@ -55,8 +75,25 @@ export function pythonStatus(): MlPythonStatus {
     const r = spawnSync(interpreter, [PIPELINE, 'version'], { encoding: 'utf8', timeout: 60_000, env: pyEnv() })
     if (r.status === 0) {
       try {
-        const v = JSON.parse(r.stdout.trim().split('\n').at(-1) ?? '{}') as { python?: string; sklearn?: string }
-        value = { available: true, interpreter, pythonVersion: v.python ?? null, sklearnVersion: v.sklearn ?? null, error: null }
+        const v = JSON.parse(r.stdout.trim().split('\n').at(-1) ?? '{}') as {
+          python?: string
+          sklearn?: string
+          xgboost?: string | null
+          torch?: string | null
+          cuda?: boolean
+          gpu?: string | null
+        }
+        value = {
+          available: true,
+          interpreter,
+          pythonVersion: v.python ?? null,
+          sklearnVersion: v.sklearn ?? null,
+          xgboostVersion: v.xgboost ?? null,
+          torchVersion: v.torch ?? null,
+          cuda: v.cuda ?? false,
+          gpu: v.gpu ?? null,
+          error: null,
+        }
       } catch {
         value = { available: false, interpreter, pythonVersion: null, sklearnVersion: null, error: 'Unexpected version output' }
       }
@@ -72,22 +109,27 @@ export function pythonStatus(): MlPythonStatus {
     }
   }
   statusCache = { at: Date.now(), value }
-  return value
+  return { ...value, deviceMode: mlDeviceMode() }
 }
 
-function pyEnv(): NodeJS.ProcessEnv {
-  return { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1' }
+function pyEnv(device?: MlDeviceMode): NodeJS.ProcessEnv {
+  return { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1', ...(device ? { ML_DEVICE: device } : {}) }
 }
 
 /**
  * Run `pipeline.py <args>`; resolves with the RESULT path. Rejects with the
- * tail of stderr when the process fails.
+ * tail of stderr when the process fails. `device` becomes ML_DEVICE for the
+ * child (default: `mlDeviceMode()`).
  */
-export function runPipeline(args: string[], onProgress: (fraction: number, message: string) => void = () => {}): Promise<string> {
+export function runPipeline(
+  args: string[],
+  onProgress: (fraction: number, message: string) => void = () => {},
+  opts: { device?: MlDeviceMode } = {},
+): Promise<string> {
   const python = resolvePython()
   if (!python) return Promise.reject(new Error('No Python interpreter found (set ML_PYTHON or create ml/.venv)'))
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(python, [PIPELINE, ...args], { env: pyEnv(), windowsHide: true })
+    const child = spawn(python, [PIPELINE, ...args], { env: pyEnv(opts.device ?? mlDeviceMode()), windowsHide: true })
     let resultPath: string | null = null
     let buf = ''
     const errTail: string[] = []

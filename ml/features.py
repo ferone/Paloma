@@ -17,9 +17,15 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_DIR = ROOT / "data" / "ml"
 H = 20
 
-# A feature is used only if it is present on at least this share of the rows
-# where every core (non-optional) feature is present, AND on the latest row.
-MIN_COVERAGE = 0.60
+# CORE features (non-optional: price, cross-asset, calendar) must all exist on a
+# row for it to be trained on, so they set the training span. OPTIONAL features
+# (feeds that start later: FRED macro, ETF flows, COT, open interest, the
+# contract curve) may be missing (NaN) on early rows: the tree family handles
+# NaN natively and the logistic family imputes the training-window median plus
+# a missing-indicator column. An optional feature is used when it is present on
+# at least MIN_OPTIONAL_ROWS of the trainable rows (~3 years: enough history for
+# it to inform the later walk-forward folds) AND on the latest row.
+MIN_OPTIONAL_ROWS = 756
 
 
 def load_matrix(metal: str, data_dir: Path = DEFAULT_DATA_DIR) -> tuple[pd.DataFrame, dict]:
@@ -44,18 +50,25 @@ def feature_specs(df: pd.DataFrame, meta: dict) -> list[dict]:
     return [{"id": c, "optional": False} for c in df.columns if c not in skip]
 
 
-def select_features(df: pd.DataFrame, meta: dict, min_coverage: float = MIN_COVERAGE) -> tuple[list[str], list[dict]]:
+def core_features(df: pd.DataFrame, meta: dict) -> list[str]:
+    """Non-optional features that have any data (a column with no data at all
+    can never be core: it would empty the training set)."""
+    return [s["id"] for s in feature_specs(df, meta) if not s["optional"] and df[s["id"]].notna().any()]
+
+
+def select_features(df: pd.DataFrame, meta: dict, min_rows: int = MIN_OPTIONAL_ROWS) -> tuple[list[str], list[dict]]:
     """Decide which features to train on; returns (used, availability report).
 
-    Coverage is measured over labeled rows where every core feature exists, so a
-    feed that starts late (e.g. GVZ in 2008) is judged on the period it could
-    plausibly cover. A feature missing on the latest row is dropped too: the
-    model could not score today without it.
+    The trainable base is every labeled row where all CORE features exist (the
+    whole history the price/cross-asset set covers). Every core feature with data
+    is used. An optional feature is used when it is present on at least
+    `min_rows` base rows and on the latest row (the model could not score today
+    without it); elsewhere it may be missing. `coverage` is the share of base
+    rows where the feature is present.
     """
     specs = feature_specs(df, meta)
     missing_reasons: dict = meta.get("missing", {})
-    # A column with no data at all can never be "core" (it would empty the base).
-    core = [s["id"] for s in specs if not s["optional"] and df[s["id"]].notna().any()]
+    core = core_features(df, meta)
     labeled = df[df["y_ret"].notna()]
     base = labeled.dropna(subset=core) if core else labeled
     latest = df.iloc[-1]
@@ -66,12 +79,13 @@ def select_features(df: pd.DataFrame, meta: dict, min_coverage: float = MIN_COVE
         col = df[fid]
         present = col.notna()
         first = df.loc[present, "date"].min() if present.any() else None
-        coverage = float(base[fid].notna().mean()) if len(base) else 0.0
+        n_present = int(base[fid].notna().sum()) if len(base) else 0
+        coverage = n_present / len(base) if len(base) else 0.0
         reason = None
         if not present.any():
             reason = missing_reasons.get(fid, "No data for this input")
-        elif coverage < min_coverage:
-            reason = f"coverage {coverage:.0%} < {min_coverage:.0%}"
+        elif s["optional"] and n_present < min_rows:
+            reason = f"only {n_present} trainable rows < {min_rows}"
         elif pd.isna(latest[fid]):
             reason = "missing on the latest date"
         if reason is None:
@@ -79,6 +93,7 @@ def select_features(df: pd.DataFrame, meta: dict, min_coverage: float = MIN_COVE
         report.append({
             "id": fid,
             "used": reason is None,
+            "core": fid in core,
             **({"reason": reason} if reason else {}),
             "coverage": round(coverage, 4),
             "firstDate": first.strftime("%Y-%m-%d") if first is not None else None,
@@ -86,9 +101,12 @@ def select_features(df: pd.DataFrame, meta: dict, min_coverage: float = MIN_COVE
     return used, report
 
 
-def trainable(df: pd.DataFrame, used: list[str]) -> pd.DataFrame:
-    """Labeled rows with every used feature present, sorted by date."""
-    out = df.dropna(subset=used + ["y_ret"]).copy()
+def trainable(df: pd.DataFrame, used: list[str], required: list[str] | None = None) -> pd.DataFrame:
+    """Labeled rows where every `required` feature (default: every used one;
+    the pipeline passes the core features) is present, sorted by date. Other
+    used features may be NaN."""
+    req = used if required is None else [f for f in required if f in used]
+    out = df.dropna(subset=req + ["y_ret"]).copy()
     out["y_up"] = (out["y_ret"] > 0).astype(int)
     return out.sort_values("date").reset_index(drop=True)
 

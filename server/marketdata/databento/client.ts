@@ -47,10 +47,10 @@ export class DatabentoClient {
   }
 
   /** GET with exponential backoff on 429/5xx/network errors; 4xx other than 429 fail fast. */
-  private async get(path: string, params: Record<string, string>): Promise<string> {
+  private async get(path: string, params: Record<string, string>, tries = this.tries): Promise<string> {
     const url = `${HOST}/${path}?${new URLSearchParams(params).toString()}`
     let lastErr: unknown
-    for (let i = 0; i < this.tries; i++) {
+    for (let i = 0; i < tries; i++) {
       try {
         const res = await this.f(url, { headers: { Authorization: this.auth }, signal: AbortSignal.timeout(this.timeoutMs) })
         const text = await res.text()
@@ -62,7 +62,7 @@ export class DatabentoClient {
         if (err instanceof DatabentoHttpError && err.status !== 429 && err.status < 500) throw err
         lastErr = err
       }
-      if (i < this.tries - 1) await sleep(Math.min(8000, this.backoffMs * 2 ** i))
+      if (i < tries - 1) await sleep(Math.min(8000, this.backoffMs * 2 ** i))
     }
     throw lastErr
   }
@@ -104,7 +104,9 @@ export class DatabentoClient {
       end: q.end,
       encoding: 'json',
       map_symbols: 'true',
-    })
+      // Few attempts on the paid download: a slow or dropped large window is split by
+      // the backfill (smaller pieces) rather than retried at the same size for an hour.
+    }, Math.min(this.tries, 2))
   }
 
   /** FREE: instrument_id → raw_symbol over a date range (fallback when records lack `symbol`). */

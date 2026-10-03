@@ -136,6 +136,27 @@ describe('ingestDatabento (fixture payloads, in-memory DB)', () => {
     expect(calls.some((c) => c.startsWith('2026-05-01'))).toBe(true)
   })
 
+  it('skips windows before the product was listed (symbology cannot resolve)', async () => {
+    const fetchImpl = (async (input: string | URL) => {
+      const url = new URL(String(input))
+      const path = url.pathname.replace('/v0/', '')
+      if (path === 'metadata.get_dataset_range') return new Response(JSON.stringify({ start: '2010-06-06T00:00:00Z', end: '2026-09-30T08:07:05Z' }))
+      const start = url.searchParams.get('start')!
+      const listed = start >= '2026-08-01'
+      if (path === 'metadata.get_cost') {
+        // The whole-range estimate resolves (part of it is listed); early windows do not.
+        if (!listed && url.searchParams.get('end')! < '2026-08-01')
+          return new Response('{"detail":{"case":"symbology_invalid_request","message":"None of the symbols could be resolved"}}', { status: 422 })
+        return new Response('0.001')
+      }
+      return new Response(fixture('sil-statistics.jsonl'))
+    }) as typeof fetch
+    const client = new DatabentoClient({ apiKey: 'test', fetchImpl, backoffMs: 1 })
+    const r = await ingestDatabento({ roots: ['SIL'], start: '2026-05-01', end: '2026-09-09', schemas: ['statistics'], windowMonths: 1 }, { client, budget: 5 })
+    expect(r.skippedWindows).toBeGreaterThanOrEqual(2)
+    expect(databentoSpend().pulls).toBeGreaterThanOrEqual(1)
+  })
+
   it('refuses before downloading anything when the estimate is over budget', async () => {
     const { client, calls } = fakeClient({ costPerCall: 3 })
     await expect(

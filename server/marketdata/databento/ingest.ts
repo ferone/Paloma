@@ -120,7 +120,18 @@ export async function ingestDatabento(req: BackfillRequest, deps: IngestDeps, ct
       return 0
     }
     const q = { symbols: [`${root}.FUT`], stypeIn: 'parent', schema, start: w.start, end: w.end }
-    const cost = await deps.client.getCost(q)
+    let cost: number
+    try {
+      cost = await deps.client.getCost(q)
+    } catch (err) {
+      // Before a product was listed (e.g. micro contracts in 2010) Databento cannot resolve
+      // the parent symbol: there is simply no data for that window, so skip it.
+      if (err instanceof DatabentoHttpError && err.status === 422 && /symbology_invalid|could not be resolved|could be resolved/i.test(err.message)) {
+        result.skippedWindows++
+        return 0
+      }
+      throw err
+    }
     if (result.spent + cost > limit + 1e-9) {
       throw new OverBudgetError({ ...est, total: Math.round((result.spent + cost) * 1e6) / 1e6 }, limit)
     }

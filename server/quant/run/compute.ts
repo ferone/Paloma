@@ -256,10 +256,13 @@ export function computeQuant(input: MarketInput): QuantResult {
     }
   }
 
-  // The snapshot: the top 40 by rank, plus every basis row (published whatever its rank).
+  // The snapshot: the top 40 by rank, plus every basis row and every actionable row
+  // (BUY/SELL) whatever its rank — readers such as the AI trade brief must never miss
+  // a trade the conservative verdict would take today.
   const basisDetails = analyzed.filter((a) => a.detail.kind === "basis").map((a) => a.detail);
   const top = opportunities.conservative.slice(0, 40);
-  const liteRows = [...top, ...opportunities.conservative.filter((o) => o.kind === "basis" && !top.includes(o))];
+  const actionable = (o: (typeof top)[number]) => o.verdict.action === "BUY" || o.verdict.action === "SELL";
+  const liteRows = [...top, ...opportunities.conservative.filter((o) => (o.kind === "basis" || actionable(o)) && !top.includes(o))];
   const lite: QuantSnapshotLite = {
     asOf: input.generatedAt,
     dataThrough,

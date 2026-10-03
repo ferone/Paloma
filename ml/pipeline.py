@@ -842,7 +842,7 @@ def do_train(metal: str, data_dir: Path, n_perm: int | None = None, fast: bool =
         raise ValueError("no usable features")
     core = [f for f in core_features(df, meta) if f in feats]
     data = trainable(df, feats, core)
-    progress(0.04, f"{len(data)} labeled rows {data['date'].min():%Y-%m-%d} → {data['date'].max():%Y-%m-%d}, {len(feats)} features ({len(core)} core)")
+    progress(0.04, f"{len(data)} labeled rows {data['date'].min():%Y-%m-%d} to {data['date'].max():%Y-%m-%d}, {len(feats)} features ({len(core)} core)")
 
     tb = time.time()
     mode = dv.requested(device)
@@ -995,6 +995,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--device", choices=list(dv.VALID), default=None, help="default: env ML_DEVICE, else auto")
     ap.add_argument("--fast", action="store_true", help="smaller models (tests only)")
     a = ap.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # cp1252 consoles on Windows
     if a.command == "version":
         print(json.dumps(lib_versions()))
         return 0

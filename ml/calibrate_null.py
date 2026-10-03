@@ -46,13 +46,14 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--device", choices=list(dv.VALID), default=None, help="default: env ML_DEVICE, else auto")
     a = ap.parse_args()
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # cp1252 consoles on Windows
 
     df, meta = load_matrix(a.asset, Path(a.data_dir))
     feats, _ = select_features(df, meta)
     base = trainable(df, feats, core_features(df, meta))
     compute = dv.resolve(dv.requested(a.device), lambda: pl.benchmark_devices(base, feats, a.n_perm))
     devices = compute["devices"]
-    print(f"{a.asset}: {len(base)} rows {base['date'].min():%Y-%m-%d} → {base['date'].max():%Y-%m-%d}, {len(feats)} features; "
+    print(f"{a.asset}: {len(base)} rows {base['date'].min():%Y-%m-%d} to {base['date'].max():%Y-%m-%d}, {len(feats)} features; "
           f"devices {devices} ({compute['requested']})", flush=True)
     y_real = base["y_up"].to_numpy()
     rng = np.random.default_rng(a.seed)

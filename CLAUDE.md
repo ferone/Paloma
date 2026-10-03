@@ -35,7 +35,7 @@ npm run db:migrate   # apply pending SQLite migrations (the server also does thi
 - **Admin PIN:** configuration writes (`/api/settings/*`, `PUT /api/ai/settings`, `/api/marketdata/schedule`, `/api/portfolio/settings`) go through `requireAdmin` (`server/lib/admin.ts`, guards registered in `server/routes/index.ts`). The axios interceptor in `src/api/admin.ts` turns a 401 `admin_required` into the `<AdminGate>` PIN dialog and replays the request. New config-write endpoints must be guarded the same way.
 - **Local-only:** the API binds `HOST` (default `127.0.0.1`); the Vite proxy targets `127.0.0.1`. CORS admits localhost origins only.
 - **Local data:** `data/` (SQLite DB, downloads, ML models) is gitignored.
-- **Node version:** 20 works, but `yahoo-finance2` warns that it wants Node 22 or newer.
+- **Node version:** 22 (`.nvmrc`; `engines` in package.json). After switching Node, run `npm rebuild better-sqlite3` (native module).
 
 ### Data operations
 ```bash

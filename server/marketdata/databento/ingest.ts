@@ -10,7 +10,8 @@ import type { JobContext } from '../../jobs/registry.js'
 import { contractRow } from '../contracts.js'
 import { refreshFrontMonth } from '../continuous.js'
 import { incrementalResumeDate, latestOpenInterestDate } from '../open-interest.js'
-import { latestContractDate, recordDatabentoPull, updateOpenInterest } from '../repo.js'
+import { latestContractDate, pullCovers, recordDatabentoPull, updateOpenInterest } from '../repo.js'
+import { DatabentoHttpError } from './client.js'
 import type { DatabentoClient } from './client.js'
 import { OverBudgetError, assertWithinBudget, costLimit, estimate, todayUtc } from './cost.js'
 import {
@@ -85,6 +86,8 @@ export interface IngestResult {
   contracts: number
   frontMonthRows: number
   skippedSpreads: number
+  /** Windows an earlier pull already covered (not paid again). */
+  skippedWindows: number
 }
 
 const noopCtx: JobContext = { progress() {}, log() {} }
@@ -105,32 +108,53 @@ export async function ingestDatabento(req: BackfillRequest, deps: IngestDeps, ct
   const windows = monthlyWindows(est.start, est.end, req.windowMonths)
   const steps = req.roots.length * windows.length * schemas.length
   let done = 0
-  const result: IngestResult = { estimate: est, spent: 0, bars: 0, openInterest: 0, contracts: 0, frontMonthRows: 0, skippedSpreads: 0 }
+  const result: IngestResult = { estimate: est, spent: 0, bars: 0, openInterest: 0, contracts: 0, frontMonthRows: 0, skippedSpreads: 0, skippedWindows: 0 }
   const seenContracts = new Set<string>()
+
+  // One window: skip it when an earlier pull covered it (resuming never pays twice);
+  // when the download keeps failing (dropped connections on very large or slow
+  // responses), split it in half and pull each half, down to about a month.
+  const pull = async (root: DatabentoRoot, schema: DatabentoSchema, w: { start: string; end: string }): Promise<number> => {
+    if (pullCovers(root, schema, w.start, w.end)) {
+      result.skippedWindows++
+      return 0
+    }
+    const q = { symbols: [`${root}.FUT`], stypeIn: 'parent', schema, start: w.start, end: w.end }
+    const cost = await deps.client.getCost(q)
+    if (result.spent + cost > limit + 1e-9) {
+      throw new OverBudgetError({ ...est, total: Math.round((result.spent + cost) * 1e6) / 1e6 }, limit)
+    }
+    let body: string
+    try {
+      body = await deps.client.getRange(q)
+    } catch (err) {
+      const days = (Date.parse(w.end) - Date.parse(w.start)) / 86_400_000
+      if (err instanceof DatabentoHttpError || days <= 35) throw err
+      const mid = addDays(w.start, Math.floor(days / 2))
+      ctx.log(`${root} ${schema} ${w.start}→${w.end} failed (${err instanceof Error ? err.message : String(err)}); splitting at ${mid}`)
+      return (await pull(root, schema, { start: w.start, end: mid })) + (await pull(root, schema, { start: mid, end: w.end }))
+    }
+    result.spent += cost
+    const written = await applyChunk(root, schema, body, w, deps, result, seenContracts)
+    recordDatabentoPull({
+      jobRunId: deps.jobRunId ?? null,
+      root,
+      schema,
+      start: w.start,
+      end: w.end,
+      estimatedCost: cost,
+      records: written.records,
+      rowsWritten: written.rows,
+    })
+    return written.rows
+  }
 
   for (const root of req.roots) {
     for (const w of windows) {
       for (const schema of schemas) {
-        const q = { symbols: [`${root}.FUT`], stypeIn: 'parent', schema, start: w.start, end: w.end }
-        const cost = await deps.client.getCost(q)
-        if (result.spent + cost > limit + 1e-9) {
-          throw new OverBudgetError({ ...est, total: Math.round((result.spent + cost) * 1e6) / 1e6 }, limit)
-        }
-        const body = await deps.client.getRange(q)
-        result.spent += cost
-        const written = await applyChunk(root, schema, body, w, deps, result, seenContracts)
-        recordDatabentoPull({
-          jobRunId: deps.jobRunId ?? null,
-          root,
-          schema,
-          start: w.start,
-          end: w.end,
-          estimatedCost: cost,
-          records: written.records,
-          rowsWritten: written.rows,
-        })
+        const rows = await pull(root, schema, w)
         done++
-        ctx.progress(done / (steps + 1), `${root} ${schema} ${w.start}→${w.end}: ${written.rows} rows`)
+        ctx.progress(done / (steps + 1), `${root} ${schema} ${w.start}→${w.end}: ${rows} rows`)
       }
     }
     if (schemas.includes('ohlcv-1d') || schemas.includes('statistics')) {

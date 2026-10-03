@@ -103,6 +103,39 @@ describe('ingestDatabento (fixture payloads, in-memory DB)', () => {
     useTestDb()
   })
 
+  it('a resumed backfill skips windows already pulled and pays nothing twice', async () => {
+    const req = { roots: ['SIL'] as const, start: '2026-09-04', end: '2026-09-09', schemas: ['ohlcv-1d', 'statistics'] as const }
+    const first = fakeClient({ costPerCall: 0.0004 })
+    await ingestDatabento({ ...req, roots: [...req.roots], schemas: [...req.schemas] }, { client: first.client, budget: 5 })
+    const again = fakeClient({ costPerCall: 0.0004 })
+    const r = await ingestDatabento({ ...req, roots: [...req.roots], schemas: [...req.schemas] }, { client: again.client, budget: 5 })
+    expect(again.calls.filter((c) => c.path === 'timeseries.get_range')).toHaveLength(0)
+    expect(r.skippedWindows).toBe(2)
+    expect(r.spent).toBe(0)
+    expect(databentoSpend()).toMatchObject({ pulls: 2, totalUsd: 0.0008 })
+  })
+
+  it('splits a window whose download keeps dropping, until the pieces succeed', async () => {
+    const calls: string[] = []
+    const fetchImpl = (async (input: string | URL) => {
+      const url = new URL(String(input))
+      const path = url.pathname.replace('/v0/', '')
+      if (path === 'metadata.get_dataset_range') return new Response(JSON.stringify({ start: '2010-06-06T00:00:00Z', end: '2026-09-30T08:07:05Z' }))
+      if (path === 'metadata.get_cost') return new Response('0.001')
+      const days = (Date.parse(url.searchParams.get('end')!) - Date.parse(url.searchParams.get('start')!)) / 86_400_000
+      calls.push(`${url.searchParams.get('start')}→${url.searchParams.get('end')}`)
+      // Large responses drop mid-body, like the server did on a 6-month statistics window.
+      if (days > 35) throw new TypeError('terminated')
+      return new Response(fixture('sil-statistics.jsonl'))
+    }) as typeof fetch
+    const client = new DatabentoClient({ apiKey: 'test', fetchImpl, backoffMs: 1, tries: 2 })
+    const r = await ingestDatabento({ roots: ['SIL'], start: '2026-05-01', end: '2026-09-09', schemas: ['statistics'], windowMonths: 6 }, { client, budget: 5 })
+    const pulled = databentoSpend().pulls
+    expect(pulled).toBeGreaterThanOrEqual(4) // ~131 days → split until each piece ≤ 35 days
+    expect(r.spent).toBeCloseTo(pulled * 0.001, 6)
+    expect(calls.some((c) => c.startsWith('2026-05-01'))).toBe(true)
+  })
+
   it('refuses before downloading anything when the estimate is over budget', async () => {
     const { client, calls } = fakeClient({ costPerCall: 3 })
     await expect(

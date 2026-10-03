@@ -133,3 +133,13 @@ export function recentJobRuns(limit = 50, name?: string): JobRunRow[] {
   const z = (t: string | null) => (t && !t.endsWith('Z') ? `${t.replace(' ', 'T')}Z` : t)
   return rows.map((r) => ({ ...r, startedAt: z(r.startedAt)!, finishedAt: z(r.finishedAt) }))
 }
+
+/**
+ * True when an earlier pull already covered [start, end) for this root and schema,
+ * so a resumed backfill can skip the window instead of paying for it again.
+ */
+export function pullCovers(root: string, schema: string, start: string, end: string): boolean {
+  return !!getDb()
+    .prepare('SELECT 1 FROM databento_pulls WHERE root = ? AND schema = ? AND start <= ? AND end >= ? LIMIT 1')
+    .get(root, schema, start, end)
+}

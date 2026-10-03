@@ -66,7 +66,7 @@ let statusCache: { at: number; value: MlPythonStatus } | null = null
 
 /** Interpreter + library versions (cached for 10 minutes). */
 export function pythonStatus(): MlPythonStatus {
-  if (statusCache && Date.now() - statusCache.at < 600_000) return statusCache.value
+  if (statusCache && Date.now() - statusCache.at < 600_000) return { ...statusCache.value, deviceMode: mlDeviceMode() }
   const interpreter = resolvePython()
   let value: MlPythonStatus
   if (!interpreter) {

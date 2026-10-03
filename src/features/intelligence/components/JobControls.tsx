@@ -25,7 +25,7 @@ export function JobControls({ metal }: { metal?: AssetId }) {
           Run inference
         </Button>
         <span className="text-2xs text-muted">
-          Training runs the full walk-forward and permutation test (≈3 min per asset). Inference reuses the saved model and retrains it
+          Training runs the full walk-forward and permutation test (several minutes per asset). Inference reuses the saved model and retrains it
           if it is older than {status.data?.maxModelAgeDays ?? 7} days.
         </span>
       </div>

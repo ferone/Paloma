@@ -6,11 +6,13 @@ import { Chip, DataTable, ErrorNote, Panel, PanelSkeleton, type Column } from '.
 import { useMlRuns, useMlStatus } from '../api'
 import { JobControls } from '../components/JobControls'
 import { ValidationChip } from '../components/common'
+import { devicesShort, fmtDuration, fmtSpan } from '../components/compute'
 
-function duration(r: MlRunSummary): string {
-  if (!r.finishedAt) return '—'
-  const s = (Date.parse(r.finishedAt) - Date.parse(r.startedAt)) / 1000
-  return s < 90 ? `${Math.round(s)} s` : `${(s / 60).toFixed(1)} min`
+/** Pipeline wall time when recorded, else the job's elapsed time. */
+function durationSec(r: MlRunSummary): number | null {
+  if (r.durationSec != null) return r.durationSec
+  if (!r.finishedAt) return null
+  return (Date.parse(r.finishedAt) - Date.parse(r.startedAt)) / 1000
 }
 
 export default function RunsPage() {
@@ -22,7 +24,26 @@ export default function RunsPage() {
   const columns: Column<MlRunSummary>[] = [
     { key: 'id', header: 'Run', sortValue: (r) => r.id, cell: (r) => <span className="num">#{r.id}</span> },
     { key: 'start', header: 'Started', sortValue: (r) => r.startedAt, cell: (r) => <span className="num">{fmtDateTime(r.startedAt)}</span> },
-    { key: 'dur', header: 'Duration', numeric: true, cell: duration },
+    { key: 'dur', header: 'Duration', numeric: true, sortValue: durationSec, cell: (r) => fmtDuration(durationSec(r)) },
+    {
+      key: 'dev', header: 'Device',
+      cell: (r) =>
+        r.devices ? (
+          <span className="text-2xs" title={r.gpu ?? undefined}>{devicesShort(r.devices)}</span>
+        ) : r.status === 'succeeded' ? (
+          <span className="text-2xs text-muted">CPU</span>
+        ) : '—',
+    },
+    {
+      key: 'span', header: 'Training span', sortValue: (r) => r.span?.from ?? null,
+      cell: (r) =>
+        r.span ? (
+          <div className="flex flex-col">
+            <span className="num text-2xs">{fmtSpan(r.span.from, r.span.to)}</span>
+            <span className="num text-2xs text-muted">{r.span.rows.toLocaleString('en-US')} days</span>
+          </div>
+        ) : '—',
+    },
     {
       key: 'state', header: 'Job',
       cell: (r) => (
@@ -49,7 +70,15 @@ export default function RunsPage() {
         provenance={{
           source: py
             ? py.available
-              ? `Python ${py.pythonVersion} · scikit-learn ${py.sklearnVersion} · ${py.interpreter}`
+              ? [
+                  `Python ${py.pythonVersion}`,
+                  `scikit-learn ${py.sklearnVersion}`,
+                  py.xgboostVersion ? `XGBoost ${py.xgboostVersion}` : null,
+                  py.torchVersion ? `torch ${py.torchVersion}` : null,
+                  py.gpu ? `GPU ${py.gpu}` : 'no CUDA GPU',
+                  py.deviceMode ? `device ${py.deviceMode}` : null,
+                  py.interpreter,
+                ].filter(Boolean).join(' · ')
               : `Python unavailable: ${py.error}`
             : 'Checking Python…',
         }}
